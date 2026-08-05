@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>App de Entrenamiento</title>
+  <!-- Tailwind CSS CDN para estilos rápidos -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome para Íconos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-950 text-gray-100 flex flex-col h-screen justify-between font-sans">
+
+  <!-- VISTA PRINCIPAL (Contenido Dinámico) -->
+  <main id="app-content" class="flex-1 overflow-y-auto p-4 mb-16">
+    <!-- El contenido de cada pestaña se renderiza aquí dinámicamente -->
+  </main>
+
+  <!-- BARRA DE TAREAS INFERIOR (Tab Bar - 4 Apartados) -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 flex justify-around py-3 z-50">
+    <button onclick="switchTab('perfil')" class="flex flex-col items-center text-red-500 hover:text-red-400">
+      <i class="fa-solid fa-user text-xl"></i>
+      <span class="text-xs mt-1">Perfil</span>
+    </button>
+    <button onclick="switchTab('entrenamiento')" class="flex flex-col items-center text-gray-400 hover:text-red-400">
+      <i class="fa-solid fa-dumbbell text-xl"></i>
+      <span class="text-xs mt-1">Entreno</span>
+    </button>
+    <button onclick="switchTab('alimentacion')" class="flex flex-col items-center text-gray-400 hover:text-red-400">
+      <i class="fa-solid fa-utensils text-xl"></i>
+      <span class="text-xs mt-1">Nutrición</span>
+    </button>
+    <button onclick="switchTab('videoteca')" class="flex flex-col items-center text-gray-400 hover:text-red-400">
+      <i class="fa-solid fa-video text-xl"></i>
+      <span class="text-xs mt-1">Videoteca</span>
+    </button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
