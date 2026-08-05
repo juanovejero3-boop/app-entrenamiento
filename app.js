@@ -1,7 +1,8 @@
 // 1. CONFIGURACIÓN DE SUPABASE 
 const SUPABASE_URL = 'https://bnqjtyaytvvajuikzymq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // <-- REEMPLAZA ESTO
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // <-- REEMPLAZA ESTO CON TU CLAVE
+// Solucionado: Cambiamos el nombre a "supaClient" para evitar el choque en la pantalla negra
+const supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
 let userProfile = null;
@@ -9,7 +10,7 @@ let evolutionHistory = [];
 
 // 2. VERIFICACIÓN DE SESIÓN AL CARGAR LA APP
 window.addEventListener('DOMContentLoaded', async () => {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await supaClient.auth.getSession();
   if (session) {
     currentUser = session.user;
     await loadUserProfile();
@@ -22,7 +23,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // 3. CARGA DE DATOS DESDE SUPABASE
 async function loadUserProfile() {
-  const { data } = await supabase
+  const { data } = await supaClient
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
@@ -36,7 +37,7 @@ async function loadUserProfile() {
 }
 
 async function loadEvolutionHistory() {
-  const { data } = await supabase
+  const { data } = await supaClient
     .from('evolution')
     .select('*')
     .eq('user_id', currentUser.id)
@@ -49,31 +50,31 @@ async function loadEvolutionHistory() {
 function renderLogin() {
   const content = document.getElementById('app-content');
   content.innerHTML = `
-    
-      
-        PRIME PHYSIQUE
-        Ingresa con tu cuenta de alumno o administrador
-      
+    <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
+      <div class="text-center">
+        <h2 class="text-2xl font-black text-neonRed">PRIME PHYSIQUE</h2>
+        <p class="text-xs text-gray-400 mt-1">Ingresa con tu cuenta de alumno o administrador</p>
+      </div>
 
-      
-        
-          Correo Electrónico
-          
-        
-        
-          Contraseña
-          
-        
-        
-          
+      <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Correo Electrónico</label>
+          <input type="email" id="auth-email" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Contraseña</label>
+          <input type="password" id="auth-password" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+        </div>
+        <div class="flex gap-2 pt-2">
+          <button type="submit" onclick="authMode='login'" class="flex-1 neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">
             Iniciar Sesión
-          
-          
+          </button>
+          <button type="submit" onclick="authMode='signup'" class="flex-1 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">
             Registrarse
-          
-        
-      
-    
+          </button>
+        </div>
+      </form>
+    </div>
   `;
 }
 
@@ -85,11 +86,11 @@ async function handleAuth(e) {
   const password = document.getElementById('auth-password').value;
 
   if (authMode === 'login') {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
     if (error) return alert('Error al iniciar sesión: ' + error.message);
     currentUser = data.user;
   } else {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supaClient.auth.signUp({ email, password });
     if (error) return alert('Error en el registro: ' + error.message);
     alert('Cuenta creada. Ya puedes iniciar sesión.');
     return;
@@ -101,7 +102,7 @@ async function handleAuth(e) {
 }
 
 async function handleLogout() {
-  await supabase.auth.signOut();
+  await supaClient.auth.signOut();
   currentUser = null;
   renderLogin();
 }
@@ -124,89 +125,89 @@ function switchTab(tab) {
 
   if (tab === 'perfil') {
     content.innerHTML = `
-      
-        
-          
-            Perfil de Usuario
-            ${currentUser.email}
-          
-          Cerrar Sesión
-        
+      <div class="space-y-6">
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+          <div>
+            <h3 class="font-bold text-md text-neonRed">Perfil de Usuario</h3>
+            <p class="text-xs text-gray-300">${currentUser.email}</p>
+          </div>
+          <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
+        </div>
 
-        
-           Registrar Evolución
-          
-            Peso (kg)
-            Sentadilla (kg)
-            Banco Plano (kg)
-            Dominadas (reps)
-            Tracciones (kg)
-            Peso Muerto (kg)
-            Guardar en Base de Datos
-          
-        
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-4">
+          <h3 class="font-bold text-md text-neonRed"><i class="fa-solid fa-chart-line mr-2"></i> Registrar Evolución</h3>
+          <form onsubmit="saveEvolution(event)" class="grid grid-cols-2 gap-3 text-sm">
+            <div><label class="block text-[10px] text-gray-400">Peso (kg)</label><input type="number" step="0.1" id="evo-peso" required class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <div><label class="block text-[10px] text-gray-400">Sentadilla (kg)</label><input type="number" id="evo-sentadilla" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <div><label class="block text-[10px] text-gray-400">Banco Plano (kg)</label><input type="number" id="evo-banco" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <div><label class="block text-[10px] text-gray-400">Dominadas (reps)</label><input type="number" id="evo-dominadas" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <div><label class="block text-[10px] text-gray-400">Tracciones (kg)</label><input type="number" id="evo-tracciones" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <div><label class="block text-[10px] text-gray-400">Peso Muerto (kg)</label><input type="number" id="evo-muerto" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
+            <button type="submit" class="col-span-2 neon-glow-button text-white font-bold py-2 rounded-lg text-xs uppercase">Guardar en Base de Datos</button>
+          </form>
+        </div>
 
-        
-           Historial
-          
-            
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
+          <h3 class="font-bold text-md text-neonRed mb-2"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Historial</h3>
+          <div class="overflow-x-auto text-xs">
+            <table class="w-full text-left text-gray-300">
+              <thead class="bg-cyberCarbon text-neonRed border-b border-gray-800">
+                <tr><th class="p-2">Fecha</th><th class="p-2">Peso</th><th class="p-2">SQ</th><th class="p-2">BP</th><th class="p-2">DL</th></tr>
+              </thead>
+              <tbody class="divide-y divide-gray-800">
                 ${evolutionHistory.map(item => `
-                  
+                  <tr>
+                    <td class="p-2 font-mono">${item.fecha}</td>
+                    <td class="p-2 font-bold text-white">${item.peso || '-'} kg</td>
+                    <td class="p-2">${item.sentadilla || '-'} kg</td>
+                    <td class="p-2">${item.banco || '-'} kg</td>
+                    <td class="p-2">${item.muerto || '-'} kg</td>
+                  </tr>
                 `).join('')}
-              
-              
-                FechaPesoSQBPDL
-              
-              
-                    ${item.fecha}
-                    ${item.peso || '-'} kg
-                    ${item.sentadilla || '-'} kg
-                    ${item.banco || '-'} kg
-                    ${item.muerto || '-'} kg
-                  
-            
-          
-        
-      
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     `;
   } else if (tab === 'entrenamiento') {
     content.innerHTML = `
-      
-        
-           ABRIR PLANILLA
-        
-        Entradas en Calor
-        
+      <div class="space-y-6">
+        <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-xl py-6 rounded-2xl uppercase tracking-wider">
+          <i class="fa-solid fa-file-spreadsheet mr-2"></i> ABRIR PLANILLA
+        </a>
+        <h3 class="font-bold text-md text-gray-200 uppercase">Entradas en Calor</h3>
+        <div class="space-y-3">
           ${[1, 2, 3, 4, 5].map(i => `
-            
-              Día ${i}
-              
-            
+            <div class="bg-cyberCard p-3 rounded-xl border border-gray-800">
+              <h4 class="font-bold text-neonRed text-xs mb-1">Día ${i}</h4>
+              <textarea placeholder="Ejercicios de activación y notas..." class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-gray-200 h-16 outline-none focus:border-neonRed"></textarea>
+            </div>
           `).join('')}
-        
-      
+        </div>
+      </div>
     `;
   } else if (tab === 'alimentacion') {
     content.innerHTML = `
-      
-        
-          
-          Plan de Alimentación
-          
+      <div class="space-y-6">
+        <div class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center space-y-3">
+          <i class="fa-solid fa-file-pdf text-4xl text-neonRed"></i>
+          <h3 class="font-bold text-md text-white">Plan de Alimentación</h3>
+          <a href="${userProfile?.pdf_url || '#'}" target="_blank" class="inline-block bg-cyberCarbon text-neonRed font-bold text-xs px-4 py-2 rounded-lg border border-neonRed">
             Abrir PDF
-          
-        
-      
+          </a>
+        </div>
+      </div>
     `;
   } else if (tab === 'videoteca') {
     content.innerHTML = `
-      
-        Videoteca
-        
-          
-          Técnica de Sentadilla
-        
-      
+      <div class="space-y-4">
+        <h3 class="font-bold text-md text-neonRed uppercase">Videoteca</h3>
+        <div class="bg-cyberCard rounded-xl overflow-hidden border border-gray-800 p-3">
+          <iframe class="w-full aspect-video" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe>
+          <h4 class="font-bold text-xs mt-2 text-white">Técnica de Sentadilla</h4>
+        </div>
+      </div>
     `;
   }
 }
@@ -225,7 +226,7 @@ async function saveEvolution(e) {
     muerto: parseFloat(document.getElementById('evo-muerto').value) || null
   };
 
-  const { error } = await supabase.from('evolution').insert([registro]);
+  const { error } = await supaClient.from('evolution').insert([registro]);
   if (error) return alert('Error al guardar: ' + error.message);
 
   await loadEvolutionHistory();
