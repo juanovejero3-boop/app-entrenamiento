@@ -2,17 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Prime Physique</title>
     
-    <!-- Librería de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <!-- Iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Estilos de Tailwind CSS y Colores Cyberpunk -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <script>
         tailwind.config = {
             theme: {
@@ -21,7 +17,8 @@
                         neonRed: '#ff003c',
                         cyberDark: '#0a0a0a',
                         cyberCard: '#111111',
-                        cyberCarbon: '#1a1a1a'
+                        cyberCarbon: '#1a1a1a',
+                        brand: { red: '#dc2626', redHover: '#b91c1c' } 
                     }
                 }
             }
@@ -30,40 +27,70 @@
     
     <style>
         body { background-color: #000000; color: #ffffff; }
-        .neon-glow-button {
-            background: linear-gradient(45deg, #ff003c, #cc0030);
-            box-shadow: 0 0 10px rgba(255, 0, 60, 0.4);
-            transition: all 0.2s;
+        .neon-glow-button { background: linear-gradient(45deg, #ff003c, #cc0030); box-shadow: 0 0 10px rgba(255, 0, 60, 0.4); transition: all 0.2s; }
+        .neon-glow-button:hover { box-shadow: 0 0 20px rgba(255, 0, 60, 0.6); }
+        .metallic-border { border: 1px solid #3f3f46; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+        .red-glow { box-shadow: 0 0 20px rgba(220, 38, 38, 0.25); }
+
+        /* ESTILOS DEL TRACKER DE MACROCICLOS */
+        :root {
+          --bg-dark: #0f0f11; --card-bg: #1c1c1e; --card-header: #2c2c2e;
+          --border-color: #2c2c2e; --accent-rp: #e63852; --accent-green: #10b981;
+          --accent-yellow: #f59e0b; --text-primary: #ffffff; --text-secondary: #98989d;
+          --input-bg: #121214;
         }
-        .neon-glow-button:hover {
-            box-shadow: 0 0 20px rgba(255, 0, 60, 0.6);
-        }
+        .rp-header-card { background: var(--card-bg); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; border: 1px solid var(--border-color); }
+        .rp-title { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; }
+        .rp-sub { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .rp-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+        .rp-tag { background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; font-size: 0.68rem; color: var(--text-secondary); font-weight: 500; }
+        .day-selector { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; scrollbar-width: none; }
+        .day-selector::-webkit-scrollbar { display: none; }
+        .day-chip { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .day-chip.active { background: var(--accent-rp); color: white; border-color: var(--accent-rp); }
+        .section-card { background: var(--card-bg); border-radius: 14px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border-color); }
+        .section-card h3 { font-size: 0.9rem; font-weight: 700; color: var(--accent-rp); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+        .form-control { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-primary); font-size: 0.9rem; outline: none; margin-bottom: 12px; }
+        .btn-action { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--accent-rp); color: white; font-weight: 700; font-size: 0.9rem; cursor: pointer; margin-top: 10px; }
+        
+        /* Modal Video Tracker */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+        .modal-video-card { background: var(--card-bg); border-radius: 16px; padding: 16px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--border-color); position: relative; }
+        .modal-video-card iframe { width: 100%; aspect-ratio: 16/9; border-radius: 10px; border: none; margin-top: 10px; background: black; }
+        .modal-close-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; }
     </style>
 </head>
 <body class="pb-20 font-sans antialiased">
 
-    <!-- Aquí se inyecta la pantalla de login o el panel del usuario automáticamente -->
-    <div id="app-content" class="p-4 max-w-lg mx-auto"></div>
+    <div id="app-content" class="p-4 max-w-lg md:max-w-3xl mx-auto"></div>
 
-    <!-- Barra de navegación inferior -->
     <nav class="fixed bottom-0 w-full bg-cyberDark border-t border-gray-800 p-3 pb-safe z-50">
         <div class="max-w-lg mx-auto flex justify-around text-xs">
             <button id="btn-perfil" onclick="switchTab('perfil')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
                 <i class="fa-solid fa-user text-lg mb-1"></i> Perfil
             </button>
             <button id="btn-entrenamiento" onclick="switchTab('entrenamiento')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-dumbbell text-lg mb-1"></i> Entreno
+                <i class="fa-solid fa-file-spreadsheet text-lg mb-1"></i> Planilla
             </button>
-            <button id="btn-alimentacion" onclick="switchTab('alimentacion')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-utensils text-lg mb-1"></i> Nutrición
+            <!-- NUEVO BOTÓN PARA EL TRACKER RP -->
+            <button id="btn-tracker" onclick="switchTab('tracker')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+                <i class="fa-solid fa-dumbbell text-lg mb-1"></i> Rutina App
             </button>
-            <button id="btn-videoteca" onclick="switchTab('videoteca')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-video text-lg mb-1"></i> Videoteca
+            <button id="btn-turnos" onclick="switchTab('turnos')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+                <i class="fa-solid fa-calendar-check text-lg mb-1"></i> Llamadas
             </button>
         </div>
     </nav>
 
-    <!-- Conexión a tu lógica de Javascript -->
+    <!-- Modal inyectado del Tracker -->
+    <div id="modal-video-preview" class="modal-overlay hidden">
+      <div class="modal-video-card">
+        <button class="modal-close-btn" onclick="document.getElementById('modal-video-preview').classList.add('hidden'); document.getElementById('video-iframe-container').innerHTML=''">✕</button>
+        <h4 id="video-modal-title" style="font-size:0.95rem; font-weight:700; color:white; padding-right:20px;">Demostración</h4>
+        <div id="video-iframe-container"></div>
+      </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
