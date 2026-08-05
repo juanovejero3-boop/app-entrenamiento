@@ -90,12 +90,21 @@ async function handleAuth(e) {
 
   if (authMode === 'login') {
     const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
-    if (error) return alert('Error al iniciar sesión: ' + error.message);
+    if (error) {
+        // Mensaje mejorado si falla el inicio de sesión
+        return alert('Error al iniciar sesión: Verifica que tus datos sean correctos y asegúrate de haber confirmado tu correo electrónico.');
+    }
     currentUser = data.user;
   } else {
     const { data, error } = await supaClient.auth.signUp({ email, password });
     if (error) return alert('Error en el registro: ' + error.message);
-    alert('Cuenta creada. Ya puedes iniciar sesión.');
+    
+    // NUEVO CARTEL DE CONFIRMACIÓN
+    alert('¡Cuenta creada exitosamente!\n\nTe va a llegar un mail de confirmación (revisa también tu bandeja de spam o no deseado). Primero confirma el mail haciendo clic en el enlace, y luego vuelve aquí para iniciar sesión.');
+    
+    // Limpiamos los campos para que el usuario no intente entrar de una vez
+    document.getElementById('auth-email').value = '';
+    document.getElementById('auth-password').value = '';
     return;
   }
 
