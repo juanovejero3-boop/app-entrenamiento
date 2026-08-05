@@ -480,7 +480,7 @@ async function switchTab(tab) {
     `;
   } 
   else if (tab === 'entrenamiento') {
-   const isAdmin = userProfile && userProfile.role === 'admin';
+    const isAdmin = userProfile && userProfile.role === 'admin';
     
     let warmupsData = {};
     try {
@@ -520,8 +520,7 @@ async function switchTab(tab) {
         </div>
       </div>
     `;
-    `;
-  } 
+  }
   else if (tab === 'alimentacion') {
     content.innerHTML = `
       <div class="space-y-6">
