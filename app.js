@@ -68,13 +68,12 @@ function renderLanding() {
         <h1 class="text-3xl md:text-5xl font-black text-white uppercase tracking-widest drop-shadow-md">PRIME <span class="text-neonRed">PHYSIQUE</span></h1>
         <p class="text-xs md:text-sm text-gray-400 uppercase tracking-widest font-bold">High Performance & Applied Biomechanics</p>
         
-        <div class="pt-12">
-            <button onclick="startPublicBooking()" class="w-full max-w-sm mx-auto p-5 bg-red-950/40 border-2 border-neonRed hover:bg-neonRed hover:text-white text-neonRed font-black text-lg leading-tight uppercase tracking-wider rounded-2xl transition-all neon-glow-button flex flex-col items-center gap-2">
-                COMENZÁ A TRANSFORMAR TU VIDA POR COMPLETO
-                <span class="text-sm font-bold text-gray-200 mt-1">¡Hacé click aquí!</span>
-            </button>
-        </div>
-    </div>
+       <div class="pt-12">
+                <button onclick="startPublicBooking()" class="w-full max-w-sm mx-auto p-5 bg-neonRed text-white font-black uppercase tracking-wider rounded-xl shadow-lg hover:bg-red-700 transition block">
+                    COMENZÁ A TRANSFORMAR TU VIDA POR COMPLETO
+                    <span class="block text-sm font-bold text-white/90 mt-1">¡Hacé click aquí!</span>
+                </button>
+            </div>
   `;
 }
 
@@ -144,68 +143,71 @@ function startPublicBooking() {
 }
 
 function renderPublicBooking() {
-  const content = document.getElementById('app-content');
-  
-  let html = `
-    <div class="max-w-md mx-auto mt-4 space-y-6">
-      <div class="flex justify-between items-center border-b border-gray-800 pb-4">
-        <h2 class="text-xl font-black text-white uppercase"><i class="fa-solid fa-bolt text-neonRed mr-2"></i> Nuevo Ingreso</h2>
-        <button onclick="renderLanding()" class="text-xs text-gray-500 hover:text-white border border-gray-800 px-2 py-1 rounded">Cancelar</button>
-      </div>
-  `;
+    const content = document.getElementById('app-content');
+    
+    let html = `
+    <div class="max-w-md mx-auto mt-4 space-y-6 pb-12">
+        <div class="flex justify-between items-center border-b border-gray-800 pb-4">
+            <h2 class="text-xl font-black text-white uppercase"><i class="fa-solid fa-bolt text-neonRed mr-2"></i> Asesoría Estratégica</h2>
+            <button onclick="renderLanding()" class="text-xs text-gray-500 hover:text-white border border-gray-800 px-3 py-1.5 rounded">Volver</button>
+        </div>
+    `;
 
-  if (bookingStep === 2) {
-    html += `
-      <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-xl">
-        <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-4">Paso 1: Fecha y Hora</p>
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
-          <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" onchange="generateAppTimeSlots('public')" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-lg outline-none focus:border-neonRed">
-        </div>
-        <div>
-          <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Turnos (ART)</label>
-          <div id="timeSlotsContainer" class="grid grid-cols-3 gap-2">
-             <p class="col-span-3 text-[10px] text-gray-500 text-center py-4">Selecciona fecha primero</p>
-          </div>
-        </div>
-        <div class="pt-4 flex justify-end">
-          <button id="btnToStep3" disabled onclick="bookingStep=3; renderPublicBooking()" class="px-6 py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg w-full tracking-wider uppercase shadow-lg">Siguiente Paso <i class="fa-solid fa-arrow-right ml-2"></i></button>
-        </div>
-      </div>
-    `;
-    setTimeout(() => { if(selectedDate) generateAppTimeSlots('public'); }, 50);
-  } 
-  else if (bookingStep === 3) {
-    html += `
-      <form onsubmit="confirmAppBooking(event)" class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-xl">
-        <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2">Paso 2: Tus Datos</p>
-        <p class="text-xs text-white font-bold bg-cyberDark p-3 rounded border border-gray-700 mb-4"><i class="fa-solid fa-calendar-check mr-2 text-neonRed"></i> ${selectedDate} a las ${selectedTime} ART</p>
-        
-        <div><label class="block text-[10px] text-gray-400 mb-1">Nombre Completo *</label><input type="text" id="b-name" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed"></div>
-        <div><label class="block text-[10px] text-gray-400 mb-1">Correo Electrónico *</label><input type="email" id="b-email" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed"></div>
-        <div><label class="block text-[10px] text-gray-400 mb-1">Teléfono / WhatsApp *</label><input type="tel" id="b-phone" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed"></div>
-        <div><label class="block text-[10px] text-gray-400 mb-1">¿Qué objetivo buscas? (opcional)</label><textarea id="b-notes" rows="2" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed"></textarea></div>
-        
-        <div class="flex gap-2 pt-4">
-          <button type="button" onclick="bookingStep=2; renderPublicBooking()" class="px-4 py-3 bg-cyberDark text-gray-400 text-xs font-bold rounded-lg border border-gray-700 w-1/3">Atrás</button>
-          <button type="submit" id="b-submit" class="px-4 py-3 neon-glow-button text-white text-xs font-bold rounded-lg w-2/3 uppercase tracking-wider">Confirmar</button>
-        </div>
-      </form>
-    `;
-  }
-  else if (bookingStep === 4) {
-    html += `
-      <div class="bg-cyberCard p-8 rounded-xl border border-emerald-900 text-center space-y-4 shadow-xl">
-         <i class="fa-solid fa-circle-check text-5xl text-emerald-500 mb-2"></i>
-         <h2 class="text-xl font-black text-emerald-400 uppercase">¡Reserva Confirmada!</h2>
-         <p class="text-xs text-gray-300">Hemos registrado tu evaluación inicial. Te llegará un correo con los detalles.</p>
-         <button onclick="renderLanding()" class="mt-6 w-full px-4 py-3 bg-cyberDark border border-gray-700 hover:border-neonRed text-white text-xs font-bold rounded-lg transition uppercase tracking-wider">Volver al Inicio</button>
-      </div>
-    `;
-  }
+    if (bookingStep === 1) {
+        html += `
+        <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
+            <div class="border-l-4 border-neonRed pl-3">
+                <h3 class="text-white font-black text-sm uppercase tracking-wide">Hablemos de tu caso real</h3>
+                <p class="text-[11px] text-gray-400 mt-1">Queremos entender dónde estás parado hoy para saber exactamente cómo ayudarte.</p>
+            </div>
 
-  html += `</div>`;
-  content.innerHTML = html;
+            <div class="bg-cyberDark/60 p-3 rounded-lg border border-gray-800/80 text-xs text-gray-300 space-y-1">
+                <p><i class="fa-solid fa-clock text-neonRed mr-2"></i> **Duración:** 15 a 20 minutos (100% enfocados en vos).</p>
+                <p><i class="fa-solid fa-phone text-neonRed mr-2"></i> **Formato:** Llamada exclusivamente telefónica.</p>
+                <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> **Garantía:** Desde esta primera llamada empezarás a transformar tu vida por completo.</p>
+            </div>
+            
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">¿Cómo te llamas?</label>
+                <input type="text" id="booking-name" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="Tu nombre y apellido">
+            </div>
+
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">¿A qué te dedicas?</label>
+                <input type="text" id="booking-job" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="Ej: Empleado, empresario, estudiante, atleta...">
+            </div>
+
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">¿Qué es lo que más te está molestando de tu cuerpo o con respecto a tu salud? ¿Qué es lo que quisieras cambiar ya mismo?</label>
+                <textarea id="booking-challenge" rows="3" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="Cuéntame con confianza qué te frustra hoy..."></textarea>
+            </div>
+
+            <button onclick="validateBookingStep1()" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
+                Continuar a selección de horario <i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+        `;
+    } else if (bookingStep === 2) {
+        html += `
+        <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
+            <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-calendar-check mr-1"></i> Paso 2: Elige cuándo nos ponemos en contacto</p>
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
+                <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" onchange="generateTimeSlots()" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Horarios Disponibles (ART)</label>
+                <div id="timeSlotsContainer" class="grid grid-cols-3 gap-2">
+                    <p class="col-span-3 text-[10px] text-gray-500 text-center py-4">Selecciona una fecha arriba para ver los turnos</p>
+                </div>
+            </div>
+            <button onclick="bookingStep=1; renderPublicBooking();" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
+        </div>
+        `;
+    }
+    
+    html += `</div>`;
+    content.innerHTML = html;
 }
 
 // ============================================
