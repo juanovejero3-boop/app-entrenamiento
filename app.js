@@ -69,9 +69,9 @@ function renderLanding() {
         <p class="text-xs md:text-sm text-gray-400 uppercase tracking-widest font-bold">High Performance & Applied Biomechanics</p>
         
         <div class="pt-12">
-            <button onclick="startPublicBooking()" class="w-full max-w-sm mx-auto p-6 bg-red-950/40 border-2 border-neonRed hover:bg-neonRed hover:text-white text-neonRed font-black text-xl md:text-2xl uppercase tracking-wider rounded-2xl transition-all neon-glow-button flex flex-col items-center gap-2">
-                COMENZAR A ENTRENAR
-                <span class="text-xs font-normal normal-case text-gray-300 mt-1">Agenda tu evaluación inicial aquí</span>
+            <button onclick="startPublicBooking()" class="w-full max-w-sm mx-auto p-5 bg-red-950/40 border-2 border-neonRed hover:bg-neonRed hover:text-white text-neonRed font-black text-lg leading-tight uppercase tracking-wider rounded-2xl transition-all neon-glow-button flex flex-col items-center gap-2">
+                COMENZÁ A TRANSFORMAR TU VIDA POR COMPLETO
+                <span class="text-sm font-bold text-gray-200 mt-1">¡Hacé click aquí!</span>
             </button>
         </div>
     </div>
