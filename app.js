@@ -335,13 +335,17 @@ async function switchTab(tab) {
               <button class="bg-cyberDark border border-gray-700 text-gray-400 px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex-shrink-0 hover:border-neonRed transition">Día 3</button>
             </div>
             <div>
+              <div>
               <label class="block text-[10px] text-gray-400 uppercase mb-1">Enfoque del Día</label>
               <input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs" placeholder="Ej: Empuje / Pecho y Tríceps">
             </div>
             
-            <button class="w-full py-3 bg-cyberDark border border-gray-700 text-gray-300 text-xs font-bold rounded mt-2 hover:border-neonRed hover:text-white transition"><i class="fa-solid fa-plus mr-2"></i> Añadir Ejercicio</button>
-            <button class="w-full py-3 neon-glow-button text-white text-xs font-bold rounded mt-2 uppercase tracking-wider" onclick="alert('Funcionalidad en desarrollo. Pronto podrás asignar la rutina directo a la base de datos.')"><i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Macrociclo</button>
-          </div>
+            <!-- CONTENEDOR DONDE APARECERÁN LOS EJERCICIOS -->
+            <div id="exercise-list-editor" class="space-y-3 mt-4"></div>
+            
+            <!-- BOTONES ACTIVADOS -->
+            <button onclick="addExerciseToDay()" class="w-full py-3 bg-cyberDark border border-gray-700 text-gray-300 text-xs font-bold rounded mt-2 hover:border-neonRed hover:text-white transition"><i class="fa-solid fa-plus mr-2"></i> Añadir Ejercicio</button>
+            <button class="w-full py-3 neon-glow-button text-white text-xs font-bold rounded mt-2 uppercase tracking-wider" onclick="alert('Programación temporal guardada.')"><i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Macrociclo</button>
         </div>
       `;
     } else {
@@ -619,6 +623,62 @@ window.clearAppBookings = function() {
   }
 }
 
+// ============================================
+// LÓGICA DEL CREADOR DE RUTINAS (TRACKER)
+// ============================================
+window.addExerciseToDay = function() {
+    const container = document.getElementById('exercise-list-editor');
+    const exId = Date.now(); // Crea un ID único para cada buscador
+    const div = document.createElement('div');
+    div.className = "bg-[#000] p-3 rounded-lg border border-gray-700 space-y-2 relative";
+    
+    div.innerHTML = `
+        <div class="flex justify-between items-center mb-1">
+            <label class="text-[10px] text-neonRed font-bold uppercase tracking-wider">Ejercicio</label>
+            <button onclick="this.parentElement.parentElement.remove()" class="text-gray-500 hover:text-red-500 transition"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div class="relative w-full">
+            <input type="text" id="ex-${exId}" oninput="searchExercise(this)" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded text-xs outline-none focus:border-neonRed" placeholder="Buscar ejercicio en la base de datos...">
+            <div id="list-${exId}" class="absolute z-50 w-full bg-cyberCard border border-gray-700 rounded-b max-h-48 overflow-y-auto hidden shadow-2xl"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-2">
+            <div><label class="text-[9px] text-gray-400 uppercase">Series</label><input type="number" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded text-xs outline-none focus:border-neonRed text-center" placeholder="Ej: 3"></div>
+            <div><label class="text-[9px] text-gray-400 uppercase">Reps</label><input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded text-xs outline-none focus:border-neonRed text-center" placeholder="Ej: 8-10"></div>
+            <div><label class="text-[9px] text-gray-400 uppercase">RPE</label><input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded text-xs outline-none focus:border-neonRed text-center" placeholder="Ej: 8"></div>
+        </div>
+    `;
+    container.appendChild(div);
+}
+
+window.searchExercise = function(input) {
+    const listDiv = input.nextElementSibling;
+    listDiv.innerHTML = '';
+    const val = input.value.toLowerCase();
+    
+    if (!val) {
+        listDiv.classList.add('hidden');
+        return;
+    }
+    
+    // Busca coincidencias en tu base de datos gigante
+    const matches = exerciseDB.filter(ex => ex.n.toLowerCase().includes(val)).slice(0, 20); // Muestra hasta 20 resultados
+    
+    if (matches.length > 0) {
+        listDiv.classList.remove('hidden');
+        matches.forEach(match => {
+            const item = document.createElement('div');
+            item.className = "p-2 cursor-pointer border-b border-gray-800 text-[11px] text-white hover:bg-red-950 transition";
+            item.innerHTML = match.n;
+            item.onclick = function() {
+                input.value = match.n;
+                listDiv.classList.add('hidden');
+            };
+            listDiv.appendChild(item);
+        });
+    } else {
+        listDiv.classList.add('hidden');
+    }
+}
 // ============================================
 // BASE DE DATOS DE EJERCICIOS - RUTINA APP
 // ============================================
