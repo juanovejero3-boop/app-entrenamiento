@@ -1,7 +1,6 @@
 // 1. CONFIGURACIÓN DE SUPABASE 
 const SUPABASE_URL = 'https://bnqjtyaytvvajuikzymq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // <-- REEMPLAZA ESTO CON TU CLAVE
-// Solucionado: Cambiamos el nombre a "supaClient" para evitar el choque en la pantalla negra
+const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // <-- REEMPLAZA ESTO
 const supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
@@ -48,6 +47,10 @@ async function loadEvolutionHistory() {
 
 // 4. VISTA DE INICIO DE SESIÓN / REGISTRO
 function renderLogin() {
+  // OCULTAR LA BARRA DE NAVEGACIÓN INFERIOR
+  const navBar = document.querySelector('nav');
+  if(navBar) navBar.style.display = 'none';
+
   const content = document.getElementById('app-content');
   content.innerHTML = `
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
@@ -109,6 +112,10 @@ async function handleLogout() {
 
 // 5. RENDERIZADO DE LA APLICACIÓN
 function renderApp() {
+  // MOSTRAR LA BARRA DE NAVEGACIÓN INFERIOR AL ENTRAR
+  const navBar = document.querySelector('nav');
+  if(navBar) navBar.style.display = 'block';
+
   switchTab('perfil');
 }
 
