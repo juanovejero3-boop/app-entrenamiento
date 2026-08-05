@@ -383,7 +383,28 @@ async function switchTab(tab) {
     
     content.innerHTML = `
       <div class="space-y-6 pb-10">
-        
+        <!-- GESTOR DE DISPONIBILIDAD DE TURNOS -->
+  <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg mb-6">
+    <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+      <i class="fa-solid fa-clock-rotate-left mr-2"></i> Configurar Disponibilidad de Turnos
+    </h3>
+    <p class="text-xs text-gray-400">Define los días y rangos horarios habilitados para llamadas de nuevos ingresos y seguimientos.</p>
+    
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Inicio</label>
+        <input type="time" id="config-start-time" value="09:00" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded text-xs outline-none focus:border-neonRed">
+      </div>
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Fin</label>
+        <input type="time" id="config-end-time" value="18:00" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded text-xs outline-none focus:border-neonRed">
+      </div>
+    </div>
+
+    <button onclick="saveScheduleConfig()" class="w-full py-3 neon-glow-button text-white font-bold rounded-lg text-xs uppercase tracking-wider">
+      <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Configuración de Horarios
+    </button>
+  </div>
         <!-- SECCIÓN GESTIÓN DE TURNOS -->
         <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-4">
           <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda de Llamadas</h2>
