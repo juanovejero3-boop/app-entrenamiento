@@ -31,7 +31,13 @@ async function loadUserProfile() {
   if (data) {
     userProfile = data;
   } else {
-    userProfile = { role: 'alumno', sheet_url: '#', pdf_url: '#' };
+    // Si es la primera vez que entra, le creamos su perfil en la tabla automáticamente
+    const { data: newProfile } = await supaClient
+      .from('profiles')
+      .insert([{ id: currentUser.id, email: currentUser.email, role: 'alumno' }])
+      .select()
+      .single();
+    userProfile = newProfile || { role: 'alumno', sheet_url: '#', pdf_url: '#' };
   }
 }
 
@@ -47,7 +53,6 @@ async function loadEvolutionHistory() {
 
 // 4. VISTA DE INICIO DE SESIÓN / REGISTRO
 function renderLogin() {
-  // OCULTAR LA BARRA DE NAVEGACIÓN INFERIOR
   const navBar = document.querySelector('nav');
   if(navBar) navBar.style.display = 'none';
 
@@ -56,7 +61,7 @@ function renderLogin() {
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
       <div class="text-center">
         <h2 class="text-2xl font-black text-neonRed">PRIME PHYSIQUE</h2>
-        <p class="text-xs text-gray-400 mt-1">Ingresa con tu cuenta de alumno o administrador</p>
+        <p class="text-xs text-gray-400 mt-1">Ingreso al sistema</p>
       </div>
 
       <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
@@ -90,19 +95,12 @@ async function handleAuth(e) {
 
   if (authMode === 'login') {
     const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
-    if (error) {
-        // Mensaje mejorado si falla el inicio de sesión
-        return alert('Error al iniciar sesión: Verifica que tus datos sean correctos y asegúrate de haber confirmado tu correo electrónico.');
-    }
+    if (error) return alert('Error al iniciar sesión. Verifica tus datos.');
     currentUser = data.user;
   } else {
     const { data, error } = await supaClient.auth.signUp({ email, password });
     if (error) return alert('Error en el registro: ' + error.message);
-    
-    // NUEVO CARTEL DE CONFIRMACIÓN
-    alert('¡Cuenta creada exitosamente!\n\nTe va a llegar un mail de confirmación (revisa también tu bandeja de spam o no deseado). Primero confirma el mail haciendo clic en el enlace, y luego vuelve aquí para iniciar sesión.');
-    
-    // Limpiamos los campos para que el usuario no intente entrar de una vez
+    alert('¡Cuenta creada exitosamente! Ya puedes iniciar sesión.');
     document.getElementById('auth-email').value = '';
     document.getElementById('auth-password').value = '';
     return;
@@ -119,27 +117,60 @@ async function handleLogout() {
   renderLogin();
 }
 
-// 5. RENDERIZADO DE LA APLICACIÓN
+// 5. RENDERIZADO DE LA APLICACIÓN Y PANEL DE ADMIN
 function renderApp() {
-  // MOSTRAR LA BARRA DE NAVEGACIÓN INFERIOR AL ENTRAR
   const navBar = document.querySelector('nav');
   if(navBar) navBar.style.display = 'block';
+
+  // Inyectar botón de Administrador si tiene el rol adecuado
+  const navContainer = document.querySelector('nav .max-w-lg');
+  if (userProfile.role === 'admin' && !document.getElementById('btn-admin')) {
+    navContainer.innerHTML += `
+        <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+            <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
+        </button>
+    `;
+  }
 
   switchTab('perfil');
 }
 
 function setActiveNav(tab) {
-  ['perfil', 'entrenamiento', 'alimentacion', 'videoteca'].forEach(t => {
+  ['perfil', 'entrenamiento', 'alimentacion', 'videoteca', 'admin'].forEach(t => {
     const btn = document.getElementById(`btn-${t}`);
     if (btn) btn.className = (t === tab) ? "flex flex-col items-center text-neonRed" : "flex flex-col items-center text-gray-500 hover:text-neonRed";
   });
 }
 
-function switchTab(tab) {
+async function switchTab(tab) {
   setActiveNav(tab);
   const content = document.getElementById('app-content');
 
-  if (tab === 'perfil') {
+  if (tab === 'admin') {
+    content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando panel maestro...</p>`;
+    // Traemos todos los perfiles de la base de datos
+    const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
+    
+    content.innerHTML = `
+      <div class="space-y-6 pb-10">
+        <div class="bg-red-950 p-4 rounded-xl border border-neonRed text-center">
+            <h2 class="text-xl font-black text-neonRed uppercase">Panel de Entrenador</h2>
+            <p class="text-xs text-gray-300">Asigna aquí las planillas a cada alumno</p>
+        </div>
+        
+        <div class="space-y-4">
+          ${(allUsers || []).map(u => `
+            <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
+               <p class="font-bold text-white text-sm mb-2">${u.email} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span></p>
+               <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Pega el link de Google Sheets aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
+               <input type="text" id="pdf-${u.id}" value="${u.pdf_url || ''}" placeholder="Pega el link del PDF aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 outline-none focus:border-neonRed" />
+               <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else if (tab === 'perfil') {
     content.innerHTML = `
       <div class="space-y-6">
         <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 flex justify-between items-center">
@@ -153,20 +184,20 @@ function switchTab(tab) {
         <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-4">
           <h3 class="font-bold text-md text-neonRed"><i class="fa-solid fa-chart-line mr-2"></i> Registrar Evolución</h3>
           <form onsubmit="saveEvolution(event)" class="grid grid-cols-2 gap-3 text-sm">
-            <div><label class="block text-[10px] text-gray-400">Peso (kg)</label><input type="number" step="0.1" id="evo-peso" required class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <div><label class="block text-[10px] text-gray-400">Sentadilla (kg)</label><input type="number" id="evo-sentadilla" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <div><label class="block text-[10px] text-gray-400">Banco Plano (kg)</label><input type="number" id="evo-banco" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <div><label class="block text-[10px] text-gray-400">Dominadas (reps)</label><input type="number" id="evo-dominadas" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <div><label class="block text-[10px] text-gray-400">Tracciones (kg)</label><input type="number" id="evo-tracciones" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <div><label class="block text-[10px] text-gray-400">Peso Muerto (kg)</label><input type="number" id="evo-muerto" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white" /></div>
-            <button type="submit" class="col-span-2 neon-glow-button text-white font-bold py-2 rounded-lg text-xs uppercase">Guardar en Base de Datos</button>
+            <div><label class="block text-[10px] text-gray-400">Peso Corporal (kg)</label><input type="number" step="0.1" id="evo-peso" required class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <div><label class="block text-[10px] text-gray-400">Sentadilla (kg)</label><input type="number" id="evo-sentadilla" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <div><label class="block text-[10px] text-gray-400">Banco Plano (kg)</label><input type="number" id="evo-banco" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <div><label class="block text-[10px] text-gray-400">Peso Muerto (kg)</label><input type="number" id="evo-muerto" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <div><label class="block text-[10px] text-gray-400">Dominadas (reps)</label><input type="number" id="evo-dominadas" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <div><label class="block text-[10px] text-gray-400">Tracciones (kg)</label><input type="number" id="evo-tracciones" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
+            <button type="submit" class="col-span-2 neon-glow-button text-white font-bold py-2 rounded-lg text-xs uppercase">Guardar Marcas</button>
           </form>
         </div>
 
         <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-          <h3 class="font-bold text-md text-neonRed mb-2"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Historial</h3>
+          <h3 class="font-bold text-md text-neonRed mb-2"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Historial de Marcas</h3>
           <div class="overflow-x-auto text-xs">
-            <table class="w-full text-left text-gray-300">
+            <table class="w-full text-left text-gray-300 whitespace-nowrap">
               <thead class="bg-cyberCarbon text-neonRed border-b border-gray-800">
                 <tr><th class="p-2">Fecha</th><th class="p-2">Peso</th><th class="p-2">SQ</th><th class="p-2">BP</th><th class="p-2">DL</th></tr>
               </thead>
@@ -192,14 +223,9 @@ function switchTab(tab) {
         <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-xl py-6 rounded-2xl uppercase tracking-wider">
           <i class="fa-solid fa-file-spreadsheet mr-2"></i> ABRIR PLANILLA
         </a>
-        <h3 class="font-bold text-md text-gray-200 uppercase">Entradas en Calor</h3>
-        <div class="space-y-3">
-          ${[1, 2, 3, 4, 5].map(i => `
-            <div class="bg-cyberCard p-3 rounded-xl border border-gray-800">
-              <h4 class="font-bold text-neonRed text-xs mb-1">Día ${i}</h4>
-              <textarea placeholder="Ejercicios de activación y notas..." class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-gray-200 h-16 outline-none focus:border-neonRed"></textarea>
-            </div>
-          `).join('')}
+        <h3 class="font-bold text-md text-gray-200 uppercase">Notas Rápidas</h3>
+        <div class="bg-cyberCard p-3 rounded-xl border border-gray-800">
+          <textarea placeholder="Ejercicios de calentamiento, recordatorios..." class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-gray-200 h-32 outline-none focus:border-neonRed"></textarea>
         </div>
       </div>
     `;
@@ -228,7 +254,7 @@ function switchTab(tab) {
   }
 }
 
-// 6. GUARDAR REGISTRO EN LA BASE DE DATOS DE SUPABASE
+// 6. FUNCIONES DE BASE DE DATOS
 async function saveEvolution(e) {
   e.preventDefault();
   const registro = {
@@ -247,4 +273,21 @@ async function saveEvolution(e) {
 
   await loadEvolutionHistory();
   switchTab('perfil');
+}
+
+// NUEVO: Guardar los links desde el panel de admin
+window.saveUserLinks = async function(userId) {
+  const sheet = document.getElementById(`sheet-${userId}`).value;
+  const pdf = document.getElementById(`pdf-${userId}`).value;
+  
+  const { error } = await supaClient
+    .from('profiles')
+    .update({ sheet_url: sheet, pdf_url: pdf })
+    .eq('id', userId);
+    
+  if (error) {
+    alert('Error al guardar: ' + error.message);
+  } else {
+    alert('¡Enlaces actualizados correctamente para este alumno!');
+  }
 }
