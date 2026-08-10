@@ -137,9 +137,9 @@ async function handleLogout() {
 // LÓGICA DE AGENDAMIENTO PÚBLICO (NUEVO INGRESO)
 // ============================================
 function startPublicBooking() {
-  selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
-  bookingStep = 2;
-  renderPublicBooking();
+    selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
+    bookingStep = 1; // ESTO FUERZA A QUE ARRANQUE EN EL PASO 1 SÍ O SÍ
+    renderPublicBooking();
 }
 
 function renderPublicBooking() {
@@ -159,12 +159,6 @@ function renderPublicBooking() {
             <div class="border-l-4 border-neonRed pl-3">
                 <h3 class="text-white font-black text-sm uppercase tracking-wide">Hablemos de tu caso real</h3>
                 <p class="text-[11px] text-gray-400 mt-1">Queremos entender dónde estás parado hoy para saber exactamente cómo ayudarte.</p>
-            </div>
-
-            <div class="bg-cyberDark/60 p-3 rounded-lg border border-gray-800/80 text-xs text-gray-300 space-y-1">
-                <p><i class="fa-solid fa-clock text-neonRed mr-2"></i> **Duración:** 15 a 20 minutos (100% enfocados en vos).</p>
-                <p><i class="fa-solid fa-phone text-neonRed mr-2"></i> **Formato:** Llamada exclusivamente telefónica.</p>
-                <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> **Garantía:** Desde esta primera llamada empezarás a transformar tu vida por completo.</p>
             </div>
             
             <div>
@@ -191,6 +185,14 @@ function renderPublicBooking() {
         html += `
         <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
             <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-calendar-check mr-1"></i> Paso 2: Elige cuándo nos ponemos en contacto</p>
+            
+            <!-- EL CUADRO DE INFORMACIÓN MOVIDO AQUÍ -->
+            <div class="bg-cyberDark/60 p-3 rounded-lg border border-gray-800/80 text-xs text-gray-300 space-y-2 mb-4">
+                <p><i class="fa-solid fa-clock text-neonRed mr-2"></i> <span class="font-bold text-white">Duración:</span> 15 a 20 minutos (100% enfocados en vos).</p>
+                <p><i class="fa-solid fa-phone text-neonRed mr-2"></i> <span class="font-bold text-white">Formato:</span> Llamada exclusivamente telefónica.</p>
+                <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> <span class="font-bold text-white">Garantía:</span> Desde esta primera llamada empezarás a transformar tu vida por completo.</p>
+            </div>
+
             <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
                 <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" onchange="generateTimeSlots()" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
