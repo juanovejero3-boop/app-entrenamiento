@@ -394,95 +394,71 @@ async function switchTab(tab) {
   
   // NUEVA LÓGICA DE TRACKER DE RUTINA
   else if (tab === 'tracker') {
-        // Estos son datos visuales de prueba para que veas cómo lucirá el panel final.
-        // En el futuro, esto se conectará a la base de datos para leer la rutina real.
-        const workoutMock = {
-            ciclo: "Fuerza Base - Semana 2",
-            dia: "Día 1: Sentadilla y Accesorios",
-            ejercicios: [
-                {
-                    nombre: "Sentadilla Libre",
-                    objetivo: "3 series x 5 reps @ RPE 8",
-                    anterior: "3x5 @ 140kg",
-                    series: [1, 2, 3]
-                },
-                {
-                    nombre: "Prensa Inclinada a 45°",
-                    objetivo: "3 series x 10 reps @ RPE 9",
-                    anterior: "3x10 @ 200kg",
-                    series: [1, 2, 3]
-                }
-            ]
-        };
+        const rutinaCruda = userProfile.rutina_text || "";
+        let ejerciciosHTML = "<p class='text-gray-500 text-[10px] text-center mt-10 uppercase tracking-widest'>No tienes un entrenamiento asignado para hoy.</p>";
 
-        // Construimos las "tarjetas" de cada ejercicio con el estilo de RP Hypertrophy
-        let ejerciciosHTML = workoutMock.ejercicios.map(ej => `
-            <div class="bg-cyberCard border border-gray-800 rounded-2xl p-4 mb-6 shadow-lg">
-                <!-- Título del Ejercicio -->
-                <div class="flex justify-between items-center mb-2">
-                    <h3 class="text-lg font-black text-neonRed uppercase tracking-wide">${ej.nombre}</h3>
-                </div>
+        if (rutinaCruda.trim() !== "") {
+            const lineas = rutinaCruda.split('\n');
+            
+            ejerciciosHTML = lineas.map(linea => {
+                if(!linea.trim()) return '';
                 
-                <!-- Datos de referencia (Objetivo actual y Marca anterior) -->
-                <div class="text-[10px] text-gray-400 mb-4 flex justify-between border-b border-gray-800 pb-2 uppercase tracking-wide">
-                    <span>🎯 Target: <span class="text-white font-bold">${ej.objetivo}</span></span>
-                    <span>🔄 Anterior: <span class="text-white font-bold">${ej.anterior}</span></span>
-                </div>
-                
-                <!-- Cabecera de la tabla de series -->
-                <div class="grid grid-cols-4 gap-2 mb-2 text-center text-[10px] font-bold text-gray-500 uppercase">
-                    <div>Serie</div>
-                    <div>Kg</div>
-                    <div>Reps</div>
-                    <div>Listo</div>
-                </div>
-                
-                <!-- Filas de las series -->
-                ${ej.series.map(numSerie => `
-                    <div class="grid grid-cols-4 gap-2 mb-2 items-center">
-                        <div class="text-center text-xs text-gray-400 font-bold">${numSerie}</div>
-                        <div>
-                            <input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none">
-                        </div>
-                        <div>
-                            <input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none">
-                        </div>
-                        <div class="flex justify-center">
-                            <!-- Botón visual para hacer el check de la serie completada -->
-                            <button onclick="this.classList.toggle('text-green-500'); this.classList.toggle('text-gray-600')" class="text-gray-600 transition-colors duration-300">
-                                <i class="fa-solid fa-circle-check text-2xl"></i>
-                            </button>
-                        </div>
+                const partes = linea.split('|');
+                const nombre = partes[0] ? partes[0].trim() : 'Ejercicio';
+                const objetivo = partes[1] ? partes[1].trim() : '-';
+                const anterior = partes[2] ? partes[2].trim() : '-';
+                const series = [1, 2, 3]; 
+
+                return `
+                <div class="bg-cyberCard border border-gray-800 rounded-2xl p-4 mb-6 shadow-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-black text-neonRed uppercase tracking-wide">${nombre}</h3>
                     </div>
-                `).join('')}
-                
-                <!-- Espacio para el feedback del atleta -->
-                <div class="mt-4">
-                    <input type="text" placeholder="Añadir notas (ej. RPE real, molestias...)" class="w-full bg-cyberDark/30 border border-gray-800 rounded-lg p-2 text-xs text-gray-400 focus:border-gray-500 outline-none">
+                    
+                    <div class="text-[10px] text-gray-400 mb-4 flex justify-between border-b border-gray-800 pb-2 uppercase tracking-wide">
+                        <span>🎯 Target: <span class="text-white font-bold">${objetivo}</span></span>
+                        <span>🔄 Ant: <span class="text-white font-bold">${anterior}</span></span>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-2 mb-2 text-center text-[10px] font-bold text-gray-500 uppercase">
+                        <div>Serie</div><div>Kg</div><div>Reps</div><div>Listo</div>
+                    </div>
+                    
+                    ${series.map(numSerie => `
+                        <div class="grid grid-cols-4 gap-2 mb-2 items-center">
+                            <div class="text-center text-xs text-gray-400 font-bold">${numSerie}</div>
+                            <div><input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none"></div>
+                            <div><input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none"></div>
+                            <div class="flex justify-center">
+                                <button onclick="this.classList.toggle('text-green-500'); this.classList.toggle('text-gray-600')" class="text-gray-600 transition-colors duration-300">
+                                    <i class="fa-solid fa-circle-check text-2xl"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                    
+                    <div class="mt-4">
+                        <input type="text" placeholder="Notas (RPE, sensaciones...)" class="w-full bg-cyberDark/30 border border-gray-800 rounded-lg p-2 text-xs text-gray-400 focus:border-gray-500 outline-none">
+                    </div>
                 </div>
-            </div>
-        `).join('');
+                `;
+            }).join('');
+        }
 
-        // Imprimimos todo en la pantalla del usuario
         content.innerHTML = `
         <div class="pb-16 mt-2 max-w-md mx-auto">
-            <!-- Header del Entrenamiento -->
             <div class="text-center mb-6 mt-4">
-                <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">${workoutMock.ciclo}</p>
-                <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-2 inline-block">${workoutMock.dia}</h2>
+                <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-2 inline-block">Entrenamiento de Hoy</h2>
             </div>
-            
-            <!-- Inyectamos las tarjetas de ejercicios -->
             ${ejerciciosHTML}
-            
-            <!-- Botón épico de finalizar -->
+            ${rutinaCruda.trim() !== "" ? `
             <button class="w-full py-4 bg-cyberDark border border-neonRed text-neonRed font-black text-sm rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.2)] mt-2 hover:bg-neonRed hover:text-white transition duration-300">
-                <i class="fa-solid fa-trophy mr-2"></i> Finalizar Entrenamiento
-            </button>
+                <i class="fa-solid fa-trophy mr-2"></i> Finalizar
+            </button>` : ''}
         </div>
         `;
     }
-    
+
 else if (tab === 'nutricion') {
         const linkNutricion = userProfile?.nutrition_url || "https://docs.google.com/spreadsheets/"; 
         
@@ -554,6 +530,7 @@ else if (tab === 'nutricion') {
                <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Pega el link de Google Sheets aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
                <input type="text" id="pdf-${u.id}" value="${u.pdf_url || ''}" placeholder="Pega el link del PDF aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 outline-none focus:border-neonRed" />
                <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Pega el link de Nutrición aquí">
+               <textarea id="rutina-${u.id}" rows="3" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Formato: Ejercicio | Objetivo | Récord Anterior">${u.rutina_text || ''}</textarea>
                <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
             </div>
           `).join('')}
@@ -698,15 +675,17 @@ window.saveUserLinks = async function(userId) {
     const sheet = document.getElementById(`sheet-${userId}`).value;
     const pdf = document.getElementById(`pdf-${userId}`).value;
     const nutricion = document.getElementById(`nutricion-${userId}`).value;
+    const rutina = document.getElementById(`rutina-${userId}`).value;
 
     const { error } = await supaClient.from('profiles').update({ 
         sheet_url: sheet, 
         pdf_url: pdf,
-        nutrition_url: nutricion 
+        nutrition_url: nutricion,
+        rutina_text: rutina
     }).eq('id', userId);
 
     if (error) alert('Error: ' + error.message);
-    else alert('¡Enlaces actualizados correctamente!');
+    else alert('¡Enlaces y rutina actualizados correctamente!');
 }
 
 window.generateTimeSlots = function() {
