@@ -526,6 +526,18 @@ else if (tab === 'nutricion') {
           </div>
         </div>
 
+<!-- SECCION ALTA MANUAL DE USUARIOS -->
+<div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-8">
+    <h2 class="text-xl font-black text-white uppercase tracking-wide">Alta Manual de Alumno</h2>
+    <p class="text-xs text-gray-400">Registra el correo de un alumno si no pudo crearlo solo</p>
+</div>
+<div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3 mt-3">
+    <input type="email" id="nuevoEmail" placeholder="correo@alumno.com" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed">
+    <button onclick="window.crearUsuarioManual()" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.3)] hover:bg-red-700 transition duration-300">
+        <i class="fa-solid fa-user-plus mr-2"></i> Dar de Alta Alumno
+    </button>
+</div>
+
         <!-- SECCIÓN ENLACES -->
         <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-8">
           <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
@@ -1092,3 +1104,25 @@ window.selectTime = function(time) {
     bookingStep = 3; // Nos manda al Paso 3 de confirmación
     renderPublicBooking(); // Actualiza la pantalla
 };
+
+window.crearUsuarioManual = async function() {
+    const emailInput = document.getElementById('nuevoEmail');
+    const email = emailInput.value.trim();
+
+    if (!email) {
+        alert('Por favor, escribe un correo electrónico.');
+        return;
+    }
+
+    const { error } = await supaClient.from('profiles').insert([
+        { email: email, role: 'client' }
+    ]);
+
+    if (error) {
+        alert('Error al dar de alta: ' + error.message);
+    } else {
+        alert('¡Alumno dado de alta con éxito!');
+        emailInput.value = '';
+        switchTab('admin');
+    }
+}
