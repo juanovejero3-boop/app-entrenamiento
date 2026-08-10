@@ -491,6 +491,7 @@ else if (tab === 'nutricion') {
         alert('Acceso denegado. Esta área es exclusiva.');
         switchTab('perfil');
         return;
+    }
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
     window.checkAndSendExpirationEmails();
