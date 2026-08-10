@@ -679,10 +679,10 @@ window.generateTimeSlots = function() {
     
     if(!dateInput || !dateInput.value) return;
 
-    // Detecta si es público o seguimiento
-    const type = (typeof isPublicBooking !== 'undefined' && isPublicBooking) ? 'onboarding' : 'followup';
+    // LA MAGIA ESTÁ AQUÍ: Si no hay usuario logueado, forzamos a que lea los horarios de "Primera Vez"
+    const type = (window.currentUser === null || window.isPublicBooking) ? 'onboarding' : 'followup';
     
-    // LEEMOS TU PANEL FIJO DESDE EL CÓDIGO (Ya no usamos localStorage)
+    // Leemos tu panel de la línea 10
     const config = window.APP_SCHEDULE[type]; 
     
     const [year, month, day] = dateInput.value.split('-');
