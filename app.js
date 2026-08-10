@@ -394,84 +394,95 @@ async function switchTab(tab) {
   
   // NUEVA LÓGICA DE TRACKER DE RUTINA
   else if (tab === 'tracker') {
-    if (userProfile.role === 'admin') {
-      content.innerHTML = `
-        <div class="space-y-6 pb-10">
-          <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-3"><i class="fa-solid fa-gears text-neonRed mr-2"></i> Editor de Rutinas</h2>
-          <p class="text-xs text-gray-400 -mt-4">Creador de Macrociclos Nativos</p>
-          
-          <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
-            <h3 class="font-bold text-neonRed uppercase text-sm mb-2"><i class="fa-solid fa-clipboard-list mr-2"></i> Parámetros del Bloque</h3>
-            <div>
-              <label class="block text-[10px] text-gray-400 uppercase mb-1">Nombre del Bloque</label>
-              <input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs" value="Hipertrofia - Bloque 1">
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-               <div>
-                 <label class="block text-[10px] text-gray-400 uppercase mb-1">Semanas</label>
-                 <input type="number" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs" value="4" min="1">
-               </div>
-               <div>
-                 <label class="block text-[10px] text-gray-400 uppercase mb-1">Frecuencia</label>
-                 <input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs" value="6 Días / Sem">
-               </div>
-            </div>
-            <div>
-              <label class="block text-[10px] text-gray-400 uppercase mb-1">Objetivo</label>
-              <select class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs">
-                <option value="Hipertrofia">Aumento de Masa Muscular</option>
-                <option value="Fuerza">Fuerza Máxima (Powerlifting)</option>
-              </select>
-            </div>
-          </div>
+        // Estos son datos visuales de prueba para que veas cómo lucirá el panel final.
+        // En el futuro, esto se conectará a la base de datos para leer la rutina real.
+        const workoutMock = {
+            ciclo: "Fuerza Base - Semana 2",
+            dia: "Día 1: Sentadilla y Accesorios",
+            ejercicios: [
+                {
+                    nombre: "Sentadilla Libre",
+                    objetivo: "3 series x 5 reps @ RPE 8",
+                    anterior: "3x5 @ 140kg",
+                    series: [1, 2, 3]
+                },
+                {
+                    nombre: "Prensa Inclinada a 45°",
+                    objetivo: "3 series x 10 reps @ RPE 9",
+                    anterior: "3x10 @ 200kg",
+                    series: [1, 2, 3]
+                }
+            ]
+        };
 
-          <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
-            <h3 class="font-bold text-neonRed uppercase text-sm mb-2"><i class="fa-solid fa-dumbbell mr-2"></i> Distribución de Días</h3>
-            <div class="flex gap-2 overflow-x-auto pb-2">
-              <button class="bg-neonRed text-white px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex-shrink-0">Día 1</button>
-              <button class="bg-cyberDark border border-gray-700 text-gray-400 px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex-shrink-0 hover:border-neonRed transition">Día 2</button>
-              <button class="bg-cyberDark border border-gray-700 text-gray-400 px-4 py-1.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex-shrink-0 hover:border-neonRed transition">Día 3</button>
+        // Construimos las "tarjetas" de cada ejercicio con el estilo de RP Hypertrophy
+        let ejerciciosHTML = workoutMock.ejercicios.map(ej => `
+            <div class="bg-cyberCard border border-gray-800 rounded-2xl p-4 mb-6 shadow-lg">
+                <!-- Título del Ejercicio -->
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-black text-neonRed uppercase tracking-wide">${ej.nombre}</h3>
+                </div>
+                
+                <!-- Datos de referencia (Objetivo actual y Marca anterior) -->
+                <div class="text-[10px] text-gray-400 mb-4 flex justify-between border-b border-gray-800 pb-2 uppercase tracking-wide">
+                    <span>🎯 Target: <span class="text-white font-bold">${ej.objetivo}</span></span>
+                    <span>🔄 Anterior: <span class="text-white font-bold">${ej.anterior}</span></span>
+                </div>
+                
+                <!-- Cabecera de la tabla de series -->
+                <div class="grid grid-cols-4 gap-2 mb-2 text-center text-[10px] font-bold text-gray-500 uppercase">
+                    <div>Serie</div>
+                    <div>Kg</div>
+                    <div>Reps</div>
+                    <div>Listo</div>
+                </div>
+                
+                <!-- Filas de las series -->
+                ${ej.series.map(numSerie => `
+                    <div class="grid grid-cols-4 gap-2 mb-2 items-center">
+                        <div class="text-center text-xs text-gray-400 font-bold">${numSerie}</div>
+                        <div>
+                            <input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none">
+                        </div>
+                        <div>
+                            <input type="number" placeholder="0" class="w-full bg-cyberDark border border-gray-700 rounded-lg py-2 text-center text-white text-sm focus:border-neonRed focus:ring-1 focus:ring-neonRed outline-none transition appearance-none">
+                        </div>
+                        <div class="flex justify-center">
+                            <!-- Botón visual para hacer el check de la serie completada -->
+                            <button onclick="this.classList.toggle('text-green-500'); this.classList.toggle('text-gray-600')" class="text-gray-600 transition-colors duration-300">
+                                <i class="fa-solid fa-circle-check text-2xl"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('')}
+                
+                <!-- Espacio para el feedback del atleta -->
+                <div class="mt-4">
+                    <input type="text" placeholder="Añadir notas (ej. RPE real, molestias...)" class="w-full bg-cyberDark/30 border border-gray-800 rounded-lg p-2 text-xs text-gray-400 focus:border-gray-500 outline-none">
+                </div>
             </div>
-            <div>
-              <div>
-              <label class="block text-[10px] text-gray-400 uppercase mb-1">Enfoque del Día</label>
-              <input type="text" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded outline-none focus:border-neonRed text-xs" placeholder="Ej: Empuje / Pecho y Tríceps">
+        `).join('');
+
+        // Imprimimos todo en la pantalla del usuario
+        content.innerHTML = `
+        <div class="pb-16 mt-2 max-w-md mx-auto">
+            <!-- Header del Entrenamiento -->
+            <div class="text-center mb-6 mt-4">
+                <p class="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">${workoutMock.ciclo}</p>
+                <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-2 inline-block">${workoutMock.dia}</h2>
             </div>
             
-            <!-- CONTENEDOR DONDE APARECERÁN LOS EJERCICIOS -->
-            <div id="exercise-list-editor" class="space-y-3 mt-4"></div>
+            <!-- Inyectamos las tarjetas de ejercicios -->
+            ${ejerciciosHTML}
             
-            <!-- BOTONES ACTIVADOS -->
-            <button onclick="addExerciseToDay()" class="w-full py-3 bg-cyberDark border border-gray-700 text-gray-300 text-xs font-bold rounded mt-2 hover:border-neonRed hover:text-white transition"><i class="fa-solid fa-plus mr-2"></i> Añadir Ejercicio</button>
-            <button class="w-full py-3 neon-glow-button text-white text-xs font-bold rounded mt-2 uppercase tracking-wider" onclick="alert('Programación temporal guardada.')"><i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Macrociclo</button>
+            <!-- Botón épico de finalizar -->
+            <button class="w-full py-4 bg-cyberDark border border-neonRed text-neonRed font-black text-sm rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.2)] mt-2 hover:bg-neonRed hover:text-white transition duration-300">
+                <i class="fa-solid fa-trophy mr-2"></i> Finalizar Entrenamiento
+            </button>
         </div>
-      `;
-    } else {
-      content.innerHTML = `
-        <div class="space-y-6 pb-10">
-          <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 shadow-lg">
-            <h2 class="text-xl font-black text-white uppercase tracking-wide">Hipertrofia - Bloque 1</h2>
-            <p class="text-[11px] text-gray-400 mt-1 font-mono">RPE Progresivo • 6 Días / Sem</p>
-            <div class="mt-3"><span class="bg-red-950/60 border border-red-900 text-neonRed text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider">Masa Muscular</span></div>
-          </div>
-
-          <div class="flex gap-2 overflow-x-auto pb-2">
-              <button class="bg-neonRed text-white px-5 py-2 rounded text-xs font-bold tracking-wider uppercase flex-shrink-0 shadow-lg">Día 1</button>
-              <button class="bg-cyberDark border border-gray-700 text-gray-400 px-5 py-2 rounded text-xs font-bold tracking-wider uppercase flex-shrink-0">Día 2</button>
-              <button class="bg-cyberDark border border-gray-700 text-gray-400 px-5 py-2 rounded text-xs font-bold tracking-wider uppercase flex-shrink-0">Día 3</button>
-          </div>
-
-          <div class="bg-cyberCard p-8 rounded-xl border border-gray-800 text-center mt-4">
-              <div class="w-16 h-16 mx-auto bg-cyberDark border border-gray-700 rounded-full flex items-center justify-center mb-4">
-                  <i class="fa-solid fa-person-digging text-2xl text-gray-500"></i>
-              </div>
-              <h3 class="text-white font-bold mb-2">Bloque en Construcción</h3>
-              <p class="text-[11px] text-gray-400 leading-relaxed">Tu entrenador está migrando los ejercicios de este bloque a la nueva app.<br><br>Por favor, continúa usando tu <strong class="text-white">Planilla de Sheets</strong> en la pestaña de Entreno.</p>
-          </div>
-        </div>
-      `;
+        `;
     }
-  }
+    
 else if (tab === 'nutricion') {
         const linkNutricion = userProfile?.nutrition_url || "https://docs.google.com/spreadsheets/"; 
         
