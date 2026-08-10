@@ -472,7 +472,24 @@ async function switchTab(tab) {
       `;
     }
   }
-
+else if (tab === 'nutricion') {
+        const linkNutricion = userProfile?.nutrition_url || "https://docs.google.com/spreadsheets/"; 
+        
+        content.innerHTML = `
+        <div class="space-y-6 pb-12 mt-4 max-w-md mx-auto">
+            <div class="bg-cyberCard p-8 rounded-2xl border border-gray-800 shadow-2xl text-center">
+                <i class="fa-solid fa-utensils text-5xl text-neonRed mb-4 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)]"></i>
+                <h2 class="text-2xl font-black text-white uppercase tracking-wide">Tu Nutrición</h2>
+                <p class="text-xs text-gray-400 mt-2 mb-8">Accede a tu distribución de macros, comidas asignadas y estrategia nutricional detallada.</p>
+                
+                <button onclick="window.open('${linkNutricion}', '_blank')" class="w-full py-5 neon-glow-button text-white font-black text-[13px] rounded-xl uppercase tracking-wider shadow-lg transition duration-300 flex items-center justify-center">
+                    Abrir tu Plan de Nutrición <i class="fa-solid fa-arrow-up-right-from-square ml-3"></i>
+                </button>
+            </div>
+        </div>
+        `;
+    }
+    
   else if (tab === 'admin') {
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
