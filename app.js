@@ -489,7 +489,7 @@ else if (tab === 'nutricion') {
         </div>
         `;
     }
-    
+
   else if (tab === 'admin') {
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
@@ -542,6 +542,7 @@ else if (tab === 'nutricion') {
                <p class="font-bold text-white text-sm mb-2">${u.email} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span></p>
                <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Pega el link de Google Sheets aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
                <input type="text" id="pdf-${u.id}" value="${u.pdf_url || ''}" placeholder="Pega el link del PDF aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 outline-none focus:border-neonRed" />
+               <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Pega el link de Nutrición aquí">
                <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
             </div>
           `).join('')}
@@ -683,11 +684,18 @@ async function saveEvolution(e) {
 }
 
 window.saveUserLinks = async function(userId) {
-  const sheet = document.getElementById(`sheet-${userId}`).value;
-  const pdf = document.getElementById(`pdf-${userId}`).value;
-  const { error } = await supaClient.from('profiles').update({ sheet_url: sheet, pdf_url: pdf }).eq('id', userId);
-  if (error) alert('Error: ' + error.message);
-  else alert('¡Enlaces actualizados correctamente!');
+    const sheet = document.getElementById(`sheet-${userId}`).value;
+    const pdf = document.getElementById(`pdf-${userId}`).value;
+    const nutricion = document.getElementById(`nutricion-${userId}`).value;
+
+    const { error } = await supaClient.from('profiles').update({ 
+        sheet_url: sheet, 
+        pdf_url: pdf,
+        nutrition_url: nutricion 
+    }).eq('id', userId);
+
+    if (error) alert('Error: ' + error.message);
+    else alert('¡Enlaces actualizados correctamente!');
 }
 
 window.generateTimeSlots = function() {
