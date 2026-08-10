@@ -763,7 +763,7 @@ window.saveWarmups = async function(userId) {
   }
 }
 // Inicializamos EmailJS con tu Public Key (reemplaza 'TU_PUBLIC_KEY' por la tuya)
-(function(){
+;(function(){
     emailjs.init("5EuZV_5aIYiY9s4HQ");
 })();
 
