@@ -7,6 +7,39 @@ let currentUser = null;
 let userProfile = null;
 let evolutionHistory = [];
 
+// ==========================================
+// PANEL GLOBAL DE HORARIOS (100% INFALIBLE)
+// ==========================================
+// Cambia a true para HABILITAR el día, o false para DESHABILITARLO.
+window.APP_SCHEDULE = {
+    onboarding: { // PRIMERA VEZ (60 min)
+        start: "09:00", // Hora en la que empiezas
+        end: "18:00",   // Hora de tu último turno
+        days: {
+            1: true,  // Lunes
+            2: true,  // Martes
+            3: true,  // Miércoles
+            4: true,  // Jueves
+            5: true,  // Viernes
+            6: false, // Sábado
+            0: false  // Domingo
+        }
+    },
+    followup: { // SEGUIMIENTO ALUMNOS (45 min)
+        start: "10:00",
+        end: "17:00",
+        days: {
+            1: true,  // Lunes
+            2: true,  // Martes
+            3: true,  // Miércoles
+            4: true,  // Jueves
+            5: true,  // Viernes
+            6: false, // Sábado
+            0: false  // Domingo
+        }
+    }
+};
+
 // VARIABLES DEL SISTEMA DE TURNOS
 let bookingStep = 1; // Empezamos en 2 porque ya no hay que elegir servicio
 let selectedService = null;
@@ -708,25 +741,57 @@ window.saveUserLinks = async function(userId) {
   else alert('¡Enlaces actualizados correctamente!');
 }
 
-window.generateAppTimeSlots = function(context) {
-  const dateVal = document.getElementById('bookingDate').value;
-  const container = document.getElementById('timeSlotsContainer');
-  selectedDate = dateVal;
-  selectedTime = null;
-  document.getElementById('btnToStep3').disabled = true;
+window.generateTimeSlots = function() {
+    const dateInput = document.getElementById('bookingDate');
+    const container = document.getElementById('timeSlotsContainer');
+    
+    if(!dateInput || !dateInput.value) return;
 
-  if (!dateVal) return;
+    // Detecta si es público o seguimiento
+    const type = (typeof isPublicBooking !== 'undefined' && isPublicBooking) ? 'onboarding' : 'followup';
+    
+    // LEEMOS TU PANEL FIJO DESDE EL CÓDIGO (Ya no usamos localStorage)
+    const config = window.APP_SCHEDULE[type]; 
+    
+    const [year, month, day] = dateInput.value.split('-');
+    const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0); 
+    const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
 
-  const baseSlots = ["08:00", "09:30", "15:00", "16:30", "18:00"];
-  const bookedTimes = localBookings.filter(b => b.date === dateVal).map(b => b.time);
-  
-  container.innerHTML = baseSlots.map(slot => {
-    if (bookedTimes.includes(slot)) {
-      return `<button disabled class="p-2 rounded bg-gray-900 text-gray-700 text-xs font-bold line-through">Ocupado</button>`;
+    // Comprobamos si le pusiste 'true' o 'false' a ese día en tu panel
+    if(!config.days[dayOfWeek]) {
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
+        return;
     }
-    return `<button type="button" onclick="selectAppTimeSlot(this, '${slot}')" class="slot-btn p-2 rounded border border-gray-700 bg-cyberDark hover:border-neonRed text-white text-xs font-bold transition">${slot}</button>`;
-  }).join('');
-}
+
+    const intervalMinutes = type === 'onboarding' ? 60 : 45;
+    const slots = [];
+    
+    let current = new Date(`2000-01-01T${config.start}:00`);
+    const end = new Date(`2000-01-01T${config.end}:00`);
+
+    while(current < end) {
+        const hours = current.getHours().toString().padStart(2, '0');
+        const minutes = current.getMinutes().toString().padStart(2, '0');
+        const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
+        
+        if (nextSlot <= end) {
+            slots.push(`${hours}:${minutes}`);
+        }
+        current = new Date(current.getTime() + intervalMinutes * 60000);
+    }
+
+    if(slots.length === 0) {
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
+        return;
+    }
+
+    // Dibujamos los botones
+    container.innerHTML = slots.map(time => `
+        <button type="button" onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
+            ${time}
+        </button>
+    `).join('');
+};
 
 window.selectAppTimeSlot = function(btnEl, slot) {
   document.querySelectorAll('.slot-btn').forEach(b => b.className = "slot-btn p-2 rounded border border-gray-700 bg-cyberDark hover:border-neonRed text-white text-xs font-bold transition");
