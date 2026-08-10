@@ -816,3 +816,32 @@ window.checkAndSendExpirationEmails = async function() {
     }
   });
 };
+// Función para validar el Paso 1 y pasar al calendario
+window.validateBookingStep1 = function() {
+    const nameInput = document.getElementById('booking-name');
+    const jobInput = document.getElementById('booking-job');
+    const challengeInput = document.getElementById('booking-challenge');
+    
+    // Verificamos que los campos existan en la pantalla
+    if(!nameInput || !jobInput || !challengeInput) {
+        console.error("Error: No se encontraron los campos del formulario.");
+        return;
+    }
+
+    const name = nameInput.value.trim();
+    const job = jobInput.value.trim();
+    const challenge = challengeInput.value.trim();
+    
+    // Validamos que el usuario haya escrito algo
+    if(!name || !job || !challenge) {
+        alert('Por favor, completa todos los campos para que podamos prepararnos para tu caso.');
+        return;
+    }
+    
+    // Guardamos los datos para usarlos cuando confirme el turno final
+    window.tempBookingData = { name, job, challenge };
+    
+    // Cambiamos al paso 2 y actualizamos la vista
+    bookingStep = 2;
+    renderPublicBooking();
+}
