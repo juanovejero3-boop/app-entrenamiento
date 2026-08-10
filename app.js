@@ -315,7 +315,7 @@ function renderApp() {
   if(navBar) navBar.style.display = 'block';
 
   const navContainer = document.querySelector('nav .max-w-lg');
-  if (userProfile.role === 'admin' && !document.getElementById('btn-admin')) {
+  if (currentUser.email === 'juanovejero3@gmail.com' && !document.getElementById('btn-admin')) {
     navContainer.innerHTML += `
         <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
             <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
@@ -486,6 +486,11 @@ else if (tab === 'nutricion') {
     }
 
   else if (tab === 'admin') {
+    // --- CANDADO DE SEGURIDAD ABSOLUTO ---
+    if (currentUser.email !== 'juanovejero3@gmail.com') {
+        alert('Acceso denegado. Esta área es exclusiva.');
+        switchTab('perfil');
+        return;
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
     window.checkAndSendExpirationEmails();
