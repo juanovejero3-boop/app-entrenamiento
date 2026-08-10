@@ -206,7 +206,6 @@ window.renderPublicBooking = function() {
         </div>
         `;
     } else if (bookingStep === 3) {
-        // Recuperamos los datos que escribiste en el Paso 1
         const temp = window.tempBookingData || { name: '', job: '', challenge: '' };
         
         html += `
@@ -223,7 +222,6 @@ window.renderPublicBooking = function() {
 
             <div>
                 <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">Nombre Completo</label>
-                <!-- Pre-cargamos el nombre que pusiste en el Paso 1 -->
                 <input type="text" id="b-name" value="${temp.name}" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
             </div>
             <div>
@@ -235,13 +233,37 @@ window.renderPublicBooking = function() {
                 <input type="tel" id="b-phone" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="+54 9 ...">
             </div>
             
-            <!-- Guardamos tu ocupación y reto de forma invisible para que lleguen a la base de datos -->
             <div class="hidden">
                 <textarea id="b-notes">Ocupación: ${temp.job} | Reto: ${temp.challenge}</textarea>
             </div>
 
             <button id="b-submit" onclick="confirmAppBooking(event)" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
                 Agendar Llamada <i class="fa-solid fa-paper-plane ml-2"></i>
+            </button>
+        </div>
+        `;
+    } else if (bookingStep === 4) {
+        // --- ¡AQUÍ ESTÁ LA NUEVA PANTALLA DE FELICITACIÓN! ---
+        html += `
+        <div class="bg-cyberCard p-8 rounded-2xl border border-neonRed space-y-4 shadow-2xl text-center">
+            <i class="fa-solid fa-fire text-5xl text-neonRed mb-2 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)]"></i>
+            <h3 class="text-white font-black text-2xl uppercase tracking-wide">¡Llamada Agendada!</h3>
+            
+            <p class="text-sm text-gray-300 font-bold mt-2">
+                ¡Te felicito por tomar acción y dar el primer paso para transformar tu vida y tu físico!
+            </p>
+            <p class="text-[11px] text-gray-400">
+                Nos pondremos en contacto contigo en el horario seleccionado. Prepárate para el cambio.
+            </p>
+
+            <div class="bg-cyberDark/80 p-4 rounded-xl border border-gray-700 text-left mt-4 shadow-inner">
+                <p class="text-xs text-gray-400 uppercase tracking-widest mb-2 font-bold border-b border-gray-800 pb-2">Resumen de tu Turno</p>
+                <p class="text-sm text-white mb-1"><i class="fa-regular fa-calendar-check text-neonRed w-5"></i> <b>${selectedDate}</b></p>
+                <p class="text-sm text-white"><i class="fa-regular fa-clock text-neonRed w-5"></i> <b>${selectedTime}</b> (Hora Argentina)</p>
+            </div>
+
+            <button onclick="window.location.reload()" class="w-full py-4 mt-6 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg transition duration-300">
+                Volver al Inicio
             </button>
         </div>
         `;
@@ -973,38 +995,47 @@ window.generateTimeSlots = function() {
     
     if(!dateInput || !dateInput.value) return;
 
-    // Detectamos si es público (Primera vez) o privado (Seguimiento)
+    // FORZAMOS a que busque siempre la configuración de "onboarding" (Primera vez) 
+    // cuando alguien entra desde el link público.
     const type = (typeof isPublicBooking !== 'undefined' && isPublicBooking) ? 'onboarding' : 'followup';
     
+    // Leemos los datos guardados en el localStorage de tu navegador
     const configString = localStorage.getItem(`pp_schedule_${type}`);
+    
     if(!configString) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Los horarios para este tipo de llamada aún no están configurados.</p>`;
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Error: El administrador aún no guardó los horarios de disponibilidad.</p>`;
         return;
     }
 
     const config = JSON.parse(configString);
     
-    // Validar el día de la semana
-    const selectedDate = new Date(dateInput.value + 'T00:00:00');
-    const dayOfWeek = selectedDate.getDay(); 
+    // ARREGLO DE ZONA HORARIA: Evitamos que el día cambie por culpa del GMT
+    // Leemos la fecha exacta que seleccionó el usuario (ej: 2026-08-15)
+    const [year, month, day] = dateInput.value.split('-');
+    // Creamos una fecha local a las 12 del mediodía para que nunca cambie de día por el timezone
+    const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0); 
+    const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
 
     if(!config.days || !config.days.includes(dayOfWeek)) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No hay turnos disponibles para este día de la semana. Selecciona otro día.</p>`;
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
         return;
     }
 
-    // Calcular el intervalo: 60 min para onboarding, 45 min para seguimiento
+    // Calcular el intervalo: 60 min para primera vez, 45 min para seguimiento
     const intervalMinutes = type === 'onboarding' ? 60 : 45;
 
     const slots = [];
-    let current = new Date(`1970-01-01T${config.start}:00`);
-    const end = new Date(`1970-01-01T${config.end}:00`);
+    // Creamos fechas ficticias solo para poder sumar los minutos fácilmente
+    let current = new Date(`2000-01-01T${config.start}:00`);
+    const end = new Date(`2000-01-01T${config.end}:00`);
 
     while(current < end) {
         const hours = current.getHours().toString().padStart(2, '0');
         const minutes = current.getMinutes().toString().padStart(2, '0');
         
         const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
+        
+        // Solo mostramos el turno si el bloque entero entra antes de la hora de fin
         if (nextSlot <= end) {
             slots.push(`${hours}:${minutes}`);
         }
@@ -1013,10 +1044,11 @@ window.generateTimeSlots = function() {
     }
 
     if(slots.length === 0) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No hay horarios en este rango.</p>`;
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
         return;
     }
 
+    // Mostramos los botones en pantalla
     container.innerHTML = slots.map(time => `
         <button onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
             ${time}
