@@ -8,7 +8,7 @@ let userProfile = null;
 let evolutionHistory = [];
 
 // VARIABLES DEL SISTEMA DE TURNOS
-let bookingStep = 2; // Empezamos en 2 porque ya no hay que elegir servicio
+let bookingStep = 1; // Empezamos en 2 porque ya no hay que elegir servicio
 let selectedService = null;
 let selectedDate = null;
 let selectedTime = null;
