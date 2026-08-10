@@ -679,10 +679,20 @@ window.generateTimeSlots = function() {
     
     if(!dateInput || !dateInput.value) return;
 
-    // LA MAGIA ESTÁ AQUÍ: Si no hay usuario logueado, forzamos a que lea los horarios de "Primera Vez"
-    const type = (window.currentUser === null || window.isPublicBooking) ? 'onboarding' : 'followup';
+    // --- SOLUCIÓN DEFINITIVA ---
+    let type = 'onboarding'; // Por defecto, CUALQUIERA que entre asume horarios de Primera Vez.
     
-    // Leemos tu panel de la línea 10
+    try {
+        // Solo si la variable currentUser existe y tiene datos (o sea, estás logueado en tu admin), usa Seguimiento.
+        if (typeof currentUser !== 'undefined' && currentUser !== null) {
+            type = 'followup';
+        }
+    } catch(e) {
+        // Si hay cualquier error al leer el usuario, seguimos forzando Primera Vez.
+        type = 'onboarding';
+    }
+    // ---------------------------
+    
     const config = window.APP_SCHEDULE[type]; 
     
     const [year, month, day] = dateInput.value.split('-');
