@@ -393,7 +393,7 @@ async function switchTab(tab) {
   }
   
   // NUEVA LÓGICA DE TRACKER DE RUTINA
-  else if (tab === 'tracker') {
+ else if (tab === 'tracker') {
         const rutinaCruda = userProfile.rutina_text || "";
         let ejerciciosHTML = "<p class='text-gray-500 text-[10px] text-center mt-10 uppercase tracking-widest'>No tienes un entrenamiento asignado para hoy.</p>";
 
@@ -403,6 +403,14 @@ async function switchTab(tab) {
             ejerciciosHTML = lineas.map(linea => {
                 if(!linea.trim()) return '';
                 
+                // Si la línea empieza con "Día:", la convertimos en un título separador
+                if (linea.toLowerCase().startsWith('día:') || linea.toLowerCase().startsWith('dia:')) {
+                    return `<div class="mt-8 mb-4 border-b-2 border-neonRed pb-2">
+                                <h3 class="text-xl font-black text-white uppercase tracking-wider">${linea.trim()}</h3>
+                            </div>`;
+                }
+                
+                // Si es un ejercicio normal, procesamos sus partes
                 const partes = linea.split('|');
                 const nombre = partes[0] ? partes[0].trim() : 'Ejercicio';
                 const objetivo = partes[1] ? partes[1].trim() : '-';
@@ -410,9 +418,9 @@ async function switchTab(tab) {
                 const series = [1, 2, 3]; 
 
                 return `
-                <div class="bg-cyberCard border border-gray-800 rounded-2xl p-4 mb-6 shadow-lg">
+                <div class="bg-cyberCard border border-gray-800 rounded-2xl p-4 mb-4 shadow-lg">
                     <div class="flex justify-between items-center mb-2">
-                        <h3 class="text-lg font-black text-neonRed uppercase tracking-wide">${nombre}</h3>
+                        <h4 class="text-base font-black text-neonRed uppercase tracking-wide">${nombre}</h4>
                     </div>
                     
                     <div class="text-[10px] text-gray-400 mb-4 flex justify-between border-b border-gray-800 pb-2 uppercase tracking-wide">
@@ -447,13 +455,13 @@ async function switchTab(tab) {
 
         content.innerHTML = `
         <div class="pb-16 mt-2 max-w-md mx-auto">
-            <div class="text-center mb-6 mt-4">
-                <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-2 inline-block">Entrenamiento de Hoy</h2>
+            <div class="text-center mb-4 mt-4">
+                <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-2 inline-block">Tu Rutina</h2>
             </div>
             ${ejerciciosHTML}
             ${rutinaCruda.trim() !== "" ? `
-            <button class="w-full py-4 bg-cyberDark border border-neonRed text-neonRed font-black text-sm rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.2)] mt-2 hover:bg-neonRed hover:text-white transition duration-300">
-                <i class="fa-solid fa-trophy mr-2"></i> Finalizar
+            <button class="w-full py-4 bg-cyberDark border border-neonRed text-neonRed font-black text-sm rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.2)] mt-6 hover:bg-neonRed hover:text-white transition duration-300">
+                <i class="fa-solid fa-trophy mr-2"></i> Finalizar Entrenamiento
             </button>` : ''}
         </div>
         `;
