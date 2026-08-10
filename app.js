@@ -142,7 +142,7 @@ function startPublicBooking() {
     renderPublicBooking();
 }
 
-function renderPublicBooking() {
+window.renderPublicBooking = function() {
     const content = document.getElementById('app-content');
     
     let html = `
@@ -172,7 +172,7 @@ function renderPublicBooking() {
             </div>
 
             <div>
-                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">¿Qué es lo que más te está molestando de tu cuerpo o con respecto a tu salud? ¿Qué es lo que quisieras cambiar ya mismo?</label>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">¿Qué es lo que más te molesta de tu cuerpo o salud hoy?</label>
                 <textarea id="booking-challenge" rows="3" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="Cuéntame con confianza qué te frustra hoy..."></textarea>
             </div>
 
@@ -184,13 +184,12 @@ function renderPublicBooking() {
     } else if (bookingStep === 2) {
         html += `
         <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
-            <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-calendar-check mr-1"></i> Paso 2: Elige cuándo nos ponemos en contacto</p>
+            <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-calendar-check mr-1"></i> Paso 2: Elige cuándo nos contactamos</p>
             
-            <!-- EL CUADRO DE INFORMACIÓN MOVIDO AQUÍ -->
             <div class="bg-cyberDark/60 p-3 rounded-lg border border-gray-800/80 text-xs text-gray-300 space-y-2 mb-4">
-                <p><i class="fa-solid fa-clock text-neonRed mr-2"></i> <span class="font-bold text-white">Duración:</span> 15 a 20 minutos (100% enfocados en vos).</p>
-                <p><i class="fa-solid fa-phone text-neonRed mr-2"></i> <span class="font-bold text-white">Formato:</span> Llamada exclusivamente telefónica.</p>
-                <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> <span class="font-bold text-white">Garantía:</span> Desde esta primera llamada empezarás a transformar tu vida por completo.</p>
+                <p><i class="fa-solid fa-clock text-neonRed mr-2"></i> <span class="font-bold text-white">Duración:</span> 15 a 20 minutos.</p>
+                <p><i class="fa-solid fa-phone text-neonRed mr-2"></i> <span class="font-bold text-white">Formato:</span> Llamada telefónica.</p>
+                <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> <span class="font-bold text-white">Garantía:</span> Transformación desde el día 1.</p>
             </div>
 
             <div>
@@ -206,11 +205,51 @@ function renderPublicBooking() {
             <button onclick="bookingStep=1; renderPublicBooking();" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
         </div>
         `;
+    } else if (bookingStep === 3) {
+        // Recuperamos los datos que escribiste en el Paso 1
+        const temp = window.tempBookingData || { name: '', job: '', challenge: '' };
+        
+        html += `
+        <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
+            <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-check-circle mr-1"></i> Paso 3: Confirma tu llamada</p>
+            
+            <div class="bg-cyberDark/60 p-3 rounded-lg border border-gray-800/80 text-xs text-gray-300 mb-4 flex justify-between items-center">
+                <div>
+                    <p><span class="font-bold text-white">Fecha:</span> ${selectedDate}</p>
+                    <p><span class="font-bold text-white">Hora:</span> ${selectedTime}</p>
+                </div>
+                <button onclick="bookingStep=2; renderPublicBooking();" class="text-[10px] text-neonRed hover:text-white underline">Cambiar</button>
+            </div>
+
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">Nombre Completo</label>
+                <!-- Pre-cargamos el nombre que pusiste en el Paso 1 -->
+                <input type="text" id="b-name" value="${temp.name}" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
+            </div>
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">Email</label>
+                <input type="email" id="b-email" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="tu@email.com">
+            </div>
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1 font-bold">Teléfono (WhatsApp)</label>
+                <input type="tel" id="b-phone" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="+54 9 ...">
+            </div>
+            
+            <!-- Guardamos tu ocupación y reto de forma invisible para que lleguen a la base de datos -->
+            <div class="hidden">
+                <textarea id="b-notes">Ocupación: ${temp.job} | Reto: ${temp.challenge}</textarea>
+            </div>
+
+            <button id="b-submit" onclick="confirmAppBooking(event)" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
+                Agendar Llamada <i class="fa-solid fa-paper-plane ml-2"></i>
+            </button>
+        </div>
+        `;
     }
     
     html += `</div>`;
     content.innerHTML = html;
-}
+};
 
 // ============================================
 // RENDERIZADO DE LA APLICACIÓN (INTERNO)
@@ -983,4 +1022,11 @@ window.generateTimeSlots = function() {
             ${time}
         </button>
     `).join('');
+};
+
+window.selectTime = function(time) {
+    selectedTime = time; // Guarda la hora que elegiste
+    selectedDate = document.getElementById('bookingDate').value; // Guarda la fecha
+    bookingStep = 3; // Nos manda al Paso 3 de confirmación
+    renderPublicBooking(); // Actualiza la pantalla
 };
