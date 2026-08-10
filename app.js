@@ -385,27 +385,75 @@ async function switchTab(tab) {
     window.checkAndSendExpirationEmails();
     content.innerHTML = `
       <div class="space-y-6 pb-10">
-        <!-- GESTOR DE DISPONIBILIDAD DE TURNOS -->
-  <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg mb-6">
-    <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-      <i class="fa-solid fa-clock-rotate-left mr-2"></i> Configurar Disponibilidad de Turnos
-    </h3>
-    <p class="text-xs text-gray-400">Define los días y rangos horarios habilitados para llamadas de nuevos ingresos y seguimientos.</p>
-    
-    <div class="grid grid-cols-2 gap-3">
-      <div>
-        <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Inicio</label>
-        <input type="time" id="config-start-time" value="09:00" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded text-xs outline-none focus:border-neonRed">
-      </div>
-      <div>
-        <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Fin</label>
-        <input type="time" id="config-end-time" value="18:00" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded text-xs outline-none focus:border-neonRed">
-      </div>
+       <!-- GESTOR DE DISPONIBILIDAD DE TURNOS - PRIMERA VEZ -->
+    <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg mb-6">
+        <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-bolt mr-2"></i> Horarios: Primera Vez (60 min)
+        </h3>
+        <p class="text-xs text-gray-400">Días y rangos para llamadas de nuevos ingresos.</p>
+
+        <div>
+            <label class="block text-[10px] text-gray-400 uppercase mb-2">Días Disponibles</label>
+            <div class="flex flex-wrap gap-2" id="days-onboarding">
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="1"><span>Lu</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="2"><span>Ma</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="3"><span>Mi</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="4"><span>Ju</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="5"><span>Vi</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="6"><span>Sá</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-neonRed"><input type="checkbox" value="0"><span>Do</span></label>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Inicio</label>
+                <input type="time" id="config-start-onboarding" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded outline-none focus:border-neonRed">
+            </div>
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Fin</label>
+                <input type="time" id="config-end-onboarding" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded outline-none focus:border-neonRed">
+            </div>
+        </div>
+        <button onclick="saveScheduleConfig('onboarding')" class="w-full py-3 neon-glow-button text-white font-bold rounded-lg text-xs">
+            <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Primera Vez
+        </button>
     </div>
 
-    <button onclick="saveScheduleConfig()" class="w-full py-3 neon-glow-button text-white font-bold rounded-lg text-xs uppercase tracking-wider">
-      <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Configuración de Horarios
-    </button>
+    <!-- GESTOR DE DISPONIBILIDAD DE TURNOS - SEGUIMIENTO -->
+    <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg mb-6">
+        <h3 class="font-bold text-md text-white uppercase tracking-wide border-l-4 border-white pl-2">
+            <i class="fa-solid fa-sync mr-2"></i> Horarios: Seguimiento (45 min)
+        </h3>
+        <p class="text-xs text-gray-400">Días y rangos para revisiones de alumnos.</p>
+
+        <div>
+            <label class="block text-[10px] text-gray-400 uppercase mb-2">Días Disponibles</label>
+            <div class="flex flex-wrap gap-2" id="days-followup">
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="1"><span>Lu</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="2"><span>Ma</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="3"><span>Mi</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="4"><span>Ju</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="5"><span>Vi</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="6"><span>Sá</span></label>
+                <label class="text-xs text-white flex items-center space-x-1 bg-cyberDark p-1.5 rounded border border-gray-700 cursor-pointer hover:border-white"><input type="checkbox" value="0"><span>Do</span></label>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Inicio</label>
+                <input type="time" id="config-start-followup" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded outline-none focus:border-white">
+            </div>
+            <div>
+                <label class="block text-[10px] text-gray-400 uppercase mb-1">Hora Fin</label>
+                <input type="time" id="config-end-followup" class="w-full bg-cyberDark border border-gray-700 text-white p-2 rounded outline-none focus:border-white">
+            </div>
+        </div>
+        <button onclick="saveScheduleConfig('followup')" class="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold rounded-lg text-xs transition">
+            <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Seguimiento
+        </button>
+    </div>
   </div>
         <!-- SECCIÓN GESTIÓN DE TURNOS -->
         <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-4">
@@ -845,3 +893,94 @@ window.validateBookingStep1 = function() {
     bookingStep = 2;
     renderPublicBooking();
 }
+
+
+// ==========================================
+// CONTROL DE HORARIOS Y TURNOS (NUEVO)
+// ==========================================
+
+window.saveScheduleConfig = function(type) {
+    const startInput = document.getElementById(`config-start-${type}`);
+    const endInput = document.getElementById(`config-end-${type}`);
+    // Busca todos los checkboxes que estén marcados
+    const dayCheckboxes = document.querySelectorAll(`#days-${type} input[type="checkbox"]:checked`);
+    
+    if (!startInput || !endInput) return;
+
+    // Convertimos los valores de los días a números
+    const selectedDays = Array.from(dayCheckboxes).map(cb => parseInt(cb.value));
+
+    if(selectedDays.length === 0) {
+        alert("Por favor, selecciona al menos un día de la semana.");
+        return;
+    }
+
+    const config = {
+        start: startInput.value,
+        end: endInput.value,
+        days: selectedDays
+    };
+
+    localStorage.setItem(`pp_schedule_${type}`, JSON.stringify(config));
+    
+    const typeName = type === 'onboarding' ? 'Primera Vez' : 'Seguimiento';
+    alert(`¡Configuración de ${typeName} guardada!\nHorario: ${config.start} a ${config.end}\nDías seleccionados: ${selectedDays.length}`);
+};
+
+
+window.generateTimeSlots = function() {
+    const dateInput = document.getElementById('bookingDate');
+    const container = document.getElementById('timeSlotsContainer');
+    
+    if(!dateInput || !dateInput.value) return;
+
+    // Detectamos si es público (Primera vez) o privado (Seguimiento)
+    const type = (typeof isPublicBooking !== 'undefined' && isPublicBooking) ? 'onboarding' : 'followup';
+    
+    const configString = localStorage.getItem(`pp_schedule_${type}`);
+    if(!configString) {
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Los horarios para este tipo de llamada aún no están configurados.</p>`;
+        return;
+    }
+
+    const config = JSON.parse(configString);
+    
+    // Validar el día de la semana
+    const selectedDate = new Date(dateInput.value + 'T00:00:00');
+    const dayOfWeek = selectedDate.getDay(); 
+
+    if(!config.days || !config.days.includes(dayOfWeek)) {
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No hay turnos disponibles para este día de la semana. Selecciona otro día.</p>`;
+        return;
+    }
+
+    // Calcular el intervalo: 60 min para onboarding, 45 min para seguimiento
+    const intervalMinutes = type === 'onboarding' ? 60 : 45;
+
+    const slots = [];
+    let current = new Date(`1970-01-01T${config.start}:00`);
+    const end = new Date(`1970-01-01T${config.end}:00`);
+
+    while(current < end) {
+        const hours = current.getHours().toString().padStart(2, '0');
+        const minutes = current.getMinutes().toString().padStart(2, '0');
+        
+        const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
+        if (nextSlot <= end) {
+            slots.push(`${hours}:${minutes}`);
+        }
+        
+        current = new Date(current.getTime() + intervalMinutes * 60000);
+    }
+
+    if(slots.length === 0) {
+        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No hay horarios en este rango.</p>`;
+        return;
+    }
+
+    container.innerHTML = slots.map(time => `
+        <button onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
+            ${time}
+        </button>
+    `).join('');
+};
