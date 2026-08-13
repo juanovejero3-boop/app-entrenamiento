@@ -1,11 +1,29 @@
 // 1. CONFIGURACIÓN DE SUPABASE 
 const SUPABASE_URL = 'https://bnqjtyaytvvajuikzymq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // Tu clave actual
+const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // Clave pública (publishable): puede ir en el frontend
+const SITE_URL = window.location.origin.startsWith('http') ? window.location.origin : 'https://app-entrenamiento-one.vercel.app';
 const supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
 let userProfile = null;
 let evolutionHistory = [];
+
+// Listener global de sesión: login, logout y recuperación de contraseña
+supaClient.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    currentUser = session.user;
+    loadUserProfile();
+    loadEvolutionHistory();
+    renderApp();
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    userProfile = null;
+    evolutionHistory = [];
+    renderLanding();
+  } else if (event === 'PASSWORD_RECOVERY') {
+    renderPasswordUpdate();
+  }
+});
 
 // ==========================================
 // PANEL GLOBAL DE HORARIOS (100% INFALIBLE)
@@ -68,8 +86,9 @@ async function loadUserProfile() {
   if (data) {
     userProfile = data;
   } else {
-    const { data: newProfile } = await supaClient.from('profiles').insert([{ id: currentUser.id, email: currentUser.email, role: 'alumno' }]).select().single();
-    userProfile = newProfile || { role: 'alumno', sheet_url: '#', pdf_url: '#' };
+    // El trigger handle_new_user debería crear el perfil automáticamente al registrarse.
+    userProfile = { id: currentUser.id, email: currentUser.email, role: 'alumno', sheet_url: '#', pdf_url: '#' };
+    console.warn('Perfil no encontrado en la base de datos para', currentUser.id);
   }
 }
 
@@ -132,6 +151,9 @@ function renderLogin() {
           <button type="submit" onclick="authMode='login'" class="flex-1 neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Iniciar Sesión</button>
           <button type="submit" onclick="authMode='signup'" class="flex-1 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">Registrarse</button>
         </div>
+        <div class="pt-1 text-center">
+          <button type="button" onclick="renderPasswordReset()" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
+        </div>
       </form>
     </div>
   `;
@@ -140,31 +162,133 @@ function renderLogin() {
 let authMode = 'login';
 async function handleAuth(e) {
   e.preventDefault();
-  const email = document.getElementById('auth-email').value;
+  const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
 
   if (authMode === 'login') {
     const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
-    if (error) return alert('Error al iniciar sesión. Verifica tus datos o tu mail de confirmación.');
-    currentUser = data.user;
-  } else {
-    const { data, error } = await supaClient.auth.signUp({ email, password });
-    if (error) return alert('Error en el registro: ' + error.message);
-    alert('¡Cuenta creada exitosamente! Revisa tu email para confirmar y luego inicia sesión.');
-    document.getElementById('auth-email').value = '';
-    document.getElementById('auth-password').value = '';
+    if (error) {
+      if (error.message === 'Email not confirmed') {
+        return alert('Todavía no confirmaste tu email. Revisá tu casilla de correo (y el spam).');
+      }
+      return alert('Email o contraseña incorrectos.');
+    }
+    // El listener onAuthStateChange (SIGNED_IN) carga el perfil y renderiza la app.
     return;
   }
-  await loadUserProfile();
-  await loadEvolutionHistory();
-  renderApp();
+
+  const { data, error } = await supaClient.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: SITE_URL }
+  });
+  if (error) {
+    if (error.message === 'Signups not allowed for this instance') {
+      return alert('El registro está deshabilitado temporalmente.');
+    }
+    if (error.message === 'User already registered') {
+      return alert('Ese correo ya está registrado. Iniciá sesión.');
+    }
+    return alert('Error en el registro: ' + error.message);
+  }
+
+  if (data.session) {
+    // Email autoconfirmado: el listener SIGNED_IN renderiza la app.
+    return;
+  }
+
+  renderEmailSent(email);
 }
 
 async function handleLogout() {
   await supaClient.auth.signOut();
-  currentUser = null;
-  renderLanding();
+  // El listener onAuthStateChange (SIGNED_OUT) limpia el estado y muestra el landing.
 }
+
+// ============================================
+// VISTAS DE AUTENTICACIÓN (confirmación y recuperación)
+// ============================================
+function renderEmailSent(email) {
+  const content = document.getElementById('app-content');
+  content.innerHTML = `
+    <div class="max-w-md mx-auto mt-16 bg-cyberCard p-8 rounded-2xl border border-gray-800 text-center space-y-4">
+      <i class="fa-solid fa-envelope-open-text text-5xl text-neonRed"></i>
+      <h2 class="text-xl font-black text-white uppercase tracking-wide">Revisá tu email</h2>
+      <p class="text-sm text-gray-300">Te enviamos un link de confirmación a <span class="text-neonRed font-bold">${email}</span>.</p>
+      <p class="text-xs text-gray-500">Hacé click en el link para activar tu cuenta y luego iniciá sesión.</p>
+      <button onclick="resendConfirmationEmail('${email}')" class="w-full py-3 bg-cyberDark border border-gray-700 text-gray-300 font-bold rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">Reenviar correo</button>
+      <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white">Volver al inicio de sesión</button>
+    </div>
+  `;
+}
+
+window.resendConfirmationEmail = async function(email) {
+  const { error } = await supaClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: SITE_URL } });
+  if (error) return alert('No se pudo reenviar: ' + error.message);
+  alert('Correo reenviado. Revisá tu casilla (y el spam).');
+};
+
+function renderPasswordReset() {
+  const content = document.getElementById('app-content');
+  content.innerHTML = `
+    <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-5">
+      <div class="flex justify-between items-center border-b border-gray-800 pb-4">
+        <h2 class="text-xl font-black text-neonRed">RECUPERAR CONTRASEÑA</h2>
+        <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form onsubmit="handlePasswordReset(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Correo Electrónico</label>
+          <input type="email" id="reset-email" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+        </div>
+        <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Enviar link de recuperación</button>
+      </form>
+    </div>
+  `;
+}
+
+async function handlePasswordReset(e) {
+  e.preventDefault();
+  const email = document.getElementById('reset-email').value.trim();
+  const { error } = await supaClient.auth.resetPasswordForEmail(email, { redirectTo: SITE_URL });
+  if (error) return alert('No se pudo enviar: ' + error.message);
+  const content = document.getElementById('app-content');
+  content.innerHTML = `
+    <div class="max-w-md mx-auto mt-16 bg-cyberCard p-8 rounded-2xl border border-gray-800 text-center space-y-4">
+      <i class="fa-solid fa-envelope text-5xl text-neonRed"></i>
+      <h2 class="text-xl font-black text-white uppercase tracking-wide">Revisá tu email</h2>
+      <p class="text-sm text-gray-300">Te enviamos un link para restablecer tu contraseña a <span class="text-neonRed font-bold">${email}</span>.</p>
+      <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white">Volver al inicio de sesión</button>
+    </div>
+  `;
+}
+
+function renderPasswordUpdate() {
+  const navBar = document.querySelector('nav');
+  if (navBar) navBar.style.display = 'none';
+  const content = document.getElementById('app-content');
+  content.innerHTML = `
+    <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-5">
+      <h2 class="text-xl font-black text-neonRed border-b border-gray-800 pb-4">NUEVA CONTRASEÑA</h2>
+      <form onsubmit="updatePassword(event)" class="space-y-4 text-sm">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Nueva contraseña</label>
+          <input type="password" id="new-password" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+        </div>
+        <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar contraseña</button>
+      </form>
+    </div>
+  `;
+}
+
+window.updatePassword = async function(e) {
+  e.preventDefault();
+  const password = document.getElementById('new-password').value;
+  const { error } = await supaClient.auth.updateUser({ password });
+  if (error) return alert('No se pudo actualizar: ' + error.message);
+  alert('Contraseña actualizada. Ahora iniciá sesión con tu nueva clave.');
+  renderLogin();
+};
 
 // ============================================
 // LÓGICA DE AGENDAMIENTO PÚBLICO (NUEVO INGRESO)
