@@ -745,7 +745,7 @@ else if (tab === 'nutricion') {
     content.innerHTML = `
       <div class="space-y-6 pb-10">
         <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
-          <i class="fa-solid fa-file-spreadsheet mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
+          <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
         </a>
 
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
