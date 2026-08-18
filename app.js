@@ -447,7 +447,8 @@ function renderApp() {
         </button>
     `;
   }
-  switchTab('entrenamiento');
+  const fichaCompleta = !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
+  switchTab(fichaCompleta ? 'entrenamiento' : 'perfil');
 }
 
 function setActiveNav(tab) {
