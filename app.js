@@ -546,6 +546,30 @@ function toast(message, ok = true) {
   setTimeout(() => el.remove(), 2500);
 }
 
+window.togglePassword = function(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm"></i>`;
+};
+
+window.changePassword = async function(e) {
+  e.preventDefault();
+  const current = document.getElementById('pw-current').value;
+  const nuevo = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+
+  if (nuevo !== confirm) return toast('Las contraseñas nuevas no coinciden', false);
+
+  const { error } = await supaClient.auth.updateUser({ password: nuevo, current_password: current });
+  if (error) return toast('Error al cambiar: ' + error.message, false);
+
+  toast('Contraseña cambiada');
+  document.getElementById('pw-current').value = '';
+  document.getElementById('pw-new').value = '';
+  document.getElementById('pw-confirm').value = '';
+};
+
 async function switchTab(tab) {
   setActiveNav(tab);
   const content = document.getElementById('app-content');
@@ -781,6 +805,33 @@ else if (tab === 'nutricion') {
       <div class="space-y-6">
         ${renderUserHeader()}
         ${renderFicha()}
+        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
+          <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-key mr-2"></i> Cambiar Contraseña</h3>
+          <form onsubmit="changePassword(event)" class="space-y-3 text-sm">
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">Contraseña actual</label>
+              <div class="relative">
+                <input type="password" id="pw-current" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="current-password" />
+                <button type="button" onclick="togglePassword('pw-current', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">Nueva contraseña</label>
+              <div class="relative">
+                <input type="password" id="pw-new" required minlength="6" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="new-password" />
+                <button type="button" onclick="togglePassword('pw-new', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">Repetir nueva contraseña</label>
+              <div class="relative">
+                <input type="password" id="pw-confirm" required minlength="6" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="new-password" />
+                <button type="button" onclick="togglePassword('pw-confirm', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+              </div>
+            </div>
+            <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Contraseña</button>
+          </form>
+        </div>
       </div>
     `;
   } 
