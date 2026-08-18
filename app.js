@@ -17,11 +17,16 @@ supaClient.auth.onAuthStateChange(async (event, session) => {
     currentUser = session.user;
     await loadUserProfile();
     await loadEvolutionHistory();
+    if (passwordRecoveryActive) return;
     renderApp();
   } else if (event === 'SIGNED_OUT') {
     currentUser = null;
     userProfile = null;
     evolutionHistory = [];
+    if (passwordRecoveryActive) {
+      renderPasswordUpdate();
+      return;
+    }
     renderLanding();
   } else if (event === 'PASSWORD_RECOVERY') {
     passwordRecoveryActive = true;
@@ -448,12 +453,15 @@ function renderApp() {
   if(navBar) navBar.style.display = 'block';
 
   const navContainer = document.querySelector('nav .max-w-lg');
-  if (userProfile?.role === 'admin' && !document.getElementById('btn-admin')) {
+  const btnAdmin = document.getElementById('btn-admin');
+  if (userProfile?.role === 'admin' && !btnAdmin) {
     navContainer.innerHTML += `
         <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
             <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
         </button>
     `;
+  } else if (userProfile?.role !== 'admin' && btnAdmin) {
+    btnAdmin.remove();
   }
   const fichaCompleta = !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
   switchTab(fichaCompleta ? 'entrenamiento' : 'perfil');
