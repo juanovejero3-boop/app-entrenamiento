@@ -447,7 +447,7 @@ function renderApp() {
         </button>
     `;
   }
-  switchTab('perfil');
+  switchTab('entrenamiento');
 }
 
 function setActiveNav(tab) {
@@ -725,24 +725,45 @@ else if (tab === 'nutricion') {
     `;
   } 
   else if (tab === 'entrenamiento') {
+    const sheetUrl = userProfile?.sheet_url;
+    const nutritionUrl = userProfile?.nutrition_url;
+
+    const entrenamientoCard = sheetUrl ? `
+      <a href="${sheetUrl}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
+        <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
+      </a>
+    ` : `
+      <button disabled class="block w-full text-center bg-cyberCarbon text-gray-600 font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-gray-800 cursor-not-allowed">
+        <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
+      </button>
+      <p class="text-xs text-gray-500 text-center">Pronto te cargaremos tu entrenamiento.</p>
+    `;
+
+    const nutricionCard = nutritionUrl ? `
+      <a href="${nutritionUrl}" target="_blank" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
+        <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
+      </a>
+    ` : `
+      <button disabled class="block w-full text-center bg-cyberCarbon text-gray-600 font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-gray-800 cursor-not-allowed">
+        <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
+      </button>
+      <p class="text-xs text-gray-500 text-center">Pronto te cargaremos tu plan de nutrición.</p>
+    `;
+
     content.innerHTML = `
       <div class="space-y-6 pb-10">
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
           <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
             <i class="fa-solid fa-dumbbell text-neonRed mr-2"></i> Planilla de Entrenamiento
           </h3>
-          <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
-            <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
-          </a>
+          ${entrenamientoCard}
         </div>
 
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
           <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
             <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición
           </h3>
-          <a href="${userProfile?.nutrition_url || '#'}" target="_blank" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
-            <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
-          </a>
+          ${nutricionCard}
         </div>
       </div>
     `;
