@@ -8,6 +8,7 @@ let currentUser = null;
 let userProfile = null;
 let evolutionHistory = [];
 let adminAllUsers = [];
+let profileEditing = false;
 
 // Listener global de sesión: login, logout y recuperación de contraseña
 supaClient.auth.onAuthStateChange(async (event, session) => {
@@ -458,6 +459,78 @@ function setActiveNav(tab) {
   });
 }
 
+function renderUserHeader() {
+  return `
+    <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 flex justify-between items-center">
+      <div>
+        <h3 class="font-bold text-md text-neonRed">Perfil de Usuario</h3>
+        <p class="text-xs text-gray-300">${currentUser.email}</p>
+      </div>
+      <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
+    </div>
+  `;
+}
+
+function fichaCompleta() {
+  return !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
+}
+
+function renderFicha() {
+  const completa = fichaCompleta();
+  const editing = profileEditing || !completa;
+  const readOnly = editing ? '' : 'readonly';
+
+  const badge = completa
+    ? `<span class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest bg-emerald-950/40 px-2 py-1 rounded border border-emerald-800"><i class="fa-solid fa-check mr-1"></i>Ficha completa</span>`
+    : `<span class="text-[10px] text-yellow-400 font-bold uppercase tracking-widest bg-yellow-950/40 px-2 py-1 rounded border border-yellow-800">Ficha incompleta</span>`;
+
+  return `
+    <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
+      <div class="flex justify-between items-center">
+        <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-id-card mr-2"></i> Mi Ficha</h3>
+        <div class="flex items-center gap-2">
+          ${badge}
+          ${!editing ? `<button onclick="enableProfileEdit()" class="text-gray-500 hover:text-neonRed transition" title="Editar ficha"><i class="fa-solid fa-pen text-lg"></i></button>` : ''}
+        </div>
+      </div>
+      <form onsubmit="saveProfile(event)" class="space-y-3 text-sm">
+        <div>
+          <label class="block text-[10px] text-gray-400 mb-1">Nombre</label>
+          <input type="text" id="profile-name" value="${userProfile?.name || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+        </div>
+        <div>
+          <label class="block text-[10px] text-gray-400 mb-1">Objetivo</label>
+          <input type="text" id="profile-goal" value="${userProfile?.goal || ''}" ${readOnly} placeholder="Ej: perder grasa, ganar masa muscular..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] text-gray-400 mb-1">Altura (cm)</label>
+            <input type="number" step="0.1" id="profile-height" value="${userProfile?.height_cm || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+          </div>
+          <div>
+            <label class="block text-[10px] text-gray-400 mb-1">Peso (kg)</label>
+            <input type="number" step="0.1" id="profile-weight" value="${userProfile?.weight_kg || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+          </div>
+        </div>
+        ${editing ? `<button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Ficha</button>` : ''}
+      </form>
+    </div>
+  `;
+}
+
+window.enableProfileEdit = function() {
+  profileEditing = true;
+  switchTab('perfil');
+};
+
+function toast(message, ok = true) {
+  const el = document.createElement('div');
+  el.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-wider shadow-2xl border ${ok ? 'bg-emerald-950/90 border-emerald-700 text-emerald-300' : 'bg-red-950/90 border-red-700 text-red-300'}`;
+  el.textContent = message;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
 async function switchTab(tab) {
   setActiveNav(tab);
   const content = document.getElementById('app-content');
@@ -691,37 +764,8 @@ else if (tab === 'nutricion') {
   else if (tab === 'perfil') {
     content.innerHTML = `
       <div class="space-y-6">
-        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 flex justify-between items-center">
-          <div>
-            <h3 class="font-bold text-md text-neonRed">Perfil de Usuario</h3>
-            <p class="text-xs text-gray-300">${currentUser.email}</p>
-          </div>
-          <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
-        </div>
-        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
-          <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-id-card mr-2"></i> Mi Ficha</h3>
-          <form onsubmit="saveProfile(event)" class="space-y-3 text-sm">
-            <div>
-              <label class="block text-[10px] text-gray-400 mb-1">Nombre</label>
-              <input type="text" id="profile-name" value="${userProfile?.name || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
-            </div>
-            <div>
-              <label class="block text-[10px] text-gray-400 mb-1">Objetivo</label>
-              <input type="text" id="profile-goal" value="${userProfile?.goal || ''}" placeholder="Ej: perder grasa, ganar masa muscular..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label class="block text-[10px] text-gray-400 mb-1">Altura (cm)</label>
-                <input type="number" step="0.1" id="profile-height" value="${userProfile?.height_cm || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
-              </div>
-              <div>
-                <label class="block text-[10px] text-gray-400 mb-1">Peso (kg)</label>
-                <input type="number" step="0.1" id="profile-weight" value="${userProfile?.weight_kg || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
-              </div>
-            </div>
-            <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Ficha</button>
-          </form>
-        </div>
+        ${renderUserHeader()}
+        ${renderFicha()}
       </div>
     `;
   } 
@@ -753,6 +797,7 @@ else if (tab === 'nutricion') {
 
     content.innerHTML = `
       <div class="space-y-6 pb-10">
+        ${renderUserHeader()}
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
           <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
             <i class="fa-solid fa-dumbbell text-neonRed mr-2"></i> Planilla de Entrenamiento
@@ -810,14 +855,19 @@ window.saveProfile = async function(e) {
     weight_kg: weightKg
   }).eq('id', currentUser.id);
 
-  if (error) return alert('Error al guardar: ' + error.message);
+  if (error) {
+    toast('Error al guardar: ' + error.message, false);
+    return;
+  }
   if (userProfile) {
     userProfile.name = name || null;
     userProfile.goal = goal || null;
     userProfile.height_cm = heightCm;
     userProfile.weight_kg = weightKg;
   }
-  alert('¡Ficha guardada!');
+  profileEditing = false;
+  toast('Ficha guardada');
+  switchTab('perfil');
 };
 
 async function saveEvolution(e) {
