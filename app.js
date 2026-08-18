@@ -11,16 +11,22 @@ let adminAllUsers = [];
 let profileEditing = false;
 let passwordRecoveryActive = false;
 let adminSubTab = 'asignacion';
+let alumnosFiltrados = [];
+let alumnosPagina = 0;
+const ALUMNOS_POR_PAGINA = 3;
+let currentTab = null;
 
 // Listener global de sesión: login, logout y recuperación de contraseña
+let appRendered = false;
 supaClient.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
     currentUser = session.user;
     await loadUserProfile();
     await loadEvolutionHistory();
     if (passwordRecoveryActive) return;
-    renderApp();
+    if (!appRendered) { appRendered = true; renderApp(); }
   } else if (event === 'SIGNED_OUT') {
+    appRendered = false;
     currentUser = null;
     userProfile = null;
     evolutionHistory = [];
@@ -88,7 +94,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     currentUser = session.user;
     await loadUserProfile();
     await loadEvolutionHistory();
-    renderApp();
+    if (!appRendered) { appRendered = true; renderApp(); }
   } else {
     renderLanding();
   }
@@ -464,11 +470,14 @@ function renderApp() {
   } else if (userProfile?.role !== 'admin' && btnAdmin) {
     btnAdmin.remove();
   }
+  // Si ya estamos en una tab de la app, no re-navegar (evita saltos al volver a la pestaña)
+  if (currentTab) return;
   const fichaCompleta = !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
   switchTab(fichaCompleta ? 'entrenamiento' : 'perfil');
 }
 
 function setActiveNav(tab) {
+  currentTab = tab;
   ['perfil', 'entrenamiento', 'admin'].forEach(t => {
     const btn = document.getElementById(`btn-${t}`);
     if (btn) btn.className = (t === tab) ? "flex flex-col items-center text-neonRed" : "flex flex-col items-center text-gray-500 hover:text-neonRed";
@@ -858,6 +867,8 @@ function renderAdminSubTab() {
 }
 
 function renderAdminAsignacion() {
+  alumnosFiltrados = adminAllUsers;
+  alumnosPagina = 0;
   return `
     <div class="space-y-4">
       <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
@@ -869,7 +880,7 @@ function renderAdminAsignacion() {
         <input type="text" id="alumno-search" oninput="filterAlumnos()" placeholder="Ej: juan, fede, @gmail..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-xs text-white outline-none focus:border-neonRed" />
       </div>
       <div id="alumnos-container" class="space-y-4">
-        ${renderAlumnos(adminAllUsers)}
+        ${renderAlumnos()}
       </div>
     </div>
   `;
@@ -972,8 +983,13 @@ async function saveEvolution(e) {
   switchTab('perfil');
 }
 
-window.renderAlumnos = function(users) {
-  return (users || []).map(u => `
+function renderAlumnos() {
+  const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
+  if (alumnosPagina >= totalPaginas) alumnosPagina = totalPaginas - 1;
+  const desde = alumnosPagina * ALUMNOS_POR_PAGINA;
+  const paginaActual = alumnosFiltrados.slice(desde, desde + ALUMNOS_POR_PAGINA);
+
+  const tarjetas = paginaActual.map(u => `
     <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
        <p class="font-bold text-white text-sm mb-2">${u.name || '(sin nombre)'} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span>
          <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
@@ -981,15 +997,33 @@ window.renderAlumnos = function(users) {
        <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
        <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
     </div>
-  `).join('');
-};
+  `).join('') || '<p class="text-center text-xs text-gray-500 py-6">No se encontraron alumnos.</p>';
+
+  const paginacion = alumnosFiltrados.length > ALUMNOS_POR_PAGINA ? `
+    <div class="flex items-center justify-between pt-1">
+      <button onclick="cambiarPaginaAlumnos(-1)" ${alumnosPagina === 0 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Anterior</button>
+      <span class="text-[11px] text-gray-500">Página ${alumnosPagina + 1} de ${totalPaginas}</span>
+      <button onclick="cambiarPaginaAlumnos(1)" ${alumnosPagina >= totalPaginas - 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Siguiente</button>
+    </div>` : '';
+
+  return `${tarjetas}${paginacion}`;
+}
 
 window.filterAlumnos = function() {
   const q = (document.getElementById('alumno-search').value || '').toLowerCase().trim();
-  const filtered = adminAllUsers.filter(u =>
+  alumnosFiltrados = adminAllUsers.filter(u =>
     !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
   );
-  document.getElementById('alumnos-container').innerHTML = renderAlumnos(filtered);
+  alumnosPagina = 0;
+  document.getElementById('alumnos-container').innerHTML = renderAlumnos();
+};
+
+window.cambiarPaginaAlumnos = function(dir) {
+  const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
+  const nueva = alumnosPagina + dir;
+  if (nueva < 0 || nueva >= totalPaginas) return;
+  alumnosPagina = nueva;
+  document.getElementById('alumnos-container').innerHTML = renderAlumnos();
 };
 
 window.saveUserLinks = async function(userId) {
