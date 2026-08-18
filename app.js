@@ -9,6 +9,7 @@ let userProfile = null;
 let evolutionHistory = [];
 let adminAllUsers = [];
 let profileEditing = false;
+let passwordRecoveryActive = false;
 
 // Listener global de sesión: login, logout y recuperación de contraseña
 supaClient.auth.onAuthStateChange(async (event, session) => {
@@ -23,6 +24,7 @@ supaClient.auth.onAuthStateChange(async (event, session) => {
     evolutionHistory = [];
     renderLanding();
   } else if (event === 'PASSWORD_RECOVERY') {
+    passwordRecoveryActive = true;
     renderPasswordUpdate();
   }
 });
@@ -72,6 +74,10 @@ let isPublicBooking = false; // Define si estamos afuera o adentro de la app
 // 2. VERIFICACIÓN DE SESIÓN AL CARGAR LA APP
 window.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await supaClient.auth.getSession();
+  if (passwordRecoveryActive) {
+    renderPasswordUpdate();
+    return;
+  }
   if (session) {
     currentUser = session.user;
     await loadUserProfile();
@@ -288,8 +294,9 @@ window.updatePassword = async function(e) {
   const password = document.getElementById('new-password').value;
   const { error } = await supaClient.auth.updateUser({ password });
   if (error) return alert('No se pudo actualizar: ' + error.message);
-  alert('Contraseña actualizada. Ahora iniciá sesión con tu nueva clave.');
-  renderLogin();
+  passwordRecoveryActive = false;
+  toast('Contraseña actualizada. Iniciá sesión con tu nueva clave.');
+  await supaClient.auth.signOut();
 };
 
 // ============================================
