@@ -7,6 +7,7 @@ const supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let userProfile = null;
 let evolutionHistory = [];
+let adminAllUsers = [];
 
 // Listener global de sesión: login, logout y recuperación de contraseña
 supaClient.auth.onAuthStateChange(async (event, session) => {
@@ -618,6 +619,7 @@ else if (tab === 'nutricion') {
     }
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
+    adminAllUsers = allUsers || [];
     window.checkAndSendExpirationEmails();
     content.innerHTML = `
       <div class="space-y-6 pb-10">
@@ -673,16 +675,14 @@ else if (tab === 'nutricion') {
           <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
           <p class="text-xs text-gray-400">Links de Google Sheets, PDFs y Nutrición por alumno</p>
         </div>
-        <div class="space-y-4">
-          ${(allUsers || []).map(u => `
-            <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-               <p class="font-bold text-white text-sm mb-2">${u.name || '(sin nombre)'} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span>
-                 <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
-               <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Link de la planilla de entrenamiento (Google Sheets)" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
-               <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
-               <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
-            </div>
-          `).join('')}
+
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+          <label class="block text-[11px] font-bold text-gray-400 uppercase">Buscar alumno por nombre o correo</label>
+          <input type="text" id="alumno-search" oninput="filterAlumnos()" placeholder="Ej: juan, fede, @gmail..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-xs text-white outline-none focus:border-neonRed" />
+        </div>
+
+        <div id="alumnos-container" class="space-y-4">
+          ${renderAlumnos(adminAllUsers)}
         </div>
       </div>
     `;
@@ -816,21 +816,37 @@ async function saveEvolution(e) {
   switchTab('perfil');
 }
 
+window.renderAlumnos = function(users) {
+  return (users || []).map(u => `
+    <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
+       <p class="font-bold text-white text-sm mb-2">${u.name || '(sin nombre)'} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span>
+         <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
+       <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Link de la planilla de entrenamiento (Google Sheets)" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
+       <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
+       <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
+    </div>
+  `).join('');
+};
+
+window.filterAlumnos = function() {
+  const q = (document.getElementById('alumno-search').value || '').toLowerCase().trim();
+  const filtered = adminAllUsers.filter(u =>
+    !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+  );
+  document.getElementById('alumnos-container').innerHTML = renderAlumnos(filtered);
+};
+
 window.saveUserLinks = async function(userId) {
     const sheet = document.getElementById(`sheet-${userId}`).value;
-    const pdf = document.getElementById(`pdf-${userId}`).value;
     const nutricion = document.getElementById(`nutricion-${userId}`).value;
-    const rutina = document.getElementById(`rutina-${userId}`).value;
 
     const { error } = await supaClient.from('profiles').update({ 
         sheet_url: sheet, 
-        pdf_url: pdf,
-        nutrition_url: nutricion,
-        rutina_text: rutina
+        nutrition_url: nutricion
     }).eq('id', userId);
 
     if (error) alert('Error: ' + error.message);
-    else alert('¡Enlaces y rutina actualizados correctamente!');
+    else alert('¡Enlaces actualizados correctamente!');
 }
 
 window.generateTimeSlots = function() {
