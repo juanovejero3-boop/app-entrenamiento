@@ -450,7 +450,7 @@ function renderApp() {
 }
 
 function setActiveNav(tab) {
-  ['perfil', 'entrenamiento', 'alimentacion', 'turnos', 'videoteca', 'admin', 'tracker'].forEach(t => {
+  ['perfil', 'entrenamiento', 'admin'].forEach(t => {
     const btn = document.getElementById(`btn-${t}`);
     if (btn) btn.className = (t === tab) ? "flex flex-col items-center text-neonRed" : "flex flex-col items-center text-gray-500 hover:text-neonRed";
   });
@@ -671,16 +671,15 @@ else if (tab === 'nutricion') {
         <!-- SECCIÓN ENLACES -->
         <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-8">
           <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
-          <p class="text-xs text-gray-400">Links de Google Sheets y PDFs</p>
+          <p class="text-xs text-gray-400">Links de Google Sheets, PDFs y Nutrición por alumno</p>
         </div>
         <div class="space-y-4">
           ${(allUsers || []).map(u => `
             <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-               <p class="font-bold text-white text-sm mb-2">${u.email} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span></p>
-               <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Pega el link de Google Sheets aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
-               <input type="text" id="pdf-${u.id}" value="${u.pdf_url || ''}" placeholder="Pega el link del PDF aquí" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 outline-none focus:border-neonRed" />
-               <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Pega el link de Nutrición aquí">
-               <textarea id="rutina-${u.id}" rows="3" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Formato: Ejercicio | Objetivo | Récord Anterior">${u.rutina_text || ''}</textarea>
+               <p class="font-bold text-white text-sm mb-2">${u.name || '(sin nombre)'} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span>
+                 <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
+               <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Link de la planilla de entrenamiento (Google Sheets)" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
+               <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
                <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
             </div>
           `).join('')}
@@ -698,80 +697,52 @@ else if (tab === 'nutricion') {
           </div>
           <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
         </div>
-        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-4">
-          <h3 class="font-bold text-md text-neonRed"><i class="fa-solid fa-chart-line mr-2"></i> Registrar Evolución</h3>
-          <form onsubmit="saveEvolution(event)" class="grid grid-cols-2 gap-3 text-sm">
-            <div><label class="block text-[10px] text-gray-400">Peso Corporal (kg)</label><input type="number" step="0.1" id="evo-peso" required class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <div><label class="block text-[10px] text-gray-400">Sentadilla (kg)</label><input type="number" id="evo-sentadilla" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <div><label class="block text-[10px] text-gray-400">Banco Plano (kg)</label><input type="number" id="evo-banco" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <div><label class="block text-[10px] text-gray-400">Peso Muerto (kg)</label><input type="number" id="evo-muerto" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <div><label class="block text-[10px] text-gray-400">Dominadas (reps)</label><input type="number" id="evo-dominadas" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <div><label class="block text-[10px] text-gray-400">Tracciones (kg)</label><input type="number" id="evo-tracciones" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white outline-none focus:border-neonRed" /></div>
-            <button type="submit" class="col-span-2 neon-glow-button text-white font-bold py-2 rounded-lg text-xs uppercase">Guardar Marcas</button>
+        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
+          <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-id-card mr-2"></i> Mi Ficha</h3>
+          <form onsubmit="saveProfile(event)" class="space-y-3 text-sm">
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">Nombre</label>
+              <input type="text" id="profile-name" value="${userProfile?.name || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+            </div>
+            <div>
+              <label class="block text-[10px] text-gray-400 mb-1">Objetivo</label>
+              <input type="text" id="profile-goal" value="${userProfile?.goal || ''}" placeholder="Ej: perder grasa, ganar masa muscular..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">Altura (cm)</label>
+                <input type="number" step="0.1" id="profile-height" value="${userProfile?.height_cm || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+              </div>
+              <div>
+                <label class="block text-[10px] text-gray-400 mb-1">Peso (kg)</label>
+                <input type="number" step="0.1" id="profile-weight" value="${userProfile?.weight_kg || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
+              </div>
+            </div>
+            <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Ficha</button>
           </form>
-        </div>
-        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-          <h3 class="font-bold text-md text-neonRed mb-2"><i class="fa-solid fa-clock-rotate-left mr-2"></i> Historial de Marcas</h3>
-          <div class="overflow-x-auto text-xs">
-            <table class="w-full text-left text-gray-300 whitespace-nowrap">
-              <thead class="bg-cyberCarbon text-neonRed border-b border-gray-800">
-                <tr><th class="p-2">Fecha</th><th class="p-2">Peso</th><th class="p-2">SQ</th><th class="p-2">BP</th><th class="p-2">DL</th></tr>
-              </thead>
-              <tbody class="divide-y divide-gray-800">
-                ${evolutionHistory.map(item => `
-                  <tr>
-                    <td class="p-2 font-mono">${item.fecha}</td>
-                    <td class="p-2 font-bold text-white">${item.peso || '-'} kg</td>
-                    <td class="p-2">${item.sentadilla || '-'} kg</td>
-                    <td class="p-2">${item.banco || '-'} kg</td>
-                    <td class="p-2">${item.muerto || '-'} kg</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     `;
   } 
   else if (tab === 'entrenamiento') {
-    const isAdmin = userProfile && userProfile.role === 'admin';
-    
-    let warmupsData = {};
-    try {
-      warmupsData = typeof userProfile?.warmups === 'string' ? JSON.parse(userProfile.warmups) : (userProfile?.warmups || {});
-    } catch(e) { warmupsData = {}; }
-
     content.innerHTML = `
       <div class="space-y-6 pb-10">
-        <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
-          <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
-        </a>
-
-        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
+        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
           <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-            <i class="fa-solid fa-fire text-neonRed mr-2"></i> Entradas en Calor
+            <i class="fa-solid fa-dumbbell text-neonRed mr-2"></i> Planilla de Entrenamiento
           </h3>
-          <p class="text-xs text-gray-400">Protocolo de activación específico para cada día de entrenamiento.</p>
+          <a href="${userProfile?.sheet_url || '#'}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
+            <i class="fa-solid fa-file-excel mr-2"></i> ABRIR PLANILLA DE GOOGLE SHEETS
+          </a>
+        </div>
 
-          <div class="space-y-3 pt-2">
-            ${[1, 2, 3, 4, 5].map(day => `
-              <div class="bg-cyberDark p-3 rounded-lg border border-gray-800">
-                <label class="block text-xs font-bold text-gray-300 uppercase mb-1.5">Día ${day}</label>
-                ${isAdmin ? `
-                  <textarea id="warmup-day-${day}" rows="2" class="w-full bg-cyberCard border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" placeholder="Escribe la entrada en calor para el Día ${day}...">${warmupsData[day] || ''}</textarea>
-                ` : `
-                  <div class="text-xs text-gray-300 bg-cyberCard/50 p-2.5 rounded border border-gray-800/60 whitespace-pre-line min-h-[40px]">${warmupsData[day] || '<span class="text-gray-600 italic">Sin entrada en calor asignada aún.</span>'}</div>
-                `}
-              </div>
-            `).join('')}
-          </div>
-
-          ${isAdmin ? `
-            <button onclick="saveWarmups('${userProfile.id}')" class="w-full mt-3 neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">
-              <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Entradas en Calor
-            </button>
-          ` : ''}
+        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+          <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición
+          </h3>
+          <a href="${userProfile?.nutrition_url || '#'}" target="_blank" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
+            <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
+          </a>
         </div>
       </div>
     `;
@@ -803,6 +774,30 @@ else if (tab === 'nutricion') {
 // ============================================
 // LÓGICA DE BASE DE DATOS Y TURNOS
 // ============================================
+window.saveProfile = async function(e) {
+  e.preventDefault();
+  const name = document.getElementById('profile-name').value.trim();
+  const goal = document.getElementById('profile-goal').value.trim();
+  const heightCm = parseFloat(document.getElementById('profile-height').value) || null;
+  const weightKg = parseFloat(document.getElementById('profile-weight').value) || null;
+
+  const { error } = await supaClient.from('profiles').update({
+    name: name || null,
+    goal: goal || null,
+    height_cm: heightCm,
+    weight_kg: weightKg
+  }).eq('id', currentUser.id);
+
+  if (error) return alert('Error al guardar: ' + error.message);
+  if (userProfile) {
+    userProfile.name = name || null;
+    userProfile.goal = goal || null;
+    userProfile.height_cm = heightCm;
+    userProfile.weight_kg = weightKg;
+  }
+  alert('¡Ficha guardada!');
+};
+
 async function saveEvolution(e) {
   e.preventDefault();
   const registro = {
