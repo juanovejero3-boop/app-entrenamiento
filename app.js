@@ -9,11 +9,11 @@ let userProfile = null;
 let evolutionHistory = [];
 
 // Listener global de sesión: login, logout y recuperación de contraseña
-supaClient.auth.onAuthStateChange((event, session) => {
+supaClient.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
     currentUser = session.user;
-    loadUserProfile();
-    loadEvolutionHistory();
+    await loadUserProfile();
+    await loadEvolutionHistory();
     renderApp();
   } else if (event === 'SIGNED_OUT') {
     currentUser = null;
@@ -439,7 +439,7 @@ function renderApp() {
   if(navBar) navBar.style.display = 'block';
 
   const navContainer = document.querySelector('nav .max-w-lg');
-  if (currentUser.email === 'juanovejero3@gmail.com' && !document.getElementById('btn-admin')) {
+  if (userProfile?.role === 'admin' && !document.getElementById('btn-admin')) {
     navContainer.innerHTML += `
         <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
             <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
@@ -610,8 +610,8 @@ else if (tab === 'nutricion') {
     }
 
   else if (tab === 'admin') {
-    // --- CANDADO DE SEGURIDAD ABSOLUTO ---
-    if (currentUser.email !== 'juanovejero3@gmail.com') {
+    // --- CANDADO DE SEGURIDAD ---
+    if (userProfile?.role !== 'admin') {
         alert('Acceso denegado. Esta área es exclusiva.');
         switchTab('perfil');
         return;
