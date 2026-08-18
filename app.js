@@ -10,6 +10,7 @@ let evolutionHistory = [];
 let adminAllUsers = [];
 let profileEditing = false;
 let passwordRecoveryActive = false;
+let adminSubTab = 'asignacion';
 
 // Listener global de sesión: login, logout y recuperación de contraseña
 supaClient.auth.onAuthStateChange(async (event, session) => {
@@ -736,67 +737,13 @@ else if (tab === 'nutricion') {
     window.checkAndSendExpirationEmails();
     content.innerHTML = `
       <div class="space-y-6 pb-10">
-      
-  </div>
-        <!-- SECCIÓN GESTIÓN DE TURNOS -->
-        <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-4">
-          <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda de Llamadas</h2>
-          <p class="text-xs text-gray-400">Evaluaciones y Seguimientos</p>
-        </div>
-        
-        <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3">
-          <label class="block text-[11px] font-bold text-gray-400 uppercase">URL Webhook (Google Calendar):</label>
-          <input type="text" id="appsScriptUrl" value="${webhookUrl}" onchange="saveAppWebhookUrl()" placeholder="https://script.google.com/macros/..." class="w-full bg-cyberDark border border-gray-700 p-2.5 rounded text-xs text-neonRed outline-none focus:border-neonRed mb-4">
-          
-          <div class="grid grid-cols-2 gap-4 mb-4">
-             <div class="bg-cyberDark p-3 rounded-lg border border-gray-800 text-center"><p class="text-[10px] text-gray-500 uppercase">Turnos Activos</p><p class="text-xl font-bold text-neonRed">${localBookings.length}</p></div>
-             <button onclick="clearAppBookings()" class="bg-red-950/40 text-red-500 border border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-900/60 transition"><i class="fa-solid fa-trash mb-1 block"></i> Limpiar Registro</button>
-          </div>
-
-          <div class="overflow-x-auto mt-4">
-            <table class="w-full text-left text-xs text-gray-300">
-              <thead class="bg-cyberCarbon text-neonRed border-b border-gray-800">
-                <tr><th class="p-2">Fecha/Hora</th><th class="p-2">Atleta</th><th class="p-2">Servicio</th></tr>
-              </thead>
-              <tbody class="divide-y divide-gray-800">
-                ${localBookings.length === 0 ? `<tr><td colspan="3" class="p-4 text-center text-gray-500">Sin citas pendientes</td></tr>` : 
-                  localBookings.slice().reverse().map(b => `
-                  <tr>
-                    <td class="p-2 whitespace-nowrap"><span class="font-bold text-white">${b.date}</span><br>${b.time} ART</td>
-                    <td class="p-2 font-semibold">${b.clientName}<br><span class="text-[10px] text-gray-500">${b.clientEmail}</span></td>
-                    <td class="p-2 text-[10px]"><span class="text-neonRed font-bold border border-red-900 px-1 rounded bg-red-950/30">${b.service}</span><br><span class="text-gray-500 truncate max-w-[80px] block mt-1">${b.notes}</span></td>
-                  </tr>`).join('')}
-              </tbody>
-            </table>
-          </div>
+        <!-- SUB-TABS DEL ADMIN -->
+        <div class="bg-cyberCard p-1 rounded-xl border border-gray-800 flex mt-4">
+          <button onclick="switchAdminSubTab('asignacion')" id="subtabs-btn-asignacion" class="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${adminSubTab === 'asignacion' ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}">Asignación</button>
+          <button onclick="switchAdminSubTab('llamadas')" id="subtabs-btn-llamadas" class="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${adminSubTab === 'llamadas' ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}">Llamadas</button>
         </div>
 
-<!-- SECCION ALTA MANUAL DE USUARIOS -->
-<div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-8">
-    <h2 class="text-xl font-black text-white uppercase tracking-wide">Alta Manual de Alumno</h2>
-    <p class="text-xs text-gray-400">Registra el correo de un alumno si no pudo crearlo solo</p>
-</div>
-<div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3 mt-3">
-    <input type="email" id="nuevoEmail" placeholder="correo@alumno.com" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed">
-    <button onclick="window.crearUsuarioManual()" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-[0_0_15px_rgba(255,0,0,0.3)] hover:bg-red-700 transition duration-300">
-        <i class="fa-solid fa-user-plus mr-2"></i> Dar de Alta Alumno
-    </button>
-</div>
-
-        <!-- SECCIÓN ENLACES -->
-        <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 mt-8">
-          <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
-          <p class="text-xs text-gray-400">Links de Google Sheets, PDFs y Nutrición por alumno</p>
-        </div>
-
-        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-          <label class="block text-[11px] font-bold text-gray-400 uppercase">Buscar alumno por nombre o correo</label>
-          <input type="text" id="alumno-search" oninput="filterAlumnos()" placeholder="Ej: juan, fede, @gmail..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-xs text-white outline-none focus:border-neonRed" />
-        </div>
-
-        <div id="alumnos-container" class="space-y-4">
-          ${renderAlumnos(adminAllUsers)}
-        </div>
+        <div id="admin-sub-content">${renderAdminSubTab()}</div>
       </div>
     `;
   }
@@ -903,6 +850,77 @@ else if (tab === 'nutricion') {
     `;
   }
 }
+
+// ---------- SUB-TABS DEL ADMIN ----------
+function renderAdminSubTab() {
+  if (adminSubTab === 'llamadas') return renderAdminLlamadas();
+  return renderAdminAsignacion();
+}
+
+function renderAdminAsignacion() {
+  return `
+    <div class="space-y-4">
+      <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
+        <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
+        <p class="text-xs text-gray-400">Links de Google Sheets, PDFs y Nutrición por alumno</p>
+      </div>
+      <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+        <label class="block text-[11px] font-bold text-gray-400 uppercase">Buscar alumno por nombre o correo</label>
+        <input type="text" id="alumno-search" oninput="filterAlumnos()" placeholder="Ej: juan, fede, @gmail..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-xs text-white outline-none focus:border-neonRed" />
+      </div>
+      <div id="alumnos-container" class="space-y-4">
+        ${renderAlumnos(adminAllUsers)}
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminLlamadas() {
+  return `
+    <div class="space-y-4">
+      <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
+        <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda de Llamadas</h2>
+        <p class="text-xs text-gray-400">Evaluaciones y Seguimientos</p>
+      </div>
+      <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3">
+        <label class="block text-[11px] font-bold text-gray-400 uppercase">URL Webhook (Google Calendar):</label>
+        <input type="text" id="appsScriptUrl" value="${webhookUrl}" onchange="saveAppWebhookUrl()" placeholder="https://script.google.com/macros/..." class="w-full bg-cyberDark border border-gray-700 p-2.5 rounded text-xs text-neonRed outline-none focus:border-neonRed mb-4">
+
+        <div class="grid grid-cols-2 gap-4 mb-4">
+           <div class="bg-cyberDark p-3 rounded-lg border border-gray-800 text-center"><p class="text-[10px] text-gray-500 uppercase">Turnos Activos</p><p class="text-xl font-bold text-neonRed">${localBookings.length}</p></div>
+           <button onclick="clearAppBookings()" class="bg-red-950/40 text-red-500 border border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-900/60 transition"><i class="fa-solid fa-trash mb-1 block"></i> Limpiar Registro</button>
+        </div>
+
+        <div class="overflow-x-auto mt-4">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-cyberCarbon text-neonRed border-b border-gray-800">
+              <tr><th class="p-2">Fecha/Hora</th><th class="p-2">Atleta</th><th class="p-2">Servicio</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+              ${localBookings.length === 0 ? `<tr><td colspan="3" class="p-4 text-center text-gray-500">Sin citas pendientes</td></tr>` :
+                localBookings.slice().reverse().map(b => `
+                <tr>
+                  <td class="p-2 whitespace-nowrap"><span class="font-bold text-white">${b.date}</span><br>${b.time} ART</td>
+                  <td class="p-2 font-semibold">${b.clientName}<br><span class="text-[10px] text-gray-500">${b.clientEmail}</span></td>
+                  <td class="p-2 text-[10px]"><span class="text-neonRed font-bold border border-red-900 px-1 rounded bg-red-950/30">${b.service}</span><br><span class="text-gray-500 truncate max-w-[80px] block mt-1">${b.notes}</span></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+window.switchAdminSubTab = function(tab) {
+  adminSubTab = tab;
+  ['asignacion', 'llamadas'].forEach(t => {
+    const btn = document.getElementById(`subtabs-btn-${t}`);
+    if (btn) btn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${tab === t ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}`;
+  });
+  const container = document.getElementById('admin-sub-content');
+  if (container) container.innerHTML = renderAdminSubTab();
+};
 
 // ============================================
 // LÓGICA DE BASE DE DATOS Y TURNOS
@@ -1383,25 +1401,3 @@ window.selectTime = function(time) {
     bookingStep = 3; // Nos manda al Paso 3 de confirmación
     renderPublicBooking(); // Actualiza la pantalla
 };
-
-window.crearUsuarioManual = async function() {
-    const emailInput = document.getElementById('nuevoEmail');
-    const email = emailInput.value.trim();
-
-    if (!email) {
-        alert('Por favor, escribe un correo electrónico.');
-        return;
-    }
-
-    const { error } = await supaClient.from('profiles').insert([
-        { email: email, role: 'client' }
-    ]);
-
-    if (error) {
-        alert('Error al dar de alta: ' + error.message);
-    } else {
-        alert('¡Alumno dado de alta con éxito!');
-        emailInput.value = '';
-        switchTab('admin');
-    }
-}
