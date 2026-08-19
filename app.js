@@ -175,7 +175,7 @@ function renderLogin() {
           <button type="submit" onclick="authMode='signup'" class="flex-1 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">Registrarse</button>
         </div>
         <div class="pt-1 text-center">
-          <button type="button" onclick="renderPasswordReset()" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
+          <button type="button" onclick="avisoContraseña()" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
         </div>
       </form>
     </div>
@@ -256,41 +256,6 @@ window.resendConfirmationEmail = async function(email) {
   if (error) return alert('No se pudo reenviar: ' + error.message);
   alert('Correo reenviado. Revisá tu casilla (y el spam).');
 };
-
-function renderPasswordReset() {
-  const content = document.getElementById('app-content');
-  content.innerHTML = `
-    <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-5">
-      <div class="flex justify-between items-center border-b border-gray-800 pb-4">
-        <h2 class="text-xl font-black text-neonRed">RECUPERAR CONTRASEÑA</h2>
-        <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-      <form onsubmit="handlePasswordReset(event)" class="space-y-4 text-sm">
-        <div>
-          <label class="block text-xs text-gray-400 mb-1">Correo Electrónico</label>
-          <input type="email" id="reset-email" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
-        </div>
-        <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Enviar link de recuperación</button>
-      </form>
-    </div>
-  `;
-}
-
-async function handlePasswordReset(e) {
-  e.preventDefault();
-  const email = document.getElementById('reset-email').value.trim();
-  const { error } = await supaClient.auth.resetPasswordForEmail(email, { redirectTo: SITE_URL });
-  if (error) return alert('No se pudo enviar: ' + error.message);
-  const content = document.getElementById('app-content');
-  content.innerHTML = `
-    <div class="max-w-md mx-auto mt-16 bg-cyberCard p-8 rounded-2xl border border-gray-800 text-center space-y-4">
-      <i class="fa-solid fa-envelope text-5xl text-neonRed"></i>
-      <h2 class="text-xl font-black text-white uppercase tracking-wide">Revisá tu email</h2>
-      <p class="text-sm text-gray-300">Te enviamos un link para restablecer tu contraseña a <span class="text-neonRed font-bold">${email}</span>.</p>
-      <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white">Volver al inicio de sesión</button>
-    </div>
-  `;
-}
 
 function renderPasswordUpdate() {
   const navBar = document.querySelector('nav');
@@ -617,6 +582,10 @@ window.resolverModal = function(valor) {
   if (window._modalResolve) window._modalResolve(valor);
   window._modalResolve = null;
   document.getElementById('app-modal-overlay').style.display = 'none';
+};
+
+window.avisoContraseña = function() {
+  window.alert('Comunicate con tu entrenador para que te regenere tu contraseña.');
 };
 
 window.togglePassword = function(inputId, btn) {
@@ -1058,7 +1027,10 @@ function renderAlumnos() {
          <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
        <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Link de la planilla de entrenamiento (Google Sheets)" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
        <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
-       <button onclick="saveUserLinks('${u.id}')" class="w-full bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
+       <div class="flex gap-2">
+         <button onclick="saveUserLinks('${u.id}')" class="flex-1 bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
+         <button onclick="generarPasswordAlumno('${u.id}', '${(u.email || u.name || '').replace(/'/g, "\\'")}')" class="flex-1 bg-cyberDark border border-gray-700 text-gray-300 font-bold py-2 rounded text-xs hover:border-neonRed hover:text-neonRed transition-colors">NUEVA CONTRASEÑA</button>
+       </div>
     </div>
   `).join('') || '<p class="text-center text-xs text-gray-500 py-6">No se encontraron alumnos.</p>';
 
@@ -1101,6 +1073,49 @@ window.saveUserLinks = async function(userId) {
     if (error) alert('Error: ' + error.message);
     else alert('¡Enlaces actualizados correctamente!');
 }
+
+window.generarPasswordAlumno = async function(userId, nombreAlumno) {
+  const ok = await window.confirm(`¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`);
+  if (!ok) return;
+  const { data: { session } } = await supaClient.auth.getSession();
+  if (!session) return alert('No hay sesión activa.');
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ user_id: userId })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert('Error: ' + (data.error || 'No se pudo generar la contraseña.'));
+    mostrarPasswordGenerada(nombreAlumno, data.password);
+  } catch (e) {
+    alert('No se pudo conectar con el servidor. ' + e.message);
+  }
+};
+
+function mostrarPasswordGenerada(nombreAlumno, password) {
+  const overlay = modalBase();
+  overlay.innerHTML = modalCard(`
+    <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Nueva contraseña para</p>
+    <p class="text-sm font-bold text-white mb-4">${String(nombreAlumno || '').replace(/</g, '&lt;')}</p>
+    <div class="bg-cyberDark border border-gray-700 rounded-xl px-4 py-3 mb-4 font-mono text-lg text-neonRed font-bold break-all">${password}</div>
+    <button onclick="copiarPassword('${password}')" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">
+      <i class="fa-solid fa-copy mr-2"></i> Copiar contraseña
+    </button>
+    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+  `);
+}
+
+window.copiarPassword = function(password) {
+  navigator.clipboard.writeText(password).then(() => {
+    toast('Contraseña copiada');
+  }).catch(() => {
+    toast('No se pudo copiar', false);
+  });
+};
 
 window.generateTimeSlots = function() {
     const dateInput = document.getElementById('bookingDate');

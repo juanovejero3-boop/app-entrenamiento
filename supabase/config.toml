@@ -1,0 +1,4 @@
+project_id = "app-entrenamiento"
+
+[functions.reset-password]
+verify_jwt = false
