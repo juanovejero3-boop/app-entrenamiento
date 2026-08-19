@@ -27,6 +27,7 @@ supaClient.auth.onAuthStateChange(async (event, session) => {
     if (!appRendered) { appRendered = true; renderApp(); }
   } else if (event === 'SIGNED_OUT') {
     appRendered = false;
+    currentTab = null;
     currentUser = null;
     userProfile = null;
     evolutionHistory = [];
@@ -120,6 +121,7 @@ async function loadEvolutionHistory() {
 // 4. VISTAS PÚBLICAS (LANDING, LOGIN Y RESERVA INICIAL)
 function renderLanding() {
   isPublicBooking = true;
+  currentTab = null;
   const navBar = document.querySelector('nav');
   if(navBar) navBar.style.display = 'none';
 
@@ -150,6 +152,7 @@ function renderLanding() {
 }
 
 function renderLogin() {
+  currentTab = null;
   const content = document.getElementById('app-content');
   content.innerHTML = `
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
@@ -210,6 +213,12 @@ async function handleAuth(e) {
       return alert('Ese correo ya está registrado. Iniciá sesión.');
     }
     return alert('Error en el registro: ' + error.message);
+  }
+
+  // Si el correo ya estaba registrado, signUp no crea usuario ni devuelve error,
+  // pero data.user llega como null. Lo detectamos y avisamos sin disparar la pantalla de "revisá tu email".
+  if (!data?.user) {
+    return alert('Ese correo ya está registrado. Iniciá sesión.');
   }
 
   if (data.session) {
@@ -555,6 +564,60 @@ function toast(message, ok = true) {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2500);
 }
+
+// ============================================
+// MODALES PROPIOS (reemplazan alert/confirm del navegador)
+// ============================================
+function modalBase() {
+  let overlay = document.getElementById('app-modal-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'app-modal-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    document.body.appendChild(overlay);
+  } else {
+    overlay.innerHTML = '';
+  }
+  overlay.style.display = 'flex';
+  return overlay;
+}
+
+function modalCard(inner) {
+  return `
+    <div class="bg-cyberCard border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
+      <i class="fa-solid fa-bolt text-2xl text-neonRed mb-3"></i>
+      ${inner}
+    </div>
+  `;
+}
+
+window.alert = function(message) {
+  const overlay = modalBase();
+  overlay.innerHTML = modalCard(`
+    <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
+    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Entendido</button>
+  `);
+};
+
+window.confirm = function(message) {
+  return new Promise((resolve) => {
+    const overlay = modalBase();
+    overlay.innerHTML = modalCard(`
+      <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
+      <div class="flex gap-2">
+        <button onclick="resolverModal(false)" class="flex-1 py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
+        <button onclick="resolverModal(true)" class="flex-1 py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Confirmar</button>
+      </div>
+    `);
+    window._modalResolve = resolve;
+  });
+};
+
+window.resolverModal = function(valor) {
+  if (window._modalResolve) window._modalResolve(valor);
+  window._modalResolve = null;
+  document.getElementById('app-modal-overlay').style.display = 'none';
+};
 
 window.togglePassword = function(inputId, btn) {
   const input = document.getElementById(inputId);
@@ -1155,8 +1218,9 @@ window.saveAppWebhookUrl = function() {
   alert("URL del Webhook guardada.");
 }
 
-window.clearAppBookings = function() {
-  if (confirm("¿Borrar historial de turnos?")) {
+window.clearAppBookings = async function() {
+  const ok = await window.confirm("¿Borrar historial de turnos?");
+  if (ok) {
     localBookings = [];
     localStorage.removeItem('pp_bookings_v4');
     switchTab('admin');
