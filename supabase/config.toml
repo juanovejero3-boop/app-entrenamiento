@@ -1,4 +1,4 @@
 project_id = "app-entrenamiento"
 
-[functions.reset-password]
+[functions.admin-usuarios]
 verify_jwt = false

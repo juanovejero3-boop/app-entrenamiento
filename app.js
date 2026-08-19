@@ -171,8 +171,7 @@ function renderLogin() {
           <input type="password" id="auth-password" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
         </div>
         <div class="flex gap-2 pt-2">
-          <button type="submit" onclick="authMode='login'" class="flex-1 neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Iniciar Sesión</button>
-          <button type="submit" onclick="authMode='signup'" class="flex-1 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">Registrarse</button>
+          <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Iniciar Sesión</button>
         </div>
         <div class="pt-1 text-center">
           <button type="button" onclick="avisoContraseña()" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
@@ -182,52 +181,23 @@ function renderLogin() {
   `;
 }
 
-let authMode = 'login';
 async function handleAuth(e) {
   e.preventDefault();
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
 
-  if (authMode === 'login') {
-    const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (error.message === 'Email not confirmed') {
-        return alert('Todavía no confirmaste tu email. Revisá tu casilla de correo (y el spam).');
-      }
-      return alert('Email o contraseña incorrectos.');
-    }
-    // El listener onAuthStateChange (SIGNED_IN) carga el perfil y renderiza la app.
-    return;
-  }
-
-  const { data, error } = await supaClient.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: SITE_URL }
-  });
+  const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
   if (error) {
-    if (error.message === 'Signups not allowed for this instance') {
-      return alert('El registro está deshabilitado temporalmente.');
+    if (error.message === 'Email not confirmed') {
+      return alert('Todavía no confirmaste tu email. Revisá tu casilla de correo (y el spam).');
     }
-    if (error.message === 'User already registered') {
-      return alert('Ese correo ya está registrado. Iniciá sesión.');
+    const esDeshabilitado = /banned|disabled|desactiv|blocked/i.test(error.message || '');
+    if (esDeshabilitado) {
+      return alert('Su cuenta ha sido deshabilitada. Comuníquese con su entrenador para más información.');
     }
-    return alert('Error en el registro: ' + error.message);
+    return alert('Email o contraseña incorrectos.');
   }
-
-  // Si el correo ya estaba registrado, signUp no crea una identidad nueva:
-  // data.user.identities llega vacío (o data.user es null). Lo detectamos y avisamos.
-  const yaRegistrado = !data?.user || (Array.isArray(data.user.identities) && data.user.identities.length === 0);
-  if (yaRegistrado) {
-    return alert('Ese correo ya está registrado. Iniciá sesión.');
-  }
-
-  if (data.session) {
-    // Email autoconfirmado: el listener SIGNED_IN renderiza la app.
-    return;
-  }
-
-  renderEmailSent(email);
+  // El listener onAuthStateChange (SIGNED_IN) carga el perfil y renderiza la app.
 }
 
 async function handleLogout() {
@@ -236,28 +206,8 @@ async function handleLogout() {
 }
 
 // ============================================
-// VISTAS DE AUTENTICACIÓN (confirmación y recuperación)
+// VISTAS DE AUTENTICACIÓN (recuperación)
 // ============================================
-function renderEmailSent(email) {
-  const content = document.getElementById('app-content');
-  content.innerHTML = `
-    <div class="max-w-md mx-auto mt-16 bg-cyberCard p-8 rounded-2xl border border-gray-800 text-center space-y-4">
-      <i class="fa-solid fa-envelope-open-text text-5xl text-neonRed"></i>
-      <h2 class="text-xl font-black text-white uppercase tracking-wide">Revisá tu email</h2>
-      <p class="text-sm text-gray-300">Te enviamos un link de confirmación a <span class="text-neonRed font-bold">${email}</span>.</p>
-      <p class="text-xs text-gray-500">Hacé click en el link para activar tu cuenta y luego iniciá sesión.</p>
-      <button onclick="resendConfirmationEmail('${email}')" class="w-full py-3 bg-cyberDark border border-gray-700 text-gray-300 font-bold rounded-lg text-xs uppercase tracking-wider hover:border-neonRed">Reenviar correo</button>
-      <button onclick="renderLogin()" class="text-xs text-gray-500 hover:text-white">Volver al inicio de sesión</button>
-    </div>
-  `;
-}
-
-window.resendConfirmationEmail = async function(email) {
-  const { error } = await supaClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: SITE_URL } });
-  if (error) return alert('No se pudo reenviar: ' + error.message);
-  alert('Correo reenviado. Revisá tu casilla (y el spam).');
-};
-
 function renderPasswordUpdate() {
   const navBar = document.querySelector('nav');
   if (navBar) navBar.style.display = 'none';
@@ -525,7 +475,7 @@ window.enableProfileEdit = function() {
 
 function toast(message, ok = true) {
   const el = document.createElement('div');
-  el.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-wider shadow-2xl border ${ok ? 'bg-emerald-950/90 border-emerald-700 text-emerald-300' : 'bg-red-950/90 border-red-700 text-red-300'}`;
+  el.className = `fixed top-4 left-1/2 -translate-x-1/2 z-[10010] px-5 py-3 rounded-xl text-sm font-bold uppercase tracking-wider shadow-2xl border ${ok ? 'bg-emerald-950/90 border-emerald-700 text-emerald-300' : 'bg-red-950/90 border-red-700 text-red-300'}`;
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 2500);
@@ -548,6 +498,21 @@ function modalBase() {
   return overlay;
 }
 
+// Overlay apilado para confirmaciones/avisos (no reemplaza la modal de fondo).
+function modalBaseApilado() {
+  let overlay = document.getElementById('app-modal-overlay-aux');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'app-modal-overlay-aux';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    document.body.appendChild(overlay);
+  } else {
+    overlay.innerHTML = '';
+  }
+  overlay.style.display = 'flex';
+  return overlay;
+}
+
 function modalCard(inner) {
   return `
     <div class="bg-cyberCard border border-gray-700 rounded-2xl p-6 w-full max-w-sm shadow-2xl text-center">
@@ -558,16 +523,16 @@ function modalCard(inner) {
 }
 
 window.alert = function(message) {
-  const overlay = modalBase();
+  const overlay = modalBaseApilado();
   overlay.innerHTML = modalCard(`
     <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
-    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Entendido</button>
+    <button onclick="document.getElementById('app-modal-overlay-aux').style.display='none'" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Entendido</button>
   `);
 };
 
 window.confirm = function(message) {
   return new Promise((resolve) => {
-    const overlay = modalBase();
+    const overlay = modalBaseApilado();
     overlay.innerHTML = modalCard(`
       <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
       <div class="flex gap-2">
@@ -582,12 +547,37 @@ window.confirm = function(message) {
 window.resolverModal = function(valor) {
   if (window._modalResolve) window._modalResolve(valor);
   window._modalResolve = null;
-  document.getElementById('app-modal-overlay').style.display = 'none';
+  document.getElementById('app-modal-overlay-aux').style.display = 'none';
 };
 
 window.avisoContraseña = function() {
   window.alert('Comunicate con tu entrenador para que te regenere tu contraseña.');
 };
+
+// ============================================
+// OVERLAY DE PROCESANDO
+// ============================================
+function mostrarProcesando(mensaje = 'Procesando...') {
+  let overlay = document.getElementById('app-processing');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'app-processing';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;';
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="bg-cyberCard border border-gray-700 rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-2xl">
+      <div class="w-10 h-10 border-4 border-neonRed border-t-transparent rounded-full" style="animation: spin 0.8s linear infinite;"></div>
+      <p class="text-sm font-bold text-white uppercase tracking-wider">${mensaje}</p>
+    </div>
+  `;
+  overlay.style.display = 'flex';
+}
+
+function ocultarProcesando() {
+  const overlay = document.getElementById('app-processing');
+  if (overlay) overlay.style.display = 'none';
+}
 
 window.togglePassword = function(inputId, btn) {
   const input = document.getElementById(inputId);
@@ -894,6 +884,11 @@ else if (tab === 'nutricion') {
 }
 
 // ---------- SUB-TABS DEL ADMIN ----------
+async function loadAdminData() {
+  const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
+  adminAllUsers = allUsers || [];
+}
+
 function renderAdminSubTab() {
   if (adminSubTab === 'llamadas') return renderAdminLlamadas();
   return renderAdminAsignacion();
@@ -906,7 +901,7 @@ function renderAdminAsignacion() {
     <div class="space-y-4">
       <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
         <h2 class="text-xl font-black text-white uppercase tracking-wide">Asignación de Programas</h2>
-        <p class="text-xs text-gray-400">Links de Google Sheets, PDFs y Nutrición por alumno</p>
+        <p class="text-xs text-gray-400">Tocá un alumno para editar su información</p>
       </div>
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         <label class="block text-[11px] font-bold text-gray-400 uppercase">Buscar alumno por nombre o correo</label>
@@ -915,6 +910,10 @@ function renderAdminAsignacion() {
       <div id="alumnos-container" class="space-y-4">
         ${renderAlumnos()}
       </div>
+
+      <button onclick="abrirModalNuevoAlumno()" class="fixed right-4 bg-neonRed text-white w-14 h-14 rounded-full shadow-[0_0_20px_rgba(255,0,60,0.4)] hover:bg-red-700 transition flex items-center justify-center" style="bottom: 5.5rem; z-index: 60;">
+        <i class="fa-solid fa-plus text-2xl"></i>
+      </button>
     </div>
   `;
 }
@@ -1023,16 +1022,15 @@ function renderAlumnos() {
   const paginaActual = alumnosFiltrados.slice(desde, desde + ALUMNOS_POR_PAGINA);
 
   const tarjetas = paginaActual.map(u => `
-    <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-       <p class="font-bold text-white text-sm mb-2">${u.name || '(sin nombre)'} <span class="text-[10px] text-gray-500 uppercase tracking-widest bg-cyberDark px-2 py-1 rounded ml-2 border border-gray-700">${u.role}</span>
-         <span class="text-xs text-gray-400 block mt-1">${u.email}</span></p>
-       <input type="text" id="sheet-${u.id}" value="${u.sheet_url || ''}" placeholder="Link de la planilla de entrenamiento (Google Sheets)" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-2 outline-none focus:border-neonRed" />
-       <input type="text" id="nutricion-${u.id}" value="${u.nutrition_url || ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white mb-3 focus:border-neonRed outline-none" placeholder="Link del plan de nutrición (Google Sheets)">
-       <div class="flex gap-2">
-         <button onclick="saveUserLinks('${u.id}')" class="flex-1 bg-cyberCarbon border border-neonRed text-neonRed font-bold py-2 rounded text-xs hover:bg-red-950 transition-colors">GUARDAR LINKS</button>
-         <button onclick="generarPasswordAlumno('${u.id}', '${(u.email || u.name || '').replace(/'/g, "\\'")}')" class="flex-1 bg-cyberDark border border-gray-700 text-gray-300 font-bold py-2 rounded text-xs hover:border-neonRed hover:text-neonRed transition-colors">NUEVA CONTRASEÑA</button>
-       </div>
-    </div>
+    <button onclick="abrirModalAlumno('${u.id}')" class="w-full text-left bg-cyberCard p-4 rounded-xl border border-gray-800 hover:border-neonRed transition">
+      <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+          <p class="font-bold text-white text-sm truncate">${u.name || '(sin nombre)'}</p>
+          <p class="text-xs text-gray-400 truncate">${u.email}</p>
+        </div>
+        ${u.disabled_at ? '<span class="text-[9px] uppercase tracking-widest text-red-400 bg-red-950/40 border border-red-900 px-2 py-0.5 rounded shrink-0">Deshabilitado</span>' : '<i class="fa-solid fa-chevron-right text-gray-600 shrink-0"></i>'}
+      </div>
+    </button>
   `).join('') || '<p class="text-center text-xs text-gray-500 py-6">No se encontraron alumnos.</p>';
 
   const paginacion = alumnosFiltrados.length > ALUMNOS_POR_PAGINA ? `
@@ -1045,13 +1043,21 @@ function renderAlumnos() {
   return `${tarjetas}${paginacion}`;
 }
 
-window.filterAlumnos = function() {
-  const q = (document.getElementById('alumno-search').value || '').toLowerCase().trim();
+function refrescarListaAlumnos() {
+  const searchEl = document.getElementById('alumno-search');
+  const q = (searchEl ? searchEl.value : '').toLowerCase().trim();
   alumnosFiltrados = adminAllUsers.filter(u =>
     !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
   );
+  const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
+  if (alumnosPagina >= totalPaginas) alumnosPagina = totalPaginas - 1;
+  const container = document.getElementById('alumnos-container');
+  if (container) container.innerHTML = renderAlumnos();
+}
+
+window.filterAlumnos = function() {
   alumnosPagina = 0;
-  document.getElementById('alumnos-container').innerHTML = renderAlumnos();
+  refrescarListaAlumnos();
 };
 
 window.cambiarPaginaAlumnos = function(dir) {
@@ -1062,39 +1068,186 @@ window.cambiarPaginaAlumnos = function(dir) {
   document.getElementById('alumnos-container').innerHTML = renderAlumnos();
 };
 
-window.saveUserLinks = async function(userId) {
-    const sheet = document.getElementById(`sheet-${userId}`).value;
-    const nutricion = document.getElementById(`nutricion-${userId}`).value;
-
-    const { error } = await supaClient.from('profiles').update({ 
-        sheet_url: sheet, 
-        nutrition_url: nutricion
-    }).eq('id', userId);
-
-    if (error) alert('Error: ' + error.message);
-    else alert('¡Enlaces actualizados correctamente!');
-}
-
-window.generarPasswordAlumno = async function(userId, nombreAlumno) {
-  const ok = await window.confirm(`¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`);
-  if (!ok) return;
+async function llamarAdminUsuarios(action, body = {}) {
   const { data: { session } } = await supaClient.auth.getSession();
-  if (!session) return alert('No hay sesión activa.');
+  if (!session) return { error: 'No hay sesión activa.' };
+  mostrarProcesando();
   try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-password`, {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/admin-usuarios`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`
       },
-      body: JSON.stringify({ user_id: userId })
+      body: JSON.stringify({ action, ...body })
     });
     const data = await res.json();
-    if (!res.ok) return alert('Error: ' + (data.error || 'No se pudo generar la contraseña.'));
-    mostrarPasswordGenerada(nombreAlumno, data.password);
+    ocultarProcesando();
+    if (!res.ok) return { error: data.error || 'Error en el servidor.' };
+    return data;
   } catch (e) {
-    alert('No se pudo conectar con el servidor. ' + e.message);
+    ocultarProcesando();
+    return { error: 'No se pudo conectar con el servidor. ' + e.message };
   }
+}
+
+// ---------- MODAL NUEVO ALUMNO ----------
+window.abrirModalNuevoAlumno = function() {
+  const overlay = modalBase();
+  overlay.innerHTML = modalCard(`
+    <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-4">Nuevo alumno</p>
+    <label class="block text-[10px] text-gray-400 uppercase mb-1 text-left">Correo del alumno</label>
+    <input type="email" id="nuevo-alumno-email" required placeholder="correo@alumno.com" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed mb-4" />
+    <button onclick="crearNuevoAlumno()" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">Guardar</button>
+    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
+  `);
+  document.getElementById('nuevo-alumno-email').focus();
+};
+
+window.crearNuevoAlumno = async function() {
+  const emailInput = document.getElementById('nuevo-alumno-email');
+  const email = (emailInput.value || '').trim();
+  if (!email) return alert('Ingresá el correo del alumno.');
+  const res = await llamarAdminUsuarios('crear', { email });
+  if (res.error) return alert(res.error);
+  mostrarCredencialesNuevoAlumno(res.email, res.password);
+  await loadAdminData();
+  refrescarListaAlumnos();
+};
+
+function mostrarCredencialesNuevoAlumno(email, password) {
+  const overlay = modalBase();
+  overlay.innerHTML = modalCard(`
+    <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">¡Alumno creado!</p>
+    <p class="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-3">Guardá estas credenciales, no se mostrarán de nuevo.</p>
+    <div class="bg-cyberDark border border-gray-700 rounded-xl px-3 py-3 mb-2 text-left">
+      <p class="text-[9px] text-gray-500 uppercase mb-1">Correo</p>
+      <div class="flex items-center gap-2">
+        <p class="text-sm text-white font-bold break-all flex-1">${String(email).replace(/</g, '&lt;')}</p>
+        <button onclick="copiarTexto('${String(email).replace(/'/g, "\\'")}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+      </div>
+    </div>
+    <div class="bg-cyberDark border border-gray-700 rounded-xl px-3 py-3 mb-4 text-left">
+      <p class="text-[9px] text-gray-500 uppercase mb-1">Contraseña</p>
+      <div class="flex items-center gap-2">
+        <input type="password" id="nuevo-password-campo" value="${password}" readonly class="flex-1 bg-transparent text-lg text-neonRed font-black font-mono outline-none" />
+        <button type="button" onclick="togglePasswordCampo('nuevo-password-campo', this)" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
+        <button onclick="copiarTexto('${password}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+      </div>
+    </div>
+    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+  `);
+}
+
+window.togglePasswordCampo = function(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm"></i>`;
+};
+
+window.copiarTexto = function(texto) {
+  navigator.clipboard.writeText(texto).then(() => {
+    toast(`${texto.includes('@') ? 'Correo copiado' : 'Contraseña copiada'} en portapapeles`);
+  }).catch(() => {
+    toast('No se pudo copiar', false);
+  });
+};
+
+// ---------- MODAL DETALLE ALUMNO ----------
+window.abrirModalAlumno = function(userId) {
+  const u = adminAllUsers.find(x => x.id === userId);
+  if (!u) return;
+  const deshabilitado = !!u.disabled_at;
+  const overlay = modalBase();
+  overlay.innerHTML = modalCard(`
+    <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">${String(u.email || '').replace(/</g, '&lt;')}</p>
+    ${deshabilitado ? '<p class="text-[10px] text-red-400 font-bold uppercase tracking-wider mb-3">Deshabilitado</p>' : ''}
+    <div class="space-y-2 text-left mb-3">
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Nombre</label>
+        <input type="text" id="alu-name-${userId}" value="${(u.name || '').replace(/"/g, '&quot;')}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Link planilla</label>
+        <input type="text" id="alu-sheet-${userId}" value="${(u.sheet_url || '').replace(/"/g, '&quot;')}" placeholder="Google Sheets" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Link plan de nutrición</label>
+        <input type="text" id="alu-nutricion-${userId}" value="${(u.nutrition_url || '').replace(/"/g, '&quot;')}" placeholder="Google Sheets" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+      </div>
+      <div>
+        <label class="block text-[10px] text-gray-400 uppercase mb-1">Objetivo</label>
+        <input type="text" id="alu-goal-${userId}" value="${(u.goal || '').replace(/"/g, '&quot;')}" placeholder="Objetivo" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-[10px] text-gray-400 uppercase mb-1">Altura (cm)</label>
+          <input type="number" id="alu-height-${userId}" value="${u.height_cm ?? ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+        </div>
+        <div>
+          <label class="block text-[10px] text-gray-400 uppercase mb-1">Peso (kg)</label>
+          <input type="number" id="alu-weight-${userId}" value="${u.weight_kg ?? ''}" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-xs text-white outline-none focus:border-neonRed" />
+        </div>
+      </div>
+    </div>
+    <button onclick="guardarDatosAlumno('${userId}')" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">
+      <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar
+    </button>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <button onclick="generarPasswordAlumno('${userId}', '${(u.email || '').replace(/'/g, "\\'")}')" class="py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Nueva contraseña</button>
+      <button onclick="toggleDeshabilitarAlumno('${userId}')" class="py-2.5 bg-cyberCarbon border ${deshabilitado ? 'border-emerald-700 text-emerald-400' : 'border-gray-700 text-gray-300'} font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed transition">${deshabilitado ? 'Habilitar' : 'Deshabilitar'}</button>
+    </div>
+    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberDark border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+  `);
+};
+
+window.guardarDatosAlumno = async function(userId) {
+  const nombre = document.getElementById(`alu-name-${userId}`).value.trim();
+  const sheet = document.getElementById(`alu-sheet-${userId}`).value.trim();
+  const nutricion = document.getElementById(`alu-nutricion-${userId}`).value.trim();
+  const goal = document.getElementById(`alu-goal-${userId}`).value.trim();
+  const altura = parseFloat(document.getElementById(`alu-height-${userId}`).value) || null;
+  const peso = parseFloat(document.getElementById(`alu-weight-${userId}`).value) || null;
+  mostrarProcesando('Guardando...');
+  const { error } = await supaClient.from('profiles').update({
+    name: nombre || null,
+    sheet_url: sheet || null,
+    nutrition_url: nutricion || null,
+    goal: goal || null,
+    height_cm: altura,
+    weight_kg: peso
+  }).eq('id', userId);
+  ocultarProcesando();
+  if (error) return alert('Error al guardar: ' + error.message);
+  toast('Alumno actualizado');
+  await loadAdminData();
+  refrescarListaAlumnos();
+  abrirModalAlumno(userId);
+};
+
+window.toggleDeshabilitarAlumno = async function(userId) {
+  const u = adminAllUsers.find(x => x.id === userId);
+  const deshabilitado = !!u?.disabled_at;
+  const ok = await window.confirm(deshabilitado
+    ? `¿Querés habilitar a ${u?.email || 'este alumno'}?`
+    : `¿Querés deshabilitar a ${u?.email || 'este alumno'}?`);
+  if (!ok) return;
+  const res = await llamarAdminUsuarios(deshabilitado ? 'habilitar' : 'deshabilitar', { user_id: userId });
+  if (res.error) return alert(res.error);
+  const accionDeshabilitar = !deshabilitado;
+  toast(accionDeshabilitar ? 'Alumno deshabilitado' : 'Alumno habilitado');
+  await loadAdminData();
+  refrescarListaAlumnos();
+  document.getElementById('app-modal-overlay').style.display = 'none';
+};
+
+window.generarPasswordAlumno = async function(userId, nombreAlumno) {
+  const ok = await window.confirm(`¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`);
+  if (!ok) return;
+  const res = await llamarAdminUsuarios('reset', { user_id: userId });
+  if (res.error) return alert(res.error);
+  mostrarPasswordGenerada(nombreAlumno, res.password);
 };
 
 function mostrarPasswordGenerada(nombreAlumno, password) {
@@ -1102,21 +1255,17 @@ function mostrarPasswordGenerada(nombreAlumno, password) {
   overlay.innerHTML = modalCard(`
     <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Nueva contraseña para</p>
     <p class="text-sm font-bold text-white mb-4">${String(nombreAlumno || '').replace(/</g, '&lt;')}</p>
-    <div class="bg-cyberDark border border-gray-700 rounded-xl px-4 py-3 mb-4 font-mono text-lg text-neonRed font-bold break-all">${password}</div>
-    <button onclick="copiarPassword('${password}')" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">
-      <i class="fa-solid fa-copy mr-2"></i> Copiar contraseña
-    </button>
+    <div class="bg-cyberDark border border-gray-700 rounded-xl px-3 py-3 mb-4 text-left">
+      <p class="text-[9px] text-gray-500 uppercase mb-1">Contraseña</p>
+      <div class="flex items-center gap-2">
+        <input type="password" id="nueva-password-campo" value="${password}" readonly class="flex-1 bg-transparent text-lg text-neonRed font-black font-mono outline-none" />
+        <button type="button" onclick="togglePasswordCampo('nueva-password-campo', this)" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
+        <button onclick="copiarTexto('${password}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+      </div>
+    </div>
     <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
   `);
 }
-
-window.copiarPassword = function(password) {
-  navigator.clipboard.writeText(password).then(() => {
-    toast('Contraseña copiada');
-  }).catch(() => {
-    toast('No se pudo copiar', false);
-  });
-};
 
 window.generateTimeSlots = function() {
     const dateInput = document.getElementById('bookingDate');
