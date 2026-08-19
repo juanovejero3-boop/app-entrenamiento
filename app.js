@@ -215,9 +215,10 @@ async function handleAuth(e) {
     return alert('Error en el registro: ' + error.message);
   }
 
-  // Si el correo ya estaba registrado, signUp no crea usuario ni devuelve error,
-  // pero data.user llega como null. Lo detectamos y avisamos sin disparar la pantalla de "revisá tu email".
-  if (!data?.user) {
+  // Si el correo ya estaba registrado, signUp no crea una identidad nueva:
+  // data.user.identities llega vacío (o data.user es null). Lo detectamos y avisamos.
+  const yaRegistrado = !data?.user || (Array.isArray(data.user.identities) && data.user.identities.length === 0);
+  if (yaRegistrado) {
     return alert('Ese correo ya está registrado. Iniciá sesión.');
   }
 
