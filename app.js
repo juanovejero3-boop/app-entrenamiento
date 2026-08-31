@@ -764,6 +764,8 @@ else if (tab === 'nutricion') {
     }
 
   else if (tab === 'material') {
+    content.innerHTML = '<p class="text-center text-gray-500 mt-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando...</p>';
+    materialData = await materialCargar();
     if (userProfile?.role === 'admin' && materialEditando) {
       content.innerHTML = renderMaterialAdmin();
     } else {
@@ -1886,31 +1888,35 @@ window.selectTime = function(time) {
 };
 
 // ============================================
-// MATERIAL (Biblioteca)
+// MATERIAL (Biblioteca) — Supabase
 // ============================================
-const MATERIAL_KEY = 'pp_material_data';
-
-function materialCargar() {
-  const data = localStorage.getItem(MATERIAL_KEY);
-  if (data) return JSON.parse(data);
-  // Datos de ejemplo iniciales
-  const ejemplo = [
-    { id: 's' + Date.now(), title: 'Técnica de ejercicios', items: [
-      { id: 'i' + Date.now(), name: 'Sentadilla - Técnica correcta', link: 'https://youtu.be/dQw4w9WgXcQ' }
-    ]}
-  ];
-  localStorage.setItem(MATERIAL_KEY, JSON.stringify(ejemplo));
-  return ejemplo;
-}
-
-function materialGuardar(data) {
-  localStorage.setItem(MATERIAL_KEY, JSON.stringify(data));
-}
+let materialData = null;
 
 function materialEsYouTube(link) {
   if (!link) return null;
   const match = link.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
   return match ? match[1] : null;
+}
+
+async function materialCargar() {
+  if (materialData) return materialData;
+  const { data: secciones } = await supaClient
+    .from('material_sections')
+    .select('*, material_items(*)')
+    .order('sort_order');
+  if (!secciones) { materialData = []; return materialData; }
+  materialData = secciones.map(s => ({
+    id: s.id,
+    title: s.title,
+    sort_order: s.sort_order,
+    items: (s.material_items || []).sort((a, b) => a.sort_order - b.sort_order).map(i => ({
+      id: i.id,
+      name: i.name,
+      link: i.link,
+      sort_order: i.sort_order
+    }))
+  }));
+  return materialData;
 }
 
 window.materialAbrirLink = function(link, nombre) {
@@ -1928,7 +1934,7 @@ window.materialAbrirLink = function(link, nombre) {
 };
 
 function renderMaterialAlumno() {
-  const secciones = materialCargar();
+  const secciones = materialData || [];
   const isAdmin = userProfile?.role === 'admin';
 
   const btnGestionar = isAdmin ? `
@@ -1949,7 +1955,7 @@ function renderMaterialAlumno() {
     `;
   }
 
-  const acordeones = secciones.map((sec, idxSec) => {
+  const acordeones = secciones.map((sec) => {
     const items = sec.items.map(item => {
       const videoId = materialEsYouTube(item.link);
       const icono = videoId ? 'fa-brands fa-youtube text-red-500' : (item.link.includes('.pdf') ? 'fa-solid fa-file-pdf text-red-400' : 'fa-solid fa-link text-blue-400');
@@ -1990,38 +1996,38 @@ function renderMaterialAlumno() {
 }
 
 function renderMaterialAdmin() {
-  const secciones = materialCargar();
+  const secciones = materialData || [];
 
-  const listaSecciones = secciones.map((sec, idxSec) => {
-    const items = sec.items.map((item, idxItem) => `
+  const listaSecciones = secciones.map((sec) => {
+    const items = sec.items.map((item) => `
       <div class="flex items-center gap-2 mb-2">
         <div class="flex flex-col gap-0.5">
-          <button onclick="materialMoverItem(${idxSec}, ${idxItem}, -1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-up"></i></button>
-          <button onclick="materialMoverItem(${idxSec}, ${idxItem}, 1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-down"></i></button>
+          <button onclick="materialMoverItem('${item.id}', -1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-up"></i></button>
+          <button onclick="materialMoverItem('${item.id}', 1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-down"></i></button>
         </div>
-        <input type="text" value="${item.name}" onchange="materialActualizarItemNombre(${idxSec}, ${idxItem}, this.value)" placeholder="Nombre" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
-        <input type="text" value="${item.link}" onchange="materialActualizarItemLink(${idxSec}, ${idxItem}, this.value)" placeholder="Link" class="flex-[2] bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
-        <button onclick="materialEliminarItem(${idxSec}, ${idxItem})" class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button>
+        <input type="text" value="${item.name}" onchange="materialActualizarItemNombre('${item.id}', this.value)" placeholder="Nombre" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
+        <input type="text" value="${item.link}" onchange="materialActualizarItemLink('${item.id}', this.value)" placeholder="Link" class="flex-[2] bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
+        <button onclick="materialEliminarItem('${item.id}')" class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button>
       </div>
     `).join('');
 
     return `
       <div class="bg-cyberCard rounded-xl border border-gray-800 p-3 space-y-2">
         <div class="flex items-center gap-2">
-          <input type="text" value="${sec.title}" onchange="materialActualizarSecTitulo(${idxSec}, this.value)" placeholder="Título de la sección" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-sm text-white font-bold outline-none focus:border-neonRed" />
+          <input type="text" value="${sec.title}" onchange="materialActualizarSecTitulo('${sec.id}', this.value)" placeholder="Título de la sección" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-sm text-white font-bold outline-none focus:border-neonRed" />
           <div class="flex flex-col gap-0.5">
-            <button onclick="materialMoverSeccion(${idxSec}, -1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-up"></i></button>
-            <button onclick="materialMoverSeccion(${idxSec}, 1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-down"></i></button>
+            <button onclick="materialMoverSeccion('${sec.id}', -1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-up"></i></button>
+            <button onclick="materialMoverSeccion('${sec.id}', 1)" class="w-5 h-4 flex items-center justify-center text-gray-500 hover:text-neonRed text-[10px]"><i class="fa-solid fa-chevron-down"></i></button>
           </div>
-          <button onclick="materialEliminarSeccion(${idxSec})" class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button>
+          <button onclick="materialEliminarSeccion('${sec.id}')" class="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-red-500"><i class="fa-solid fa-trash text-xs"></i></button>
         </div>
         <div class="pl-1">
           ${items}
         </div>
         <div class="flex gap-2 mt-2">
-          <input type="text" id="mat-new-name-${idxSec}" placeholder="Nombre" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
-          <input type="text" id="mat-new-link-${idxSec}" placeholder="Link (YouTube, PDF, web...)" class="flex-[2] bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
-          <button onclick="materialAgregarItem(${idxSec})" class="px-3 py-1.5 bg-neonRed text-white text-xs font-bold rounded-lg hover:bg-red-700"><i class="fa-solid fa-plus"></i></button>
+          <input type="text" id="mat-new-name-${sec.id}" placeholder="Nombre" class="flex-1 bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
+          <input type="text" id="mat-new-link-${sec.id}" placeholder="Link (YouTube, PDF, web...)" class="flex-[2] bg-cyberDark border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed" />
+          <button onclick="materialAgregarItem('${sec.id}')" class="px-3 py-1.5 bg-neonRed text-white text-xs font-bold rounded-lg hover:bg-red-700"><i class="fa-solid fa-plus"></i></button>
         </div>
       </div>
     `;
@@ -2043,79 +2049,99 @@ function renderMaterialAdmin() {
   `;
 }
 
-window.materialAgregarSeccion = function() {
-  const secciones = materialCargar();
-  secciones.push({ id: 's' + Date.now(), title: 'Nueva sección', items: [] });
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+async function materialRefresh() {
+  materialData = await materialCargar();
+  const content = document.getElementById('app-content');
+  if (materialEditando) {
+    content.innerHTML = renderMaterialAdmin();
+  } else {
+    content.innerHTML = renderMaterialAlumno();
+  }
+}
+
+window.materialAgregarSeccion = async function() {
+  const maxOrder = materialData.reduce((max, s) => Math.max(max, s.sort_order), -1);
+  const { error } = await supaClient
+    .from('material_sections')
+    .insert({ title: 'Nueva sección', sort_order: maxOrder + 1 });
+  if (error) return alert('Error al crear sección: ' + error.message);
+  materialData = null;
+  materialRefresh();
 };
 
-window.materialEliminarSeccion = function(idx) {
-  const ok = window.confirm('¿Eliminar esta sección y todos sus elementos?');
+window.materialEliminarSeccion = async function(id) {
+  const ok = await window.confirm('¿Eliminar esta sección y todos sus elementos?');
   if (!ok) return;
-  const secciones = materialCargar();
-  secciones.splice(idx, 1);
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+  const { error } = await supaClient.from('material_sections').delete().eq('id', id);
+  if (error) return alert('Error al eliminar: ' + error.message);
+  materialData = null;
+  materialRefresh();
 };
 
-window.materialActualizarSecTitulo = function(idx, titulo) {
-  const secciones = materialCargar();
-  secciones[idx].title = titulo;
-  materialGuardar(secciones);
+window.materialActualizarSecTitulo = async function(id, titulo) {
+  await supaClient.from('material_sections').update({ title: titulo }).eq('id', id);
+  materialData = null;
 };
 
-window.materialMoverSeccion = function(idx, dir) {
-  const secciones = materialCargar();
+window.materialMoverSeccion = async function(id, dir) {
+  const secciones = materialData;
+  const idx = secciones.findIndex(s => s.id === id);
+  if (idx < 0) return;
   const nuevoIdx = idx + dir;
   if (nuevoIdx < 0 || nuevoIdx >= secciones.length) return;
-  [secciones[idx], secciones[nuevoIdx]] = [secciones[nuevoIdx], secciones[idx]];
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+  const otroId = secciones[nuevoIdx].id;
+  const miOrder = secciones[idx].sort_order;
+  const otroOrder = secciones[nuevoIdx].sort_order;
+  await supaClient.from('material_sections').update({ sort_order: otroOrder }).eq('id', id);
+  await supaClient.from('material_sections').update({ sort_order: miOrder }).eq('id', otroId);
+  materialData = null;
+  materialRefresh();
 };
 
-window.materialAgregarItem = function(idxSec) {
-  const nameInput = document.getElementById(`mat-new-name-${idxSec}`);
-  const linkInput = document.getElementById(`mat-new-link-${idxSec}`);
+window.materialAgregarItem = async function(sectionId) {
+  const nameInput = document.getElementById(`mat-new-name-${sectionId}`);
+  const linkInput = document.getElementById(`mat-new-link-${sectionId}`);
   const nombre = (nameInput?.value || '').trim();
   const link = (linkInput?.value || '').trim();
   if (!nombre || !link) return alert('Completá nombre y link');
-  const secciones = materialCargar();
-  secciones[idxSec].items.push({ id: 'i' + Date.now(), name: nombre, link: link });
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+  const seccion = materialData.find(s => s.id === sectionId);
+  const maxOrder = seccion ? seccion.items.reduce((max, i) => Math.max(max, i.sort_order), -1) : -1;
+  const { error } = await supaClient
+    .from('material_items')
+    .insert({ section_id: sectionId, name: nombre, link: link, sort_order: maxOrder + 1 });
+  if (error) return alert('Error al agregar item: ' + error.message);
+  materialData = null;
+  materialRefresh();
 };
 
-window.materialEliminarItem = function(idxSec, idxItem) {
-  const secciones = materialCargar();
-  secciones[idxSec].items.splice(idxItem, 1);
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+window.materialEliminarItem = async function(id) {
+  const { error } = await supaClient.from('material_items').delete().eq('id', id);
+  if (error) return alert('Error al eliminar: ' + error.message);
+  materialData = null;
+  materialRefresh();
 };
 
-window.materialActualizarItemNombre = function(idxSec, idxItem, nombre) {
-  const secciones = materialCargar();
-  secciones[idxSec].items[idxItem].name = nombre;
-  materialGuardar(secciones);
+window.materialActualizarItemNombre = async function(id, nombre) {
+  await supaClient.from('material_items').update({ name: nombre }).eq('id', id);
+  materialData = null;
 };
 
-window.materialActualizarItemLink = function(idxSec, idxItem, link) {
-  const secciones = materialCargar();
-  secciones[idxSec].items[idxItem].link = link;
-  materialGuardar(secciones);
+window.materialActualizarItemLink = async function(id, link) {
+  await supaClient.from('material_items').update({ link: link }).eq('id', id);
+  materialData = null;
 };
 
-window.materialMoverItem = function(idxSec, idxItem, dir) {
-  const secciones = materialCargar();
-  const items = secciones[idxSec].items;
-  const nuevoIdx = idxItem + dir;
-  if (nuevoIdx < 0 || nuevoIdx >= items.length) return;
-  [items[idxItem], items[nuevoIdx]] = [items[nuevoIdx], items[idxItem]];
-  materialGuardar(secciones);
-  renderMaterialAdminRefresh();
+window.materialMoverItem = async function(id, dir) {
+  const seccion = materialData.find(s => s.items.some(i => i.id === id));
+  if (!seccion) return;
+  const idx = seccion.items.findIndex(i => i.id === id);
+  const nuevoIdx = idx + dir;
+  if (nuevoIdx < 0 || nuevoIdx >= seccion.items.length) return;
+  const otroId = seccion.items[nuevoIdx].id;
+  const miOrder = seccion.items[idx].sort_order;
+  const otroOrder = seccion.items[nuevoIdx].sort_order;
+  await supaClient.from('material_items').update({ sort_order: otroOrder }).eq('id', id);
+  await supaClient.from('material_items').update({ sort_order: miOrder }).eq('id', otroId);
+  materialData = null;
+  materialRefresh();
 };
-
-function renderMaterialAdminRefresh() {
-  const content = document.getElementById('app-content');
-  content.innerHTML = renderMaterialAdmin();
-}
