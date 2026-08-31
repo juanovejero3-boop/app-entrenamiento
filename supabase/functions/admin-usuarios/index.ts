@@ -148,5 +148,13 @@ Deno.serve(async (req) => {
     return json({ ok: true });
   }
 
+  if (action === "eliminar") {
+    const user_id = body.user_id;
+    if (!user_id) return json({ error: "Falta user_id" }, 400);
+    const { error } = await adminClient.auth.admin.deleteUser(user_id);
+    if (error) return json({ error: error.message }, 500);
+    return json({ ok: true });
+  }
+
   return json({ error: "Acción no válida" }, 400);
 });

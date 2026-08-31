@@ -1395,6 +1395,9 @@ window.abrirModalAlumno = function(userId) {
       <button onclick="generarPasswordAlumno('${userId}', '${(u.email || '').replace(/'/g, "\\'")}')" class="py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Nueva contraseña</button>
       <button onclick="toggleDeshabilitarAlumno('${userId}')" class="py-2.5 bg-cyberCarbon border ${deshabilitado ? 'border-emerald-700 text-emerald-400' : 'border-gray-700 text-gray-300'} font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed transition">${deshabilitado ? 'Habilitar' : 'Deshabilitar'}</button>
     </div>
+    <button onclick="eliminarAlumno('${userId}')" class="w-full py-2.5 bg-red-950 border border-red-800 text-red-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:bg-red-900 transition mb-2">
+      <i class="fa-solid fa-trash mr-2"></i> Eliminar alumno
+    </button>
     <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberDark border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
   `);
 };
@@ -1434,6 +1437,18 @@ window.toggleDeshabilitarAlumno = async function(userId) {
   if (res.error) return alert(res.error);
   const accionDeshabilitar = !deshabilitado;
   toast(accionDeshabilitar ? 'Alumno deshabilitado' : 'Alumno habilitado');
+  await loadAdminData();
+  refrescarListaAlumnos();
+  document.getElementById('app-modal-overlay').style.display = 'none';
+};
+
+window.eliminarAlumno = async function(userId) {
+  const u = adminAllUsers.find(x => x.id === userId);
+  const ok = await window.confirm(`¿Seguro que querés ELIMINAR a ${u?.email || 'este alumno'}? Esta acción no se puede deshacer.`);
+  if (!ok) return;
+  const res = await llamarAdminUsuarios('eliminar', { user_id: userId });
+  if (res.error) return alert(res.error);
+  toast('Alumno eliminado');
   await loadAdminData();
   refrescarListaAlumnos();
   document.getElementById('app-modal-overlay').style.display = 'none';
