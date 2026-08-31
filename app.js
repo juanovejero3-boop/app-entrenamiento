@@ -765,6 +765,7 @@ else if (tab === 'nutricion') {
 
   else if (tab === 'material') {
     content.innerHTML = '<p class="text-center text-gray-500 mt-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando...</p>';
+    materialData = null;
     materialData = await materialCargar();
     if (userProfile?.role === 'admin' && materialEditando) {
       content.innerHTML = renderMaterialAdmin();
