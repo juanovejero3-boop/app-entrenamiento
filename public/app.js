@@ -1,8 +1,6 @@
-// 1. CONFIGURACIÓN DE SUPABASE 
-const SUPABASE_URL = 'https://bnqjtyaytvvajuikzymq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_TbmI-Ng6DpGTo4WK-stBHg_F507N3Cr'; // Clave pública (publishable): puede ir en el frontend
+// 1. CONFIGURACIÓN DE SUPABASE
+// SUPABASE_URL, SUPABASE_KEY, supaClient y emailjs los inicializa src/main.js (Vite) en window.
 const SITE_URL = window.location.origin.startsWith('http') ? window.location.origin : 'https://app-entrenamiento-one.vercel.app';
-const supaClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let currentUser = null;
 let userProfile = null;
