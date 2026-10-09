@@ -1,0 +1,24 @@
+{
+  "name": "prime-physique",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.4"
+  },
+  "dependencies": {
+    "@emailjs/browser": "^3.12.1",
+    "@fortawesome/fontawesome-free": "^6.7.2",
+    "@supabase/supabase-js": "^2.117.3"
+  }
+}
