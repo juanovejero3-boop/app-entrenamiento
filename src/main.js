@@ -1,4 +1,3 @@
-// Punto de entrada de Vite.
-import './styles/main.css';
-import '@fortawesome/fontawesome-free/css/all.min.css';
+// Punto de entrada de Vite. Los estilos se cargan con <link> en index.html
+// (evita el flash de HTML sin estilos en desarrollo).
 import './app.js';
