@@ -1,5 +1,6 @@
 // 1. CONFIGURACIÓN DE SUPABASE
-// SUPABASE_URL, SUPABASE_KEY, supaClient y emailjs los inicializa src/main.js (Vite) en window.
+import emailjs from '@emailjs/browser';
+import { SUPABASE_URL, supaClient } from './lib/supabase.js';
 const SITE_URL = window.location.origin.startsWith('http') ? window.location.origin : 'https://app-entrenamiento-one.vercel.app';
 
 let currentUser = null;
@@ -308,7 +309,7 @@ window.renderPublicBooking = function() {
                     <p class="col-span-3 text-[10px] text-gray-500 text-center py-4">Selecciona una fecha arriba para ver los turnos</p>
                 </div>
             </div>
-            <button onclick="bookingStep=1; renderPublicBooking();" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
+            <button onclick="irAPasoReservaPublica(1)" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
         </div>
         `;
     } else if (bookingStep === 3) {
@@ -323,7 +324,7 @@ window.renderPublicBooking = function() {
                     <p><span class="font-bold text-white">Fecha:</span> ${selectedDate}</p>
                     <p><span class="font-bold text-white">Hora:</span> ${selectedTime}</p>
                 </div>
-                <button onclick="bookingStep=2; renderPublicBooking();" class="text-[10px] text-neonRed hover:text-white underline">Cambiar</button>
+                <button onclick="irAPasoReservaPublica(2)" class="text-[10px] text-neonRed hover:text-white underline">Cambiar</button>
             </div>
 
             <div>
@@ -637,7 +638,7 @@ async function switchTab(tab) {
             </div>
           </div>
           <div class="pt-2">
-            <button id="btnToStep3" disabled onclick="bookingStep=3; switchTab('turnos')" class="w-full py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg uppercase tracking-wider">Siguiente Paso</button>
+            <button id="btnToStep3" disabled onclick="irAPasoTurnos(3)" class="w-full py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg uppercase tracking-wider">Siguiente Paso</button>
           </div>
         </div>
         ` : ''}
@@ -651,7 +652,7 @@ async function switchTab(tab) {
             <div><label class="block text-[10px] text-gray-400 mb-1">Temas a revisar</label><textarea id="b-notes" rows="2" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white"></textarea></div>
             
             <div class="flex gap-2 pt-2">
-              <button type="button" onclick="bookingStep=2; switchTab('turnos')" class="w-1/3 py-2 bg-cyberDark text-gray-400 text-xs font-bold rounded-lg border border-gray-700">Atrás</button>
+              <button type="button" onclick="irAPasoTurnos(2)" class="w-1/3 py-2 bg-cyberDark text-gray-400 text-xs font-bold rounded-lg border border-gray-700">Atrás</button>
               <button type="submit" id="b-submit" class="w-2/3 py-2 neon-glow-button text-white text-xs font-bold rounded-lg flex items-center justify-center uppercase"><i class="fa-solid fa-bolt mr-2"></i> AGENDAR</button>
             </div>
         </form>
@@ -661,7 +662,7 @@ async function switchTab(tab) {
         <div class="bg-cyberCard p-6 rounded-xl border border-emerald-900 text-center space-y-4 shadow-xl mt-10">
            <i class="fa-solid fa-circle-check text-5xl text-emerald-500"></i>
            <h2 class="text-lg font-black text-emerald-400 uppercase">¡Llamada Agendada!</h2>
-           <button onclick="bookingStep=2; switchTab('turnos')" class="mt-4 px-4 py-2 bg-cyberDark border border-gray-700 text-white text-xs font-bold rounded-lg">Programar otra</button>
+           <button onclick="irAPasoTurnos(2)" class="mt-4 px-4 py-2 bg-cyberDark border border-gray-700 text-white text-xs font-bold rounded-lg">Programar otra</button>
         </div>
         ` : ''}
       </div>
@@ -1972,7 +1973,7 @@ function renderMaterialAlumno() {
   const isAdmin = userProfile?.role === 'admin';
 
   const btnGestionar = isAdmin ? `
-    <button onclick="materialEditando = true; switchTab('material')" class="ml-auto text-xs bg-cyberCard border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:border-neonRed hover:text-neonRed transition">
+    <button onclick="setMaterialEditando(true)" class="ml-auto text-xs bg-cyberCard border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:border-neonRed hover:text-neonRed transition">
       <i class="fa-solid fa-pen-to-square mr-1"></i> Gestionar
     </button>
   ` : '';
@@ -2071,7 +2072,7 @@ function renderMaterialAdmin() {
     <div class="space-y-4 pb-10">
       <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2 flex items-center justify-between">
         <h2 class="text-lg font-black text-white uppercase tracking-wide">Gestionar Material</h2>
-        <button onclick="materialEditando = false; switchTab('material')" class="text-xs bg-cyberCard border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:border-neonRed hover:text-neonRed transition">
+        <button onclick="setMaterialEditando(false)" class="text-xs bg-cyberCard border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:border-neonRed hover:text-neonRed transition">
           <i class="fa-solid fa-arrow-left mr-1"></i> Volver
         </button>
       </div>
@@ -2179,3 +2180,25 @@ window.materialMoverItem = async function(id, dir) {
   materialData = null;
   materialRefresh();
 };
+
+// ============================================
+// HANDLERS INLINE
+// ============================================
+// Este archivo es un módulo ES: sus funciones no son globales. Las que se usan desde
+// atributos onclick/onsubmit/oninput del HTML se exponen acá (el resto ya se define como window.x).
+function irAPasoReservaPublica(paso) { bookingStep = paso; renderPublicBooking(); }
+function irAPasoTurnos(paso) { bookingStep = paso; switchTab('turnos'); }
+function setMaterialEditando(valor) { materialEditando = valor; switchTab('material'); }
+
+Object.assign(window, {
+  switchTab,
+  handleAuth,
+  handleLogout,
+  renderLanding,
+  renderLogin,
+  startPublicBooking,
+  adminPlanillaFiltrar,
+  irAPasoReservaPublica,
+  irAPasoTurnos,
+  setMaterialEditando,
+});

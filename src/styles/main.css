@@ -1,6 +1,5 @@
 @import "tailwindcss" source(none);
 @source "../../index.html";
-@source "../../public/app.js";
 @source "../**/*.js";
 
 /* Colores de marca (antes en tailwind.config del CDN) */
