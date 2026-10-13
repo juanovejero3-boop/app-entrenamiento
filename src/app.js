@@ -1,20 +1,15 @@
 // 1. CONFIGURACIÓN DE SUPABASE
 import emailjs from '@emailjs/browser';
 import { SUPABASE_URL, supaClient } from './lib/supabase.js';
+import { state } from './state.js';
 import { toast, modalBase, modalCard, mostrarProcesando, ocultarProcesando } from './lib/ui.js';
 const SITE_URL = window.location.origin.startsWith('http') ? window.location.origin : 'https://app-entrenamiento-one.vercel.app';
 
-let currentUser = null;
-let userProfile = null;
-let evolutionHistory = [];
-let adminAllUsers = [];
 let profileEditing = false;
-let passwordRecoveryActive = false;
 let adminSubTab = 'asignacion';
 let alumnosFiltrados = [];
 let alumnosPagina = 0;
 const ALUMNOS_POR_PAGINA = 3;
-let currentTab = null;
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
 let materialEditando = false;
@@ -22,27 +17,26 @@ let adminPlanillaPagina = 0;
 const ALUMNOS_PLANILLA_POR_PAGINA = 3;
 
 // Listener global de sesión: login, logout y recuperación de contraseña
-let appRendered = false;
 supaClient.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
-    currentUser = session.user;
+    state.currentUser = session.user;
     await loadUserProfile();
     await loadEvolutionHistory();
-    if (passwordRecoveryActive) return;
-    if (!appRendered) { appRendered = true; renderApp(); }
+    if (state.passwordRecoveryActive) return;
+    if (!state.appRendered) { state.appRendered = true; renderApp(); }
   } else if (event === 'SIGNED_OUT') {
-    appRendered = false;
-    currentTab = null;
-    currentUser = null;
-    userProfile = null;
-    evolutionHistory = [];
-    if (passwordRecoveryActive) {
+    state.appRendered = false;
+    state.currentTab = null;
+    state.currentUser = null;
+    state.userProfile = null;
+    state.evolutionHistory = [];
+    if (state.passwordRecoveryActive) {
       renderPasswordUpdate();
       return;
     }
     renderLanding();
   } else if (event === 'PASSWORD_RECOVERY') {
-    passwordRecoveryActive = true;
+    state.passwordRecoveryActive = true;
     renderPasswordUpdate();
   }
 });
@@ -92,15 +86,15 @@ let isPublicBooking = false; // Define si estamos afuera o adentro de la app
 // 2. VERIFICACIÓN DE SESIÓN AL CARGAR LA APP
 window.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await supaClient.auth.getSession();
-  if (passwordRecoveryActive) {
+  if (state.passwordRecoveryActive) {
     renderPasswordUpdate();
     return;
   }
   if (session) {
-    currentUser = session.user;
+    state.currentUser = session.user;
     await loadUserProfile();
     await loadEvolutionHistory();
-    if (!appRendered) { appRendered = true; renderApp(); }
+    if (!state.appRendered) { state.appRendered = true; renderApp(); }
   } else {
     renderLanding();
   }
@@ -108,25 +102,25 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // 3. CARGA DE DATOS
 async function loadUserProfile() {
-  const { data } = await supaClient.from('profiles').select('*').eq('id', currentUser.id).single();
+  const { data } = await supaClient.from('profiles').select('*').eq('id', state.currentUser.id).single();
   if (data) {
-    userProfile = data;
+    state.userProfile = data;
   } else {
     // El trigger handle_new_user debería crear el perfil automáticamente al registrarse.
-    userProfile = { id: currentUser.id, email: currentUser.email, role: 'alumno', sheet_url: '#', pdf_url: '#' };
-    console.warn('Perfil no encontrado en la base de datos para', currentUser.id);
+    state.userProfile = { id: state.currentUser.id, email: state.currentUser.email, role: 'alumno', sheet_url: '#', pdf_url: '#' };
+    console.warn('Perfil no encontrado en la base de datos para', state.currentUser.id);
   }
 }
 
 async function loadEvolutionHistory() {
-  const { data } = await supaClient.from('evolution').select('*').eq('user_id', currentUser.id).order('fecha', { ascending: false });
-  evolutionHistory = data || [];
+  const { data } = await supaClient.from('evolution').select('*').eq('user_id', state.currentUser.id).order('fecha', { ascending: false });
+  state.evolutionHistory = data || [];
 }
 
 // 4. VISTAS PÚBLICAS (LANDING, LOGIN Y RESERVA INICIAL)
 function renderLanding() {
   isPublicBooking = true;
-  currentTab = null;
+  state.currentTab = null;
   const navBar = document.querySelector('nav');
   if(navBar) navBar.style.display = 'none';
 
@@ -157,7 +151,7 @@ function renderLanding() {
 }
 
 function renderLogin() {
-  currentTab = null;
+  state.currentTab = null;
   const content = document.getElementById('app-content');
   content.innerHTML = `
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
@@ -236,7 +230,7 @@ window.updatePassword = async function(e) {
   const password = document.getElementById('new-password').value;
   const { error } = await supaClient.auth.updateUser({ password });
   if (error) return alert('No se pudo actualizar: ' + error.message);
-  passwordRecoveryActive = false;
+  state.passwordRecoveryActive = false;
   toast('Contraseña actualizada. Iniciá sesión con tu nueva clave.');
   await supaClient.auth.signOut();
 };
@@ -391,23 +385,23 @@ function renderApp() {
 
   const navContainer = document.querySelector('nav .max-w-lg');
   const btnAdmin = document.getElementById('btn-admin');
-  if (userProfile?.role === 'admin' && !btnAdmin) {
+  if (state.userProfile?.role === 'admin' && !btnAdmin) {
     navContainer.innerHTML += `
         <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
             <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
         </button>
     `;
-  } else if (userProfile?.role !== 'admin' && btnAdmin) {
+  } else if (state.userProfile?.role !== 'admin' && btnAdmin) {
     btnAdmin.remove();
   }
   // Si ya estamos en una tab de la app, no re-navegar (evita saltos al volver a la pestaña)
-  if (currentTab) return;
-  const fichaCompleta = !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
+  if (state.currentTab) return;
+  const fichaCompleta = !!(state.userProfile?.name && state.userProfile?.goal && state.userProfile?.height_cm && state.userProfile?.weight_kg);
   switchTab(fichaCompleta ? 'entrenamiento' : 'perfil');
 }
 
 function setActiveNav(tab) {
-  currentTab = tab;
+  state.currentTab = tab;
   if (tab !== 'entrenamiento') {
     adminPlanillaAbiertos = [];
     adminPlanillaActivo = null;
@@ -423,7 +417,7 @@ function renderUserHeader() {
     <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 flex justify-between items-center">
       <div>
         <h3 class="font-bold text-md text-neonRed">Perfil de Usuario</h3>
-        <p class="text-xs text-gray-300">${currentUser.email}</p>
+        <p class="text-xs text-gray-300">${state.currentUser.email}</p>
       </div>
       <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
     </div>
@@ -431,7 +425,7 @@ function renderUserHeader() {
 }
 
 function fichaCompleta() {
-  return !!(userProfile?.name && userProfile?.goal && userProfile?.height_cm && userProfile?.weight_kg);
+  return !!(state.userProfile?.name && state.userProfile?.goal && state.userProfile?.height_cm && state.userProfile?.weight_kg);
 }
 
 function renderFicha() {
@@ -455,20 +449,20 @@ function renderFicha() {
       <form onsubmit="saveProfile(event)" class="space-y-3 text-sm">
         <div>
           <label class="block text-[10px] text-gray-400 mb-1">Nombre</label>
-          <input type="text" id="profile-name" value="${userProfile?.name || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+          <input type="text" id="profile-name" value="${state.userProfile?.name || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
         </div>
         <div>
           <label class="block text-[10px] text-gray-400 mb-1">Objetivo</label>
-          <input type="text" id="profile-goal" value="${userProfile?.goal || ''}" ${readOnly} placeholder="Ej: perder grasa, ganar masa muscular..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+          <input type="text" id="profile-goal" value="${state.userProfile?.goal || ''}" ${readOnly} placeholder="Ej: perder grasa, ganar masa muscular..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-[10px] text-gray-400 mb-1">Altura (cm)</label>
-            <input type="number" step="0.1" id="profile-height" value="${userProfile?.height_cm || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+            <input type="number" step="0.1" id="profile-height" value="${state.userProfile?.height_cm || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
           </div>
           <div>
             <label class="block text-[10px] text-gray-400 mb-1">Peso (kg)</label>
-            <input type="number" step="0.1" id="profile-weight" value="${userProfile?.weight_kg || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
+            <input type="number" step="0.1" id="profile-weight" value="${state.userProfile?.weight_kg || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
           </div>
         </div>
         ${editing ? `<button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Ficha</button>` : ''}
@@ -567,7 +561,7 @@ async function switchTab(tab) {
     content.innerHTML = '<p class="text-center text-gray-500 mt-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando...</p>';
     materialData = null;
     materialData = await materialCargar();
-    if (userProfile?.role === 'admin' && materialEditando) {
+    if (state.userProfile?.role === 'admin' && materialEditando) {
       content.innerHTML = renderMaterialAdmin();
     } else {
       content.innerHTML = renderMaterialAlumno();
@@ -575,14 +569,14 @@ async function switchTab(tab) {
   }
   else if (tab === 'admin') {
     // --- CANDADO DE SEGURIDAD ---
-    if (userProfile?.role !== 'admin') {
+    if (state.userProfile?.role !== 'admin') {
         alert('Acceso denegado. Esta área es exclusiva.');
         switchTab('perfil');
         return;
     }
     content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
     const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
-    adminAllUsers = allUsers || [];
+    state.adminAllUsers = allUsers || [];
     window.checkAndSendExpirationEmails();
     content.innerHTML = `
       <div class="space-y-6 pb-10">
@@ -632,10 +626,10 @@ async function switchTab(tab) {
     `;
   } 
   else if (tab === 'entrenamiento') {
-    if (userProfile?.role === 'admin') {
-      if (!adminAllUsers.length) await loadAdminData();
+    if (state.userProfile?.role === 'admin') {
+      if (!state.adminAllUsers.length) await loadAdminData();
       if (adminPlanillaActivo) {
-        const alumno = adminAllUsers.find(u => u.id === adminPlanillaActivo);
+        const alumno = state.adminAllUsers.find(u => u.id === adminPlanillaActivo);
         if (alumno) {
           content.innerHTML = renderAdminPlanillaAlumno(alumno);
         } else {
@@ -652,8 +646,8 @@ async function switchTab(tab) {
         }, 50);
       }
     } else {
-      const sheetUrl = userProfile?.sheet_url;
-      const nutritionUrl = userProfile?.nutrition_url;
+      const sheetUrl = state.userProfile?.sheet_url;
+      const nutritionUrl = state.userProfile?.nutrition_url;
 
       const entrenamientoCard = sheetUrl ? `
         <a href="${sheetUrl}" target="_blank" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
@@ -703,7 +697,7 @@ async function switchTab(tab) {
         <div class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center space-y-3 shadow-lg">
           <i class="fa-solid fa-file-pdf text-4xl text-neonRed"></i>
           <h3 class="font-bold text-md text-white">Plan de Alimentación</h3>
-          <a href="${userProfile?.pdf_url || '#'}" target="_blank" class="inline-block bg-cyberCarbon text-neonRed font-bold text-xs px-4 py-2 rounded-lg border border-neonRed hover:bg-red-950 transition">Abrir PDF</a>
+          <a href="${state.userProfile?.pdf_url || '#'}" target="_blank" class="inline-block bg-cyberCarbon text-neonRed font-bold text-xs px-4 py-2 rounded-lg border border-neonRed hover:bg-red-950 transition">Abrir PDF</a>
         </div>
       </div>
     `;
@@ -750,7 +744,7 @@ function adminPlanillaFiltrar() {
 function adminPlanillaActualizarLista(filtro) {
   const lista = document.getElementById('admin-planilla-lista');
   if (!lista) return;
-  const usuarios = adminAllUsers.filter(u =>
+  const usuarios = state.adminAllUsers.filter(u =>
     !filtro || (u.email || '').toLowerCase().includes(filtro) || (u.name || '').toLowerCase().includes(filtro)
   );
   if (!usuarios.length) {
@@ -782,7 +776,7 @@ function adminPlanillaActualizarLista(filtro) {
 
 window.adminPlanillaCambiarPagina = function(dir) {
   const q = document.getElementById('admin-planilla-search').value.toLowerCase().trim();
-  const usuarios = adminAllUsers.filter(u =>
+  const usuarios = state.adminAllUsers.filter(u =>
     !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
   );
   const totalPaginas = Math.max(1, Math.ceil(usuarios.length / ALUMNOS_PLANILLA_POR_PAGINA));
@@ -797,7 +791,7 @@ function renderAdminPlanillaPestanas() {
   return `
     <div class="flex gap-1 overflow-x-auto pb-2 scrollbar-none">
       ${adminPlanillaAbiertos.map(id => {
-        const u = adminAllUsers.find(x => x.id === id);
+        const u = state.adminAllUsers.find(x => x.id === id);
         if (!u) return '';
         const activo = id === adminPlanillaActivo;
         return `
@@ -879,7 +873,7 @@ window.adminPlanillaSeleccionar = function(userId) {
     adminPlanillaAbiertos.push(userId);
   }
   adminPlanillaActivo = userId;
-  const u = adminAllUsers.find(x => x.id === userId);
+  const u = state.adminAllUsers.find(x => x.id === userId);
   if (u) {
     const content = document.getElementById('app-content');
     content.innerHTML = renderAdminPlanillaAlumno(u);
@@ -888,7 +882,7 @@ window.adminPlanillaSeleccionar = function(userId) {
 
 window.adminPlanillaActivar = function(userId) {
   adminPlanillaActivo = userId;
-  const u = adminAllUsers.find(x => x.id === userId);
+  const u = state.adminAllUsers.find(x => x.id === userId);
   if (u) {
     const content = document.getElementById('app-content');
     content.innerHTML = renderAdminPlanillaAlumno(u);
@@ -903,7 +897,7 @@ window.adminPlanillaCerrarPestana = function(userId) {
   if (!adminPlanillaActivo) {
     adminPlanillaMostrarBuscador();
   } else {
-    const u = adminAllUsers.find(x => x.id === adminPlanillaActivo);
+    const u = state.adminAllUsers.find(x => x.id === adminPlanillaActivo);
     if (u) {
       const content = document.getElementById('app-content');
       content.innerHTML = renderAdminPlanillaAlumno(u);
@@ -927,7 +921,7 @@ window.adminPlanillaMostrarBuscador = function() {
 // ---------- SUB-TABS DEL ADMIN ----------
 async function loadAdminData() {
   const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
-  adminAllUsers = allUsers || [];
+  state.adminAllUsers = allUsers || [];
 }
 
 function renderAdminSubTab() {
@@ -936,7 +930,7 @@ function renderAdminSubTab() {
 }
 
 function renderAdminAsignacion() {
-  alumnosFiltrados = adminAllUsers;
+  alumnosFiltrados = state.adminAllUsers;
   alumnosPagina = 0;
   return `
     <div class="space-y-4">
@@ -1021,17 +1015,17 @@ window.saveProfile = async function(e) {
     goal: goal || null,
     height_cm: heightCm,
     weight_kg: weightKg
-  }).eq('id', currentUser.id);
+  }).eq('id', state.currentUser.id);
 
   if (error) {
     toast('Error al guardar: ' + error.message, false);
     return;
   }
-  if (userProfile) {
-    userProfile.name = name || null;
-    userProfile.goal = goal || null;
-    userProfile.height_cm = heightCm;
-    userProfile.weight_kg = weightKg;
+  if (state.userProfile) {
+    state.userProfile.name = name || null;
+    state.userProfile.goal = goal || null;
+    state.userProfile.height_cm = heightCm;
+    state.userProfile.weight_kg = weightKg;
   }
   profileEditing = false;
   toast('Ficha guardada');
@@ -1070,7 +1064,7 @@ function renderAlumnos() {
 function refrescarListaAlumnos() {
   const searchEl = document.getElementById('alumno-search');
   const q = (searchEl ? searchEl.value : '').toLowerCase().trim();
-  alumnosFiltrados = adminAllUsers.filter(u =>
+  alumnosFiltrados = state.adminAllUsers.filter(u =>
     !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
   );
   const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
@@ -1180,7 +1174,7 @@ window.copiarTexto = function(texto) {
 
 // ---------- MODAL DETALLE ALUMNO ----------
 window.abrirModalAlumno = function(userId) {
-  const u = adminAllUsers.find(x => x.id === userId);
+  const u = state.adminAllUsers.find(x => x.id === userId);
   if (!u) return;
   const deshabilitado = !!u.disabled_at;
   const overlay = modalBase();
@@ -1254,7 +1248,7 @@ window.guardarDatosAlumno = async function(userId) {
 };
 
 window.toggleDeshabilitarAlumno = async function(userId) {
-  const u = adminAllUsers.find(x => x.id === userId);
+  const u = state.adminAllUsers.find(x => x.id === userId);
   const deshabilitado = !!u?.disabled_at;
   const ok = await window.confirm(deshabilitado
     ? `¿Querés habilitar a ${u?.email || 'este alumno'}?`
@@ -1270,7 +1264,7 @@ window.toggleDeshabilitarAlumno = async function(userId) {
 };
 
 window.eliminarAlumno = async function(userId) {
-  const u = adminAllUsers.find(x => x.id === userId);
+  const u = state.adminAllUsers.find(x => x.id === userId);
   const ok = await window.confirm(`¿Seguro que querés ELIMINAR a ${u?.email || 'este alumno'}? Esta acción no se puede deshacer.`);
   if (!ok) return;
   const res = await llamarAdminUsuarios('eliminar', { user_id: userId });
@@ -1317,7 +1311,7 @@ window.generateTimeSlots = function() {
     
     try {
         // Solo si la variable currentUser existe y tiene datos (o sea, estás logueado en tu admin), usa Seguimiento.
-        if (typeof currentUser !== 'undefined' && currentUser !== null) {
+        if (typeof state.currentUser !== 'undefined' && state.currentUser !== null) {
             type = 'followup';
         }
     } catch(e) {
@@ -1381,7 +1375,7 @@ window.confirmAppBooking = function(e) {
   btn.disabled = true;
   btn.innerHTML = "PROCESANDO...";
 
-  const emailToSave = isPublicBooking ? document.getElementById('b-email').value.trim() : currentUser.email;
+  const emailToSave = isPublicBooking ? document.getElementById('b-email').value.trim() : state.currentUser.email;
 
   const newBooking = {
     id: Date.now(),
@@ -1671,7 +1665,7 @@ window.materialAbrirLink = function(link, nombre) {
 
 function renderMaterialAlumno() {
   const secciones = materialData || [];
-  const isAdmin = userProfile?.role === 'admin';
+  const isAdmin = state.userProfile?.role === 'admin';
 
   const btnGestionar = isAdmin ? `
     <button onclick="setMaterialEditando(true)" class="ml-auto text-xs bg-cyberCard border border-gray-700 text-gray-300 px-3 py-1.5 rounded-lg hover:border-neonRed hover:text-neonRed transition">
