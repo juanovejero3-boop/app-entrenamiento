@@ -128,32 +128,6 @@ export async function switchTab(tab) {
   else if (tab === 'admin') await renderTabAdmin(content);
   else if (tab === 'perfil') await renderTabPerfil(content);
   else if (tab === 'entrenamiento') await renderTabEntrenamiento(content);
-  else if (tab === 'alimentacion') await renderTabAlimentacion(content);
-  else if (tab === 'videoteca') await renderTabVideoteca(content);
-}
-
-function renderTabAlimentacion(content) {
-    content.innerHTML = `
-      <div class="space-y-6">
-        <div class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center space-y-3 shadow-lg">
-          <i class="fa-solid fa-file-pdf text-4xl text-neonRed"></i>
-          <h3 class="font-bold text-md text-white">Plan de Alimentación</h3>
-          <a href="${state.userProfile?.pdf_url || '#'}" target="_blank" class="inline-block bg-cyberCarbon text-neonRed font-bold text-xs px-4 py-2 rounded-lg border border-neonRed hover:bg-red-950 transition">Abrir PDF</a>
-        </div>
-      </div>
-    `;
-}
-
-function renderTabVideoteca(content) {
-    content.innerHTML = `
-      <div class="space-y-4">
-        <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">Videoteca</h3>
-        <div class="bg-cyberCard rounded-xl overflow-hidden border border-gray-800 p-3 shadow-lg">
-          <iframe class="w-full aspect-video rounded" src="https://www.youtube.com/embed/dQw4w9WgXcQ" frameborder="0" allowfullscreen></iframe>
-          <h4 class="font-bold text-xs mt-3 text-white">Técnica de Sentadilla</h4>
-        </div>
-      </div>
-    `;
 }
 
 // ============================================
