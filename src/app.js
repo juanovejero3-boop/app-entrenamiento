@@ -502,7 +502,16 @@ async function switchTab(tab) {
   const content = document.getElementById('app-content');
 
   // LÓGICA DE TURNOS INTERNA (Solo Seguimiento Semanal)
-  if (tab === 'turnos') {
+  if (tab === 'turnos') await renderTabTurnos(content);
+  else if (tab === 'material') await renderTabMaterial(content);
+  else if (tab === 'admin') await renderTabAdmin(content);
+  else if (tab === 'perfil') await renderTabPerfil(content);
+  else if (tab === 'entrenamiento') await renderTabEntrenamiento(content);
+  else if (tab === 'alimentacion') await renderTabAlimentacion(content);
+  else if (tab === 'videoteca') await renderTabVideoteca(content);
+}
+
+function renderTabTurnos(content) {
     selectedService = { name: 'Seguimiento Semanal de Progreso', duration: 30 };
     if(bookingStep === 1 || isPublicBooking) bookingStep = 2; 
     
@@ -555,9 +564,9 @@ async function switchTab(tab) {
     `;
     
     if (bookingStep === 2 && selectedDate) { setTimeout(() => generateAppTimeSlots('internal'), 50); }
-  }
-  
-  else if (tab === 'material') {
+}
+
+async function renderTabMaterial(content) {
     content.innerHTML = '<p class="text-center text-gray-500 mt-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando...</p>';
     materialData = null;
     materialData = await materialCargar();
@@ -566,8 +575,9 @@ async function switchTab(tab) {
     } else {
       content.innerHTML = renderMaterialAlumno();
     }
-  }
-  else if (tab === 'admin') {
+}
+
+async function renderTabAdmin(content) {
     // --- CANDADO DE SEGURIDAD ---
     if (state.userProfile?.role !== 'admin') {
         alert('Acceso denegado. Esta área es exclusiva.');
@@ -589,8 +599,9 @@ async function switchTab(tab) {
         <div id="admin-sub-content">${renderAdminSubTab()}</div>
       </div>
     `;
-  }
-  else if (tab === 'perfil') {
+}
+
+function renderTabPerfil(content) {
     content.innerHTML = `
       <div class="space-y-6">
         ${renderUserHeader()}
@@ -624,8 +635,9 @@ async function switchTab(tab) {
         </div>
       </div>
     `;
-  } 
-  else if (tab === 'entrenamiento') {
+}
+
+async function renderTabEntrenamiento(content) {
     if (state.userProfile?.role === 'admin') {
       if (!state.adminAllUsers.length) await loadAdminData();
       if (adminPlanillaActivo) {
@@ -690,8 +702,9 @@ async function switchTab(tab) {
         </div>
       `;
     }
-  }
-  else if (tab === 'alimentacion') {
+}
+
+function renderTabAlimentacion(content) {
     content.innerHTML = `
       <div class="space-y-6">
         <div class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center space-y-3 shadow-lg">
@@ -701,8 +714,9 @@ async function switchTab(tab) {
         </div>
       </div>
     `;
-  } 
-  else if (tab === 'videoteca') {
+}
+
+function renderTabVideoteca(content) {
     content.innerHTML = `
       <div class="space-y-4">
         <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">Videoteca</h3>
@@ -712,7 +726,6 @@ async function switchTab(tab) {
         </div>
       </div>
     `;
-  }
 }
 
 // ---------- ADMIN: PLANILLA DE ALUMNO (PESTAÑAS) ----------
