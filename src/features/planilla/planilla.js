@@ -1,7 +1,8 @@
 // Pestaña Planilla: links de entrenamiento/nutrición del alumno y, para el admin,
 // buscador de alumnos con pestañas para ver la planilla de cada uno.
-import { loadAdminData, renderUserHeader } from '../../app.js';
+import { renderUserHeader } from '../../app.js';
 import { state } from '../../state.js';
+import { loadAdminData } from '../admin/admin.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
