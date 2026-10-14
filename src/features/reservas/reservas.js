@@ -1,6 +1,6 @@
 // Reservas de llamadas: agenda pública (landing), pestaña interna de turnos y sub-pestaña
 // Llamadas del admin. Movido tal cual desde app.js, sin cambios de lógica.
-import { switchTab } from '../../app.js';
+import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
 
 window.APP_SCHEDULE = {

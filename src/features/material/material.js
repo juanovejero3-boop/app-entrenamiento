@@ -1,5 +1,5 @@
 // Material: biblioteca de secciones y links (lectura para alumnos, edición para el admin).
-import { switchTab } from '../../app.js';
+import { switchTab } from '../../router.js';
 import { supaClient } from '../../lib/supabase.js';
 import { state } from '../../state.js';
 

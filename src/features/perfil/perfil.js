@@ -1,5 +1,6 @@
 // Perfil del usuario: ficha (datos físicos y objetivo) y cambio de contraseña.
-import { renderUserHeader, switchTab } from '../../app.js';
+import { switchTab } from '../../router.js';
+import { renderUserHeader } from '../../shell.js';
 import { supaClient } from '../../lib/supabase.js';
 import { toast } from '../../lib/ui.js';
 import { state } from '../../state.js';

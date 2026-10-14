@@ -1,5 +1,5 @@
 // Panel admin: sub-pestañas (Asignación / Llamadas) y listado paginado de alumnos.
-import { switchTab } from '../../app.js';
+import { switchTab } from '../../router.js';
 import { supaClient } from '../../lib/supabase.js';
 import { state } from '../../state.js';
 import { renderAdminLlamadas } from '../reservas/reservas.js';
