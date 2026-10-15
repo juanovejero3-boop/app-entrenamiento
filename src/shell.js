@@ -38,7 +38,7 @@ export function renderUserHeader() {
         <h3 class="font-bold text-md text-neonRed">Perfil de Usuario</h3>
         <p class="text-xs text-gray-300">${state.currentUser.email}</p>
       </div>
-      <button onclick="handleLogout()" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
+      <button data-click="handleLogout" class="text-xs bg-red-950 text-neonRed px-3 py-1.5 rounded border border-neonRed font-bold">Cerrar Sesión</button>
     </div>
   `;
 }

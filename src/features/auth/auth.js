@@ -1,4 +1,5 @@
 // Autenticación: landing, login, logout y recuperación de contraseña.
+import { registrarAcciones } from '../../lib/acciones.js';
 import { supaClient } from '../../lib/supabase.js';
 import { toast } from '../../lib/ui.js';
 import { state } from '../../state.js';
@@ -14,7 +15,7 @@ export function renderLanding() {
   content.innerHTML = `
     <!-- Botón pequeño arriba a la derecha para usuarios existentes -->
     <div class="flex justify-end mb-12">
-        <button onclick="renderLogin()" class="text-xs font-bold text-gray-400 hover:text-neonRed border border-gray-800 hover:border-neonRed bg-cyberCard px-4 py-2 rounded-lg transition shadow-lg">
+        <button data-click="renderLogin" class="text-xs font-bold text-gray-400 hover:text-neonRed border border-gray-800 hover:border-neonRed bg-cyberCard px-4 py-2 rounded-lg transition shadow-lg">
             <i class="fa-solid fa-user mr-1"></i> Ingresar / Crear Cuenta
         </button>
     </div>
@@ -28,7 +29,7 @@ export function renderLanding() {
         <p class="text-xs md:text-sm text-gray-400 uppercase tracking-widest font-bold">High Performance & Applied Biomechanics</p>
         
        <div class="pt-12">
-                <button onclick="startPublicBooking()" class="w-full max-w-sm mx-auto p-5 bg-neonRed text-white font-black uppercase tracking-wider rounded-xl shadow-lg hover:bg-red-700 transition block">
+                <button data-click="startPublicBooking" class="w-full max-w-sm mx-auto p-5 bg-neonRed text-white font-black uppercase tracking-wider rounded-xl shadow-lg hover:bg-red-700 transition block">
                     COMENZÁ A TRANSFORMAR TU VIDA POR COMPLETO
                     <span class="block text-sm font-bold text-white/90 mt-1">¡Hacé click aquí!</span>
                 </button>
@@ -43,10 +44,10 @@ function renderLogin() {
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-6">
       <div class="flex justify-between items-center border-b border-gray-800 pb-4">
         <h2 class="text-xl font-black text-neonRed">ACCESO AL SISTEMA</h2>
-        <button onclick="renderLanding()" class="text-xs text-gray-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+        <button data-click="renderLanding" class="text-xs text-gray-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
-      <form onsubmit="handleAuth(event)" class="space-y-4 text-sm">
+      <form data-submit="handleAuth" class="space-y-4 text-sm">
         <div>
           <label class="block text-xs text-gray-400 mb-1">Correo Electrónico</label>
           <input type="email" id="auth-email" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
@@ -59,7 +60,7 @@ function renderLogin() {
           <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Iniciar Sesión</button>
         </div>
         <div class="pt-1 text-center">
-          <button type="button" onclick="avisoContraseña()" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
+          <button type="button" data-click="avisoContraseña" class="text-xs text-gray-500 hover:text-neonRed">¿Olvidaste tu contraseña?</button>
         </div>
       </form>
     </div>
@@ -97,7 +98,7 @@ export function renderPasswordUpdate() {
   content.innerHTML = `
     <div class="max-w-md mx-auto mt-10 bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-5">
       <h2 class="text-xl font-black text-neonRed border-b border-gray-800 pb-4">NUEVA CONTRASEÑA</h2>
-      <form onsubmit="updatePassword(event)" class="space-y-4 text-sm">
+      <form data-submit="updatePassword" class="space-y-4 text-sm">
         <div>
           <label class="block text-xs text-gray-400 mb-1">Nueva contraseña</label>
           <input type="password" id="new-password" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed" />
@@ -108,7 +109,7 @@ export function renderPasswordUpdate() {
   `;
 }
 
-window.updatePassword = async function (e) {
+async function updatePassword(e) {
   e.preventDefault();
   const password = document.getElementById('new-password').value;
   const { error } = await supaClient.auth.updateUser({ password });
@@ -116,16 +117,22 @@ window.updatePassword = async function (e) {
   state.passwordRecoveryActive = false;
   toast('Contraseña actualizada. Iniciá sesión con tu nueva clave.');
   await supaClient.auth.signOut();
-};
+}
 
-window.avisoContraseña = function () {
+function avisoContraseña() {
   window.alert('Comunicate con tu entrenador para que te regenere tu contraseña.');
-};
+}
 
-// Usadas desde handlers inline (onclick/onsubmit) del HTML
+registrarAcciones({
+  renderLanding: () => renderLanding(),
+  renderLogin: () => renderLogin(),
+  handleAuth: (el, e) => handleAuth(e),
+  handleLogout: () => handleLogout(),
+  updatePassword: (el, e) => updatePassword(e),
+  avisoContraseña: () => avisoContraseña(),
+});
+
+// Todavía usada por un onclick inline de reservas (se quita al convertir ese módulo)
 Object.assign(window, {
-  handleAuth,
-  handleLogout,
   renderLanding,
-  renderLogin,
 });

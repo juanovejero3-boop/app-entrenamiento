@@ -1,5 +1,6 @@
 // Reservas de llamadas: agenda pública (landing), pestaña interna de turnos y sub-pestaña
 // Llamadas del admin. Movido tal cual desde app.js, sin cambios de lógica.
+import { registrarAcciones } from '../../lib/acciones.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
 
@@ -585,8 +586,11 @@ export function setPublicBooking(valor) {
 }
 
 // Usadas desde handlers inline (onclick/onsubmit) del HTML
+registrarAcciones({
+  startPublicBooking: () => startPublicBooking(),
+});
+
 Object.assign(window, {
-  startPublicBooking,
   irAPasoReservaPublica,
   irAPasoTurnos,
 });
