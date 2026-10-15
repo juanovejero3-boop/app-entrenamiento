@@ -5,6 +5,7 @@ import { escapeAttr } from '../../lib/dom.js';
 import { renderUserHeader } from '../../shell.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
+import { abrirConstructorDePlanes } from '../coaching/entrenamiento/constructorDePlanes.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
@@ -244,6 +245,16 @@ function renderAdminPlanillaAlumno(u) {
         </h3>
         ${nutricionCard}
       </div>
+
+      <div class="bg-cyberCard p-4 rounded-xl border border-dashed border-neonRed/60 space-y-3">
+        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+          <i class="fa-solid fa-layer-group mr-2"></i> Plan de entrenamiento (en la app)
+        </h3>
+        <p class="text-[11px] text-gray-400">En prueba: se guarda solo en este navegador hasta aprobar la integración.</p>
+        <button data-click="planillaAbrirConstructorDePlanes" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
+          <i class="fa-solid fa-pen-ruler mr-2"></i> Armar / editar macrociclo
+        </button>
+      </div>
     </div>
   `;
 }
@@ -309,4 +320,11 @@ registrarAcciones({
   adminPlanillaActivar: (el) => adminPlanillaActivar(el.dataset.id),
   adminPlanillaCerrarPestana: (el) => adminPlanillaCerrarPestana(el.dataset.id),
   adminPlanillaMostrarBuscador: () => adminPlanillaMostrarBuscador(),
+  planillaAbrirConstructorDePlanes: (el) => {
+    const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
+    if (!u) return;
+    abrirConstructorDePlanes(document.getElementById('app-content'), u, {
+      alVolver: () => adminPlanillaActivar(u.id),
+    });
+  },
 });
