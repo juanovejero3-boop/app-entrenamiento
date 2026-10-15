@@ -1,6 +1,7 @@
 // Reservas de llamadas: agenda pública (landing), pestaña interna de turnos y sub-pestaña
 // Llamadas del admin. Movido tal cual desde app.js, sin cambios de lógica.
 import { registrarAcciones } from '../../lib/acciones.js';
+import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
 
@@ -57,7 +58,7 @@ window.renderPublicBooking = function () {
     <div class="max-w-md mx-auto mt-4 space-y-6 pb-12">
         <div class="flex justify-between items-center border-b border-gray-800 pb-4">
             <h2 class="text-xl font-black text-white uppercase"><i class="fa-solid fa-bolt text-neonRed mr-2"></i> Asesoría Estratégica</h2>
-            <button onclick="renderLanding()" class="text-xs text-gray-500 hover:text-white border border-gray-800 px-3 py-1.5 rounded">Volver</button>
+            <button data-click="renderLanding" class="text-xs text-gray-500 hover:text-white border border-gray-800 px-3 py-1.5 rounded">Volver</button>
         </div>
     `;
 
@@ -84,7 +85,7 @@ window.renderPublicBooking = function () {
                 <textarea id="booking-challenge" rows="3" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed" placeholder="Cuéntame con confianza qué te frustra hoy..."></textarea>
             </div>
 
-            <button onclick="validateBookingStep1()" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
+            <button data-click="validateBookingStep1" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
                 Continuar a selección de horario <i class="fa-solid fa-arrow-right ml-2"></i>
             </button>
         </div>
@@ -102,7 +103,7 @@ window.renderPublicBooking = function () {
 
             <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
-                <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" onchange="generateTimeSlots()" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
+                <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" data-change="generateTimeSlots" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
             </div>
             <div>
                 <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Horarios Disponibles (ART)</label>
@@ -110,7 +111,7 @@ window.renderPublicBooking = function () {
                     <p class="col-span-3 text-[10px] text-gray-500 text-center py-4">Selecciona una fecha arriba para ver los turnos</p>
                 </div>
             </div>
-            <button onclick="irAPasoReservaPublica(1)" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
+            <button data-click="irAPasoReservaPublica" data-paso="1" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
         </div>
         `;
   } else if (bookingStep === 3) {
@@ -125,7 +126,7 @@ window.renderPublicBooking = function () {
                     <p><span class="font-bold text-white">Fecha:</span> ${selectedDate}</p>
                     <p><span class="font-bold text-white">Hora:</span> ${selectedTime}</p>
                 </div>
-                <button onclick="irAPasoReservaPublica(2)" class="text-[10px] text-neonRed hover:text-white underline">Cambiar</button>
+                <button data-click="irAPasoReservaPublica" data-paso="2" class="text-[10px] text-neonRed hover:text-white underline">Cambiar</button>
             </div>
 
             <div>
@@ -145,7 +146,7 @@ window.renderPublicBooking = function () {
                 <textarea id="b-notes">Ocupación: ${temp.job} | Reto: ${temp.challenge}</textarea>
             </div>
 
-            <button id="b-submit" onclick="confirmAppBooking(event)" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
+            <button id="b-submit" data-click="confirmAppBooking" class="w-full py-4 mt-2 neon-glow-button text-white font-black text-xs rounded-xl uppercase tracking-wider shadow-lg">
                 Agendar Llamada <i class="fa-solid fa-paper-plane ml-2"></i>
             </button>
         </div>
@@ -170,7 +171,7 @@ window.renderPublicBooking = function () {
                 <p class="text-sm text-white"><i class="fa-regular fa-clock text-neonRed w-5"></i> <b>${selectedTime}</b> (Hora Argentina)</p>
             </div>
 
-            <button onclick="window.location.reload()" class="w-full py-4 mt-6 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg transition duration-300">
+            <button data-click="recargarPagina" class="w-full py-4 mt-6 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg transition duration-300">
                 Volver al Inicio
             </button>
         </div>
@@ -196,7 +197,7 @@ export function renderTabTurnos(content) {
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
           <div>
             <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
-            <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" onchange="generateAppTimeSlots('internal')" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded-lg outline-none focus:border-neonRed">
+            <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" data-change="generateAppTimeSlots" class="w-full bg-cyberDark border border-gray-700 text-white p-2.5 rounded-lg outline-none focus:border-neonRed">
           </div>
           <div>
             <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Turnos (ART)</label>
@@ -205,7 +206,7 @@ export function renderTabTurnos(content) {
             </div>
           </div>
           <div class="pt-2">
-            <button id="btnToStep3" disabled onclick="irAPasoTurnos(3)" class="w-full py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg uppercase tracking-wider">Siguiente Paso</button>
+            <button id="btnToStep3" disabled data-click="irAPasoTurnos" data-paso="3" class="w-full py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg uppercase tracking-wider">Siguiente Paso</button>
           </div>
         </div>
         `
@@ -215,7 +216,7 @@ export function renderTabTurnos(content) {
         ${
           bookingStep === 3
             ? `
-        <form onsubmit="confirmAppBooking(event)" class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
+        <form data-submit="confirmAppBooking" class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
             <p class="text-xs text-neonRed font-bold bg-red-950/40 p-3 rounded border border-red-900 mb-4 text-center"><i class="fa-solid fa-calendar-check mr-2"></i> ${selectedDate} a las ${selectedTime} ART</p>
             
             <div><label class="block text-[10px] text-gray-400 mb-1">Nombre *</label><input type="text" id="b-name" required class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white"></div>
@@ -223,7 +224,7 @@ export function renderTabTurnos(content) {
             <div><label class="block text-[10px] text-gray-400 mb-1">Temas a revisar</label><textarea id="b-notes" rows="2" class="w-full bg-cyberDark border border-gray-700 rounded p-2 text-white"></textarea></div>
             
             <div class="flex gap-2 pt-2">
-              <button type="button" onclick="irAPasoTurnos(2)" class="w-1/3 py-2 bg-cyberDark text-gray-400 text-xs font-bold rounded-lg border border-gray-700">Atrás</button>
+              <button type="button" data-click="irAPasoTurnos" data-paso="2" class="w-1/3 py-2 bg-cyberDark text-gray-400 text-xs font-bold rounded-lg border border-gray-700">Atrás</button>
               <button type="submit" id="b-submit" class="w-2/3 py-2 neon-glow-button text-white text-xs font-bold rounded-lg flex items-center justify-center uppercase"><i class="fa-solid fa-bolt mr-2"></i> AGENDAR</button>
             </div>
         </form>
@@ -237,7 +238,7 @@ export function renderTabTurnos(content) {
         <div class="bg-cyberCard p-6 rounded-xl border border-emerald-900 text-center space-y-4 shadow-xl mt-10">
            <i class="fa-solid fa-circle-check text-5xl text-emerald-500"></i>
            <h2 class="text-lg font-black text-emerald-400 uppercase">¡Llamada Agendada!</h2>
-           <button onclick="irAPasoTurnos(2)" class="mt-4 px-4 py-2 bg-cyberDark border border-gray-700 text-white text-xs font-bold rounded-lg">Programar otra</button>
+           <button data-click="irAPasoTurnos" data-paso="2" class="mt-4 px-4 py-2 bg-cyberDark border border-gray-700 text-white text-xs font-bold rounded-lg">Programar otra</button>
         </div>
         `
             : ''
@@ -261,11 +262,11 @@ export function renderAdminLlamadas() {
       </div>
       <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3">
         <label class="block text-[11px] font-bold text-gray-400 uppercase">URL Webhook (Google Calendar):</label>
-        <input type="text" id="appsScriptUrl" value="${webhookUrl}" onchange="saveAppWebhookUrl()" placeholder="https://script.google.com/macros/..." class="w-full bg-cyberDark border border-gray-700 p-2.5 rounded text-xs text-neonRed outline-none focus:border-neonRed mb-4">
+        <input type="text" id="appsScriptUrl" value="${webhookUrl}" data-change="saveAppWebhookUrl" placeholder="https://script.google.com/macros/..." class="w-full bg-cyberDark border border-gray-700 p-2.5 rounded text-xs text-neonRed outline-none focus:border-neonRed mb-4">
 
         <div class="grid grid-cols-2 gap-4 mb-4">
            <div class="bg-cyberDark p-3 rounded-lg border border-gray-800 text-center"><p class="text-[10px] text-gray-500 uppercase">Turnos Activos</p><p class="text-xl font-bold text-neonRed">${localBookings.length}</p></div>
-           <button onclick="clearAppBookings()" class="bg-red-950/40 text-red-500 border border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-900/60 transition"><i class="fa-solid fa-trash mb-1 block"></i> Limpiar Registro</button>
+           <button data-click="clearAppBookings" class="bg-red-950/40 text-red-500 border border-red-900/50 rounded-lg text-xs font-bold hover:bg-red-900/60 transition"><i class="fa-solid fa-trash mb-1 block"></i> Limpiar Registro</button>
         </div>
 
         <div class="overflow-x-auto mt-4">
@@ -356,7 +357,7 @@ window.generateTimeSlots = function () {
   container.innerHTML = slots
     .map(
       (time) => `
-        <button type="button" onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
+        <button type="button" data-click="selectTime" data-time="${escapeAttr(time)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
             ${time}
         </button>
     `,
@@ -556,7 +557,7 @@ window.generateTimeSlots = function () {
   container.innerHTML = slots
     .map(
       (time) => `
-        <button onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
+        <button data-click="selectTime" data-time="${escapeAttr(time)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
             ${time}
         </button>
     `,
@@ -586,11 +587,21 @@ export function setPublicBooking(valor) {
 }
 
 // Usadas desde handlers inline (onclick/onsubmit) del HTML
+// Las funciones definidas como window.x se llaman al momento del evento (no se
+// capturan al registrar), igual que hacían los onclick inline.
 registrarAcciones({
   startPublicBooking: () => startPublicBooking(),
-});
-
-Object.assign(window, {
-  irAPasoReservaPublica,
-  irAPasoTurnos,
+  irAPasoReservaPublica: (el) => irAPasoReservaPublica(Number(el.dataset.paso)),
+  irAPasoTurnos: (el) => irAPasoTurnos(Number(el.dataset.paso)),
+  validateBookingStep1: () => window.validateBookingStep1(),
+  generateTimeSlots: () => window.generateTimeSlots(),
+  selectTime: (el) => window.selectTime(el.dataset.time),
+  confirmAppBooking: (el, e) => window.confirmAppBooking(e),
+  saveAppWebhookUrl: () => window.saveAppWebhookUrl(),
+  clearAppBookings: () => window.clearAppBookings(),
+  recargarPagina: () => window.location.reload(),
+  // generateAppTimeSlots no existe (error previo de la agenda interna, pendiente de revisar):
+  // se mantiene la misma llamada que hacía el onchange inline.
+  // eslint-disable-next-line no-undef
+  generateAppTimeSlots: () => generateAppTimeSlots('internal'),
 });

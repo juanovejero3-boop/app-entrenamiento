@@ -131,8 +131,3 @@ registrarAcciones({
   updatePassword: (el, e) => updatePassword(e),
   avisoContraseña: () => avisoContraseña(),
 });
-
-// Todavía usada por un onclick inline de reservas (se quita al convertir ese módulo)
-Object.assign(window, {
-  renderLanding,
-});
