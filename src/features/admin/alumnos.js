@@ -1,6 +1,8 @@
 // Gestión de alumnos (admin): alta, edición, deshabilitar, eliminar y contraseñas,
 // vía la Edge Function admin-usuarios.
 import { loadAdminData, refrescarListaAlumnos } from './admin.js';
+import { registrarAcciones } from '../../lib/acciones.js';
+import { escapeAttr } from '../../lib/dom.js';
 import { SUPABASE_URL, supaClient } from '../../lib/supabase.js';
 import { modalBase, modalCard, mostrarProcesando, ocultarProcesando, toast } from '../../lib/ui.js';
 import { state } from '../../state.js';
@@ -31,19 +33,19 @@ async function llamarAdminUsuarios(action, body = {}) {
 }
 
 // ---------- MODAL NUEVO ALUMNO ----------
-window.abrirModalNuevoAlumno = function () {
+function abrirModalNuevoAlumno() {
   const overlay = modalBase();
   overlay.innerHTML = modalCard(`
     <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-4">Nuevo alumno</p>
     <label class="block text-[10px] text-gray-400 uppercase mb-1 text-left">Correo del alumno</label>
     <input type="email" id="nuevo-alumno-email" required placeholder="correo@alumno.com" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed mb-4" />
-    <button onclick="crearNuevoAlumno()" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">Guardar</button>
-    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
+    <button data-click="crearNuevoAlumno" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">Guardar</button>
+    <button data-click="cerrarModal" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
   `);
   document.getElementById('nuevo-alumno-email').focus();
-};
+}
 
-window.crearNuevoAlumno = async function () {
+async function crearNuevoAlumno() {
   const emailInput = document.getElementById('nuevo-alumno-email');
   const email = (emailInput.value || '').trim();
   if (!email) return alert('Ingresá el correo del alumno.');
@@ -52,7 +54,7 @@ window.crearNuevoAlumno = async function () {
   mostrarCredencialesNuevoAlumno(res.email, res.password);
   await loadAdminData();
   refrescarListaAlumnos();
-};
+}
 
 function mostrarCredencialesNuevoAlumno(email, password) {
   const overlay = modalBase();
@@ -63,29 +65,29 @@ function mostrarCredencialesNuevoAlumno(email, password) {
       <p class="text-[9px] text-gray-500 uppercase mb-1">Correo</p>
       <div class="flex items-center gap-2">
         <p class="text-sm text-white font-bold break-all flex-1">${String(email).replace(/</g, '&lt;')}</p>
-        <button onclick="copiarTexto('${String(email).replace(/'/g, "\\'")}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+        <button data-click="copiarTexto" data-texto="${escapeAttr(email)}" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
       </div>
     </div>
     <div class="bg-cyberDark border border-gray-700 rounded-xl px-3 py-3 mb-4 text-left">
       <p class="text-[9px] text-gray-500 uppercase mb-1">Contraseña</p>
       <div class="flex items-center gap-2">
         <input type="password" id="nuevo-password-campo" value="${password}" readonly class="flex-1 bg-transparent text-lg text-neonRed font-black font-mono outline-none" />
-        <button type="button" onclick="togglePasswordCampo('nuevo-password-campo', this)" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
-        <button onclick="copiarTexto('${password}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+        <button type="button" data-click="togglePasswordCampo" data-campo="nuevo-password-campo" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
+        <button data-click="copiarTexto" data-texto="${escapeAttr(password)}" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
       </div>
     </div>
-    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+    <button data-click="cerrarModal" class="w-full py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
   `);
 }
 
-window.togglePasswordCampo = function (inputId, btn) {
+function togglePasswordCampo(inputId, btn) {
   const input = document.getElementById(inputId);
   const isPassword = input.type === 'password';
   input.type = isPassword ? 'text' : 'password';
   btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm"></i>`;
-};
+}
 
-window.copiarTexto = function (texto) {
+function copiarTexto(texto) {
   navigator.clipboard
     .writeText(texto)
     .then(() => {
@@ -94,10 +96,10 @@ window.copiarTexto = function (texto) {
     .catch(() => {
       toast('No se pudo copiar', false);
     });
-};
+}
 
 // ---------- MODAL DETALLE ALUMNO ----------
-window.abrirModalAlumno = function (userId) {
+function abrirModalAlumno(userId) {
   const u = state.adminAllUsers.find((x) => x.id === userId);
   if (!u) return;
   const deshabilitado = !!u.disabled_at;
@@ -133,21 +135,21 @@ window.abrirModalAlumno = function (userId) {
         </div>
       </div>
     </div>
-    <button onclick="guardarDatosAlumno('${userId}')" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">
+    <button data-click="guardarDatosAlumno" data-id="${escapeAttr(userId)}" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition mb-2">
       <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar
     </button>
     <div class="grid grid-cols-2 gap-2 mb-2">
-      <button onclick="generarPasswordAlumno('${userId}', '${(u.email || '').replace(/'/g, "\\'")}')" class="py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Nueva contraseña</button>
-      <button onclick="toggleDeshabilitarAlumno('${userId}')" class="py-2.5 bg-cyberCarbon border ${deshabilitado ? 'border-emerald-700 text-emerald-400' : 'border-gray-700 text-gray-300'} font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed transition">${deshabilitado ? 'Habilitar' : 'Deshabilitar'}</button>
+      <button data-click="generarPasswordAlumno" data-id="${escapeAttr(userId)}" data-email="${escapeAttr(u.email || '')}" class="py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Nueva contraseña</button>
+      <button data-click="toggleDeshabilitarAlumno" data-id="${escapeAttr(userId)}" class="py-2.5 bg-cyberCarbon border ${deshabilitado ? 'border-emerald-700 text-emerald-400' : 'border-gray-700 text-gray-300'} font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed transition">${deshabilitado ? 'Habilitar' : 'Deshabilitar'}</button>
     </div>
-    <button onclick="eliminarAlumno('${userId}')" class="w-full py-2.5 bg-red-950 border border-red-800 text-red-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:bg-red-900 transition mb-2">
+    <button data-click="eliminarAlumno" data-id="${escapeAttr(userId)}" class="w-full py-2.5 bg-red-950 border border-red-800 text-red-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:bg-red-900 transition mb-2">
       <i class="fa-solid fa-trash mr-2"></i> Eliminar alumno
     </button>
-    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberDark border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+    <button data-click="cerrarModal" class="w-full py-2.5 bg-cyberDark border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
   `);
-};
+}
 
-window.guardarDatosAlumno = async function (userId) {
+async function guardarDatosAlumno(userId) {
   const nombre = document.getElementById(`alu-name-${userId}`).value.trim();
   const sheet = document.getElementById(`alu-sheet-${userId}`).value.trim();
   const nutricion = document.getElementById(`alu-nutricion-${userId}`).value.trim();
@@ -171,10 +173,10 @@ window.guardarDatosAlumno = async function (userId) {
   toast('Alumno actualizado');
   await loadAdminData();
   refrescarListaAlumnos();
-  window.abrirModalAlumno(userId);
-};
+  abrirModalAlumno(userId);
+}
 
-window.toggleDeshabilitarAlumno = async function (userId) {
+async function toggleDeshabilitarAlumno(userId) {
   const u = state.adminAllUsers.find((x) => x.id === userId);
   const deshabilitado = !!u?.disabled_at;
   const ok = await window.confirm(
@@ -190,9 +192,9 @@ window.toggleDeshabilitarAlumno = async function (userId) {
   await loadAdminData();
   refrescarListaAlumnos();
   document.getElementById('app-modal-overlay').style.display = 'none';
-};
+}
 
-window.eliminarAlumno = async function (userId) {
+async function eliminarAlumno(userId) {
   const u = state.adminAllUsers.find((x) => x.id === userId);
   const ok = await window.confirm(
     `¿Seguro que querés ELIMINAR a ${u?.email || 'este alumno'}? Esta acción no se puede deshacer.`,
@@ -204,9 +206,9 @@ window.eliminarAlumno = async function (userId) {
   await loadAdminData();
   refrescarListaAlumnos();
   document.getElementById('app-modal-overlay').style.display = 'none';
-};
+}
 
-window.generarPasswordAlumno = async function (userId, nombreAlumno) {
+async function generarPasswordAlumno(userId, nombreAlumno) {
   const ok = await window.confirm(
     `¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`,
   );
@@ -214,7 +216,7 @@ window.generarPasswordAlumno = async function (userId, nombreAlumno) {
   const res = await llamarAdminUsuarios('reset', { user_id: userId });
   if (res.error) return alert(res.error);
   mostrarPasswordGenerada(nombreAlumno, res.password);
-};
+}
 
 function mostrarPasswordGenerada(nombreAlumno, password) {
   const overlay = modalBase();
@@ -225,10 +227,22 @@ function mostrarPasswordGenerada(nombreAlumno, password) {
       <p class="text-[9px] text-gray-500 uppercase mb-1">Contraseña</p>
       <div class="flex items-center gap-2">
         <input type="password" id="nueva-password-campo" value="${password}" readonly class="flex-1 bg-transparent text-lg text-neonRed font-black font-mono outline-none" />
-        <button type="button" onclick="togglePasswordCampo('nueva-password-campo', this)" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
-        <button onclick="copiarTexto('${password}')" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
+        <button type="button" data-click="togglePasswordCampo" data-campo="nueva-password-campo" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-eye text-sm"></i></button>
+        <button data-click="copiarTexto" data-texto="${escapeAttr(password)}" class="text-gray-500 hover:text-neonRed shrink-0"><i class="fa-solid fa-copy"></i></button>
       </div>
     </div>
-    <button onclick="document.getElementById('app-modal-overlay').style.display='none'" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
+    <button data-click="cerrarModal" class="w-full py-2.5 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cerrar</button>
   `);
 }
+
+registrarAcciones({
+  abrirModalNuevoAlumno: () => abrirModalNuevoAlumno(),
+  crearNuevoAlumno: () => crearNuevoAlumno(),
+  abrirModalAlumno: (el) => abrirModalAlumno(el.dataset.id),
+  guardarDatosAlumno: (el) => guardarDatosAlumno(el.dataset.id),
+  toggleDeshabilitarAlumno: (el) => toggleDeshabilitarAlumno(el.dataset.id),
+  eliminarAlumno: (el) => eliminarAlumno(el.dataset.id),
+  generarPasswordAlumno: (el) => generarPasswordAlumno(el.dataset.id, el.dataset.email),
+  togglePasswordCampo: (el) => togglePasswordCampo(el.dataset.campo, el),
+  copiarTexto: (el) => copiarTexto(el.dataset.texto),
+});

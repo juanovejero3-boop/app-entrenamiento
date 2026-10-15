@@ -7,7 +7,7 @@ import { supaClient } from '../../lib/supabase.js';
   emailjs.init('5EuZV_5aIYiY9s4HQ');
 })();
 
-window.checkAndSendExpirationEmails = async function () {
+export async function checkAndSendExpirationEmails() {
   const { data: allUsers, error } = await supaClient.from('profiles').select('*');
   if (error) {
     console.error('Error al obtener usuarios para vencimientos:', error.message);
@@ -57,4 +57,4 @@ window.checkAndSendExpirationEmails = async function () {
       );
     }
   });
-};
+}
