@@ -1,5 +1,7 @@
 // Pestaña Planilla: links de entrenamiento/nutrición del alumno y, para el admin,
 // buscador de alumnos con pestañas para ver la planilla de cada uno.
+import { registrarAcciones } from '../../lib/acciones.js';
+import { escapeAttr } from '../../lib/dom.js';
 import { renderUserHeader } from '../../shell.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
@@ -92,7 +94,7 @@ function renderAdminPlanillaBuscador() {
         <p class="text-xs text-gray-400">Buscá un alumno para ver sus planillas</p>
       </div>
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800">
-        <input type="text" id="admin-planilla-search" oninput="adminPlanillaFiltrar()" placeholder="Buscar por nombre o correo..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-sm text-white outline-none focus:border-neonRed" />
+        <input type="text" id="admin-planilla-search" data-input="adminPlanillaFiltrar" placeholder="Buscar por nombre o correo..." class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-sm text-white outline-none focus:border-neonRed" />
       </div>
       <div id="admin-planilla-lista" class="space-y-2">
       </div>
@@ -124,7 +126,7 @@ function adminPlanillaActualizarLista(filtro) {
   const tarjetas = paginaActual
     .map(
       (u) => `
-    <button onclick="adminPlanillaSeleccionar('${u.id}')" class="w-full text-left bg-cyberCard p-3 rounded-xl border border-gray-800 hover:border-neonRed transition">
+    <button data-click="adminPlanillaSeleccionar" data-id="${escapeAttr(u.id)}" class="w-full text-left bg-cyberCard p-3 rounded-xl border border-gray-800 hover:border-neonRed transition">
       <p class="font-bold text-white text-sm">${u.name || '(sin nombre)'}</p>
       <p class="text-xs text-gray-400">${u.email}</p>
     </button>
@@ -136,9 +138,9 @@ function adminPlanillaActualizarLista(filtro) {
     usuarios.length > ALUMNOS_PLANILLA_POR_PAGINA
       ? `
     <div class="flex items-center justify-between pt-2">
-      <button onclick="adminPlanillaCambiarPagina(-1)" ${adminPlanillaPagina === 0 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Anterior</button>
+      <button data-click="adminPlanillaCambiarPagina" data-dir="-1" ${adminPlanillaPagina === 0 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Anterior</button>
       <span class="text-[11px] text-gray-500">Página ${adminPlanillaPagina + 1} de ${totalPaginas}</span>
-      <button onclick="adminPlanillaCambiarPagina(1)" ${adminPlanillaPagina >= totalPaginas - 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Siguiente</button>
+      <button data-click="adminPlanillaCambiarPagina" data-dir="1" ${adminPlanillaPagina >= totalPaginas - 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Siguiente</button>
     </div>
   `
       : '';
@@ -146,7 +148,7 @@ function adminPlanillaActualizarLista(filtro) {
   lista.innerHTML = `${tarjetas}${paginacion}`;
 }
 
-window.adminPlanillaCambiarPagina = function (dir) {
+function adminPlanillaCambiarPagina(dir) {
   const q = document.getElementById('admin-planilla-search').value.toLowerCase().trim();
   const usuarios = state.adminAllUsers.filter(
     (u) => !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q),
@@ -156,7 +158,7 @@ window.adminPlanillaCambiarPagina = function (dir) {
   if (nueva < 0 || nueva >= totalPaginas) return;
   adminPlanillaPagina = nueva;
   adminPlanillaActualizarLista(q);
-};
+}
 
 function renderAdminPlanillaPestanas() {
   if (!adminPlanillaAbiertos.length) return '';
@@ -169,17 +171,17 @@ function renderAdminPlanillaPestanas() {
           const activo = id === adminPlanillaActivo;
           return `
           <div class="flex items-center gap-1 shrink-0">
-            <button onclick="adminPlanillaActivar('${id}')" class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${activo ? 'bg-neonRed text-white' : 'bg-cyberCard text-gray-400 border border-gray-700 hover:border-neonRed'}">
+            <button data-click="adminPlanillaActivar" data-id="${escapeAttr(id)}" class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${activo ? 'bg-neonRed text-white' : 'bg-cyberCard text-gray-400 border border-gray-700 hover:border-neonRed'}">
               ${u.name || u.email.split('@')[0]}
             </button>
-            <button onclick="adminPlanillaCerrarPestana('${id}')" class="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-neonRed transition">
+            <button data-click="adminPlanillaCerrarPestana" data-id="${escapeAttr(id)}" class="w-5 h-5 flex items-center justify-center text-gray-500 hover:text-neonRed transition">
               <i class="fa-solid fa-times text-[10px]"></i>
             </button>
           </div>
         `;
         })
         .join('')}
-      <button onclick="adminPlanillaMostrarBuscador()" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-cyberCard text-gray-400 border border-dashed border-gray-600 hover:border-neonRed hover:text-neonRed transition shrink-0">
+      <button data-click="adminPlanillaMostrarBuscador" class="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-cyberCard text-gray-400 border border-dashed border-gray-600 hover:border-neonRed hover:text-neonRed transition shrink-0">
         <i class="fa-solid fa-plus"></i>
       </button>
     </div>
@@ -246,7 +248,7 @@ function renderAdminPlanillaAlumno(u) {
   `;
 }
 
-window.adminPlanillaSeleccionar = function (userId) {
+function adminPlanillaSeleccionar(userId) {
   if (!adminPlanillaAbiertos.includes(userId)) {
     adminPlanillaAbiertos.push(userId);
   }
@@ -256,24 +258,24 @@ window.adminPlanillaSeleccionar = function (userId) {
     const content = document.getElementById('app-content');
     content.innerHTML = renderAdminPlanillaAlumno(u);
   }
-};
+}
 
-window.adminPlanillaActivar = function (userId) {
+function adminPlanillaActivar(userId) {
   adminPlanillaActivo = userId;
   const u = state.adminAllUsers.find((x) => x.id === userId);
   if (u) {
     const content = document.getElementById('app-content');
     content.innerHTML = renderAdminPlanillaAlumno(u);
   }
-};
+}
 
-window.adminPlanillaCerrarPestana = function (userId) {
+function adminPlanillaCerrarPestana(userId) {
   adminPlanillaAbiertos = adminPlanillaAbiertos.filter((id) => id !== userId);
   if (adminPlanillaActivo === userId) {
     adminPlanillaActivo = adminPlanillaAbiertos.length ? adminPlanillaAbiertos[adminPlanillaAbiertos.length - 1] : null;
   }
   if (!adminPlanillaActivo) {
-    window.adminPlanillaMostrarBuscador();
+    adminPlanillaMostrarBuscador();
   } else {
     const u = state.adminAllUsers.find((x) => x.id === adminPlanillaActivo);
     if (u) {
@@ -281,9 +283,9 @@ window.adminPlanillaCerrarPestana = function (userId) {
       content.innerHTML = renderAdminPlanillaAlumno(u);
     }
   }
-};
+}
 
-window.adminPlanillaMostrarBuscador = function () {
+function adminPlanillaMostrarBuscador() {
   adminPlanillaActivo = null;
   const content = document.getElementById('app-content');
   content.innerHTML = renderAdminPlanillaBuscador();
@@ -292,7 +294,7 @@ window.adminPlanillaMostrarBuscador = function () {
     const input = document.getElementById('admin-planilla-search');
     if (input) input.focus();
   }, 50);
-};
+}
 
 // Cierra las pestañas de alumnos abiertas (al salir de la pestaña Planilla).
 export function resetPlanillaPestanas() {
@@ -300,7 +302,11 @@ export function resetPlanillaPestanas() {
   adminPlanillaActivo = null;
 }
 
-// Usadas desde handlers inline (onclick/onsubmit) del HTML
-Object.assign(window, {
-  adminPlanillaFiltrar,
+registrarAcciones({
+  adminPlanillaFiltrar: () => adminPlanillaFiltrar(),
+  adminPlanillaSeleccionar: (el) => adminPlanillaSeleccionar(el.dataset.id),
+  adminPlanillaCambiarPagina: (el) => adminPlanillaCambiarPagina(Number(el.dataset.dir)),
+  adminPlanillaActivar: (el) => adminPlanillaActivar(el.dataset.id),
+  adminPlanillaCerrarPestana: (el) => adminPlanillaCerrarPestana(el.dataset.id),
+  adminPlanillaMostrarBuscador: () => adminPlanillaMostrarBuscador(),
 });
