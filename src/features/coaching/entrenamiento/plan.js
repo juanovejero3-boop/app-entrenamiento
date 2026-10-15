@@ -208,13 +208,15 @@ function asegurarDia(semana, d) {
   while (semana.days.length <= d) semana.days.push(diaVacio(semana.days.length + 1));
 }
 
-/** Inserta una copia de la semana `w` justo después, con el número del nombre incrementado. */
+/**
+ * Inserta una copia de la semana `w` justo después, llamada "<nombre> (copia)".
+ * No renumera: el entrenador le pone el nombre que quiera.
+ */
 export function duplicarSemana(plan, w) {
   const nuevo = copiar(plan);
   const original = nuevo.weeks[w];
   const copia = conIdsNuevos(original);
-  const match = original.name.match(/(.*?)(\d+)(\D*)$/);
-  copia.name = match ? match[1] + (parseInt(match[2], 10) + 1) + match[3] : `${original.name} (Copia)`;
+  copia.name = `${original.name} (copia)`;
   nuevo.weeks.splice(w + 1, 0, copia);
   return nuevo;
 }

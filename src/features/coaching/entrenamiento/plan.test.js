@@ -305,15 +305,15 @@ describe('actualizarDia y actualizarBloque', () => {
 describe('duplicarSemana', () => {
   it('inserta la copia justo después de la original con el mismo contenido', () => {
     const plan = duplicarSemana(planDesparejo(), 0);
-    expect(plan.weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 2', 'Semana 2', 'Semana 3']);
+    expect(plan.weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 1 (copia)', 'Semana 2', 'Semana 3']);
     expect(sinIds(plan.weeks[1].days)).toEqual(sinIds(planDesparejo().weeks[0].days));
   });
 
+  // La copia no adivina un número (podría repetir el de otra semana): el entrenador la renombra
   it.each([
-    ['Semana 3', 'Semana 4'],
-    ['Bloque 2 (descarga)', 'Bloque 3 (descarga)'],
-    ['Semana 9', 'Semana 10'],
-    ['Descarga', 'Descarga (Copia)'],
+    ['Semana 3', 'Semana 3 (copia)'],
+    ['Bloque 2 (descarga)', 'Bloque 2 (descarga) (copia)'],
+    ['Descarga', 'Descarga (copia)'],
   ])('nombra la copia de "%s" como "%s"', (nombre, esperado) => {
     let plan = actualizarSemana(planChico(), 0, { name: nombre });
     plan = duplicarSemana(plan, 0);
