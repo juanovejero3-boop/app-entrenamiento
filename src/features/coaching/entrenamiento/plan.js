@@ -16,7 +16,9 @@
  * @property {string} tech            Técnica de intensidad (Drop Set, Rest-Pause, ...)
  * @property {string} rest            Descanso ("90s", "2 min")
  * @property {string} notes
- * @property {boolean} isSuperset     Enlazado en superserie con el siguiente
+ * @property {string} group          Letra de superserie ('A', 'B', ...) o '' si va sola.
+ *                                    Los ejercicios de un bloque con la misma letra forman la
+ *                                    superserie (A1, A2, A3...; ver etiquetasSuperserie)
  *
  * @typedef {object} Bloque
  * @property {string} id
@@ -113,7 +115,7 @@ export function agregarEjercicio(plan, w, d, b) {
     tech: '',
     rest: '',
     notes: '',
-    isSuperset: false,
+    group: '',
   });
   return nuevo;
 }
@@ -256,6 +258,38 @@ export function propagarEjercicio(plan, w, d, b, e) {
 }
 
 const TIPOS_INTENSIDAD = ['RIR', 'RPE', '%RM'];
+
+/** Una sola letra (A-Z, en mayúscula) o '' si no es un grupo válido. */
+function letraDeGrupo(valor) {
+  const letra = texto(valor).trim().toUpperCase();
+  return /^[A-Z]$/.test(letra) ? letra : '';
+}
+
+/**
+ * Convierte la marca vieja `isSuperset` (del prototipo) en grupos: un ejercicio marcado va
+ * con el siguiente, y marcas seguidas se encadenan (triserie). Cada cadena recibe la primera
+ * letra libre del bloque. Una marca en el último ejercicio queda sin grupo.
+ * Solo aplica a ejercicios que no traen `group`.
+ */
+function convertirMarcasViejas(crudos, ejercicios) {
+  const ocupadas = new Set(ejercicios.map((e) => e.group).filter(Boolean));
+  const siguienteLibre = () => [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].find((l) => !ocupadas.has(l)) ?? '';
+  const sinGrupo = (i) => crudos[i].group === undefined;
+  let letra = '';
+  for (let i = 0; i < crudos.length; i++) {
+    const marcado = sinGrupo(i) && Boolean(crudos[i].isSuperset);
+    if (marcado && i + 1 < crudos.length && sinGrupo(i + 1)) {
+      if (!letra) {
+        letra = siguienteLibre();
+        ocupadas.add(letra);
+      }
+      ejercicios[i].group = letra;
+      ejercicios[i + 1].group = letra;
+    } else {
+      letra = '';
+    }
+  }
+}
 const texto = (v) => (v === undefined || v === null ? '' : String(v));
 const esObjeto = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -289,16 +323,15 @@ export function normalizarPlan(dato) {
     tech: texto(e.tech),
     rest: texto(e.rest),
     notes: texto(e.notes),
-    isSuperset: Boolean(e.isSuperset),
+    group: letraDeGrupo(e.group),
   });
 
   const bloque = (b) => {
     const x = esObjeto(b) ? b : {};
-    return {
-      id: id(x.id),
-      type: texto(x.type) || 'fuerza',
-      exercises: (Array.isArray(x.exercises) ? x.exercises : []).filter(esObjeto).map(ejercicio),
-    };
+    const crudos = (Array.isArray(x.exercises) ? x.exercises : []).filter(esObjeto);
+    const exercises = crudos.map(ejercicio);
+    convertirMarcasViejas(crudos, exercises);
+    return { id: id(x.id), type: texto(x.type) || 'fuerza', exercises };
   };
 
   const dia = (d, i) => {
@@ -328,4 +361,19 @@ export function normalizarPlan(dato) {
     report: { focus: texto(report.focus), evaluation: texto(report.evaluation) },
     weeks: (dato.weeks ?? []).map(semana),
   };
+}
+
+/**
+ * Etiquetas de superserie de los ejercicios de un bloque, en orden: los de un mismo grupo se
+ * numeran por orden de aparición (A1, A2, A3...); los que no tienen grupo llevan ''.
+ * @param {Bloque} bloque
+ * @returns {string[]}
+ */
+export function etiquetasSuperserie(bloque) {
+  const vistos = {};
+  return bloque.exercises.map((e) => {
+    if (!e.group) return '';
+    vistos[e.group] = (vistos[e.group] ?? 0) + 1;
+    return `${e.group}${vistos[e.group]}`;
+  });
 }

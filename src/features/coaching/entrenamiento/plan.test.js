@@ -15,6 +15,7 @@ import {
   eliminarDia,
   eliminarEjercicio,
   eliminarSemana,
+  etiquetasSuperserie,
   fechasDeSemana,
   generarEstructura,
   normalizarPlan,
@@ -130,7 +131,7 @@ describe('agregar y eliminar', () => {
       tech: '',
       rest: '',
       notes: '',
-      isSuperset: false,
+      group: '',
     });
   });
 
@@ -170,13 +171,13 @@ describe('actualizar', () => {
   });
 
   it('actualizarEjercicio aplica los cambios a ese ejercicio y conserva el resto', () => {
-    const plan = actualizarEjercicio(planChico(), 0, 0, 0, 0, { sets: '5', isSuperset: true });
+    const plan = actualizarEjercicio(planChico(), 0, 0, 0, 0, { sets: '5', group: 'A' });
     expect(plan.weeks[0].days[0].blocks[0].exercises[0]).toEqual({
       id: 'e1',
       name: 'Sentadilla',
       sets: '5',
       reps: '6',
-      isSuperset: true,
+      group: 'A',
     });
   });
 });
@@ -436,7 +437,7 @@ describe('normalizarPlan', () => {
       tech: '',
       rest: '',
       notes: '',
-      isSuperset: false,
+      group: '',
     });
   });
 
@@ -492,13 +493,12 @@ describe('normalizarPlan', () => {
 
   it('pasa a texto las series y repeticiones numéricas y usa RIR si el tipo de intensidad es desconocido', () => {
     const plan = normalizarPlan({
-      weeks: [{ days: [{ blocks: [{ exercises: [{ sets: 4, reps: 10, intensityType: 'otro', isSuperset: 1 }] }] }] }],
+      weeks: [{ days: [{ blocks: [{ exercises: [{ sets: 4, reps: 10, intensityType: 'otro' }] }] }] }],
     });
     expect(plan.weeks[0].days[0].blocks[0].exercises[0]).toMatchObject({
       sets: '4',
       reps: '10',
       intensityType: 'RIR',
-      isSuperset: true,
     });
   });
 
@@ -515,5 +515,70 @@ describe('normalizarPlan', () => {
     const dato = { weeks: [{ id: 5, days: [null] }] };
     normalizarPlan(dato);
     expect(dato).toEqual({ weeks: [{ id: 5, days: [null] }] });
+  });
+});
+
+describe('superseries (grupos A, B, ...)', () => {
+  const bloque = (...grupos) => ({ exercises: grupos.map((group, i) => ({ id: `e${i}`, name: `E${i}`, group })) });
+
+  it('numera los ejercicios de cada grupo por orden de aparición', () => {
+    expect(etiquetasSuperserie(bloque('A', 'A', 'B', 'B'))).toEqual(['A1', 'A2', 'B1', 'B2']);
+  });
+
+  it('una triserie es un grupo de tres', () => {
+    expect(etiquetasSuperserie(bloque('A', 'A', 'A'))).toEqual(['A1', 'A2', 'A3']);
+  });
+
+  it('los ejercicios sin grupo no llevan etiqueta', () => {
+    expect(etiquetasSuperserie(bloque('', 'A', 'A', ''))).toEqual(['', 'A1', 'A2', '']);
+  });
+
+  it('respeta el orden aunque los del grupo no estén juntos', () => {
+    expect(etiquetasSuperserie(bloque('A', '', 'B', 'A', 'B'))).toEqual(['A1', '', 'B1', 'A2', 'B2']);
+  });
+
+  it('agregarEjercicio y propagar conservan el grupo', () => {
+    let plan = actualizarEjercicio(planChico(), 0, 0, 0, 0, { group: 'B' });
+    plan = propagarEjercicio(agregarSemana(plan), 0, 0, 0, 0);
+    expect(plan.weeks[1].days[0].blocks[0].exercises[0].group).toBe('B');
+  });
+});
+
+describe('normalizarPlan: superseries', () => {
+  const normalizarBloque = (exercises) =>
+    normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises }] }] }] }).weeks[0].days[0].blocks[0].exercises.map(
+      (e) => e.group,
+    );
+
+  it('conserva los grupos válidos y los pasa a mayúscula', () => {
+    expect(normalizarBloque([{ group: 'a' }, { group: ' A ' }, { group: 'B' }])).toEqual(['A', 'A', 'B']);
+  });
+
+  it('descarta grupos que no son una letra', () => {
+    expect(normalizarBloque([{ group: 'AB' }, { group: '1' }, { group: 3 }])).toEqual(['', '', '']);
+  });
+
+  it('convierte la marca vieja isSuperset: el ejercicio marcado va con el siguiente', () => {
+    // Press ✓, Remo, Fondos ✓, Dominadas  ->  A1 A2 B1 B2
+    expect(
+      normalizarBloque([{ isSuperset: true }, { isSuperset: false }, { isSuperset: true }, { isSuperset: false }]),
+    ).toEqual(['A', 'A', 'B', 'B']);
+  });
+
+  it('marcas seguidas forman una triserie', () => {
+    expect(normalizarBloque([{ isSuperset: true }, { isSuperset: true }, {}])).toEqual(['A', 'A', 'A']);
+  });
+
+  it('una marca en el último ejercicio queda sin grupo (no hay con quién enlazarlo)', () => {
+    expect(normalizarBloque([{}, { isSuperset: true }])).toEqual(['', '']);
+  });
+
+  it('la conversión usa letras que no estén ocupadas en el bloque', () => {
+    expect(normalizarBloque([{ group: 'A' }, { group: 'A' }, { isSuperset: true }, {}])).toEqual(['A', 'A', 'B', 'B']);
+  });
+
+  it('el ejercicio normalizado ya no tiene isSuperset', () => {
+    const plan = normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises: [{ isSuperset: true }, {}] }] }] }] });
+    expect(plan.weeks[0].days[0].blocks[0].exercises[0]).not.toHaveProperty('isSuperset');
   });
 });
