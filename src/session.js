@@ -13,7 +13,10 @@ export function iniciarSesion() {
       await loadUserProfile();
       await loadEvolutionHistory();
       if (state.passwordRecoveryActive) return;
-      if (!state.appRendered) { state.appRendered = true; renderApp(); }
+      if (!state.appRendered) {
+        state.appRendered = true;
+        renderApp();
+      }
     } else if (event === 'SIGNED_OUT') {
       state.appRendered = false;
       state.currentTab = null;
@@ -33,7 +36,9 @@ export function iniciarSesion() {
 
   // Verificación de sesión al cargar la app
   window.addEventListener('DOMContentLoaded', async () => {
-    const { data: { session } } = await supaClient.auth.getSession();
+    const {
+      data: { session },
+    } = await supaClient.auth.getSession();
     if (state.passwordRecoveryActive) {
       renderPasswordUpdate();
       return;
@@ -42,7 +47,10 @@ export function iniciarSesion() {
       state.currentUser = session.user;
       await loadUserProfile();
       await loadEvolutionHistory();
-      if (!state.appRendered) { state.appRendered = true; renderApp(); }
+      if (!state.appRendered) {
+        state.appRendered = true;
+        renderApp();
+      }
     } else {
       renderLanding();
     }
@@ -55,12 +63,22 @@ async function loadUserProfile() {
     state.userProfile = data;
   } else {
     // El trigger handle_new_user debería crear el perfil automáticamente al registrarse.
-    state.userProfile = { id: state.currentUser.id, email: state.currentUser.email, role: 'alumno', sheet_url: '#', pdf_url: '#' };
+    state.userProfile = {
+      id: state.currentUser.id,
+      email: state.currentUser.email,
+      role: 'alumno',
+      sheet_url: '#',
+      pdf_url: '#',
+    };
     console.warn('Perfil no encontrado en la base de datos para', state.currentUser.id);
   }
 }
 
 async function loadEvolutionHistory() {
-  const { data } = await supaClient.from('evolution').select('*').eq('user_id', state.currentUser.id).order('fecha', { ascending: false });
+  const { data } = await supaClient
+    .from('evolution')
+    .select('*')
+    .eq('user_id', state.currentUser.id)
+    .order('fecha', { ascending: false });
   state.evolutionHistory = data || [];
 }

@@ -1,5 +1,5 @@
-@import "@fortawesome/fontawesome-free/css/all.min.css";
-@import "tailwindcss" source(none);
+@import '@fortawesome/fontawesome-free/css/all.min.css';
+@import 'tailwindcss' source(none);
 @source "../../index.html";
 @source "../**/*.js";
 
@@ -15,52 +15,211 @@
 
 /* Compatibilidad con los defaults de Tailwind v3 (guía oficial de upgrade) */
 @layer base {
-  *, ::after, ::before, ::backdrop, ::file-selector-button {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
   }
-  input::placeholder, textarea::placeholder {
+  input::placeholder,
+  textarea::placeholder {
     color: var(--color-gray-400);
   }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
     cursor: pointer;
   }
-  body { background-color: #000000; color: #ffffff; }
+  body {
+    background-color: #000000;
+    color: #ffffff;
+  }
 }
 
 /* Estilos propios: en layer components para que las utilidades (ej. .hidden) sigan ganando */
 @layer components {
-  .neon-glow-button { background: linear-gradient(45deg, #ff003c, #cc0030); box-shadow: 0 0 10px rgba(255, 0, 60, 0.4); transition: all 0.2s; }
-  .neon-glow-button:hover { box-shadow: 0 0 20px rgba(255, 0, 60, 0.6); }
-  .metallic-border { border: 1px solid #3f3f46; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-  .red-glow { box-shadow: 0 0 20px rgba(220, 38, 38, 0.25); }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .scrollbar-none::-webkit-scrollbar { display: none; }
-  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+  .neon-glow-button {
+    background: linear-gradient(45deg, #ff003c, #cc0030);
+    box-shadow: 0 0 10px rgba(255, 0, 60, 0.4);
+    transition: all 0.2s;
+  }
+  .neon-glow-button:hover {
+    box-shadow: 0 0 20px rgba(255, 0, 60, 0.6);
+  }
+  .metallic-border {
+    border: 1px solid #3f3f46;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+  .red-glow {
+    box-shadow: 0 0 20px rgba(220, 38, 38, 0.25);
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 
   /* ESTILOS DEL TRACKER DE MACROCICLOS */
   :root {
-    --bg-dark: #0f0f11; --card-bg: #1c1c1e; --card-header: #2c2c2e;
-    --border-color: #2c2c2e; --accent-rp: #e63852; --accent-green: #10b981;
-    --accent-yellow: #f59e0b; --text-primary: #ffffff; --text-secondary: #98989d;
+    --bg-dark: #0f0f11;
+    --card-bg: #1c1c1e;
+    --card-header: #2c2c2e;
+    --border-color: #2c2c2e;
+    --accent-rp: #e63852;
+    --accent-green: #10b981;
+    --accent-yellow: #f59e0b;
+    --text-primary: #ffffff;
+    --text-secondary: #98989d;
     --input-bg: #121214;
   }
-  .rp-header-card { background: var(--card-bg); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; border: 1px solid var(--border-color); }
-  .rp-title { font-size: 1.2rem; font-weight: 800; color: var(--text-primary); margin-bottom: 2px; }
-  .rp-sub { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 8px; }
-  .rp-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-  .rp-tag { background: rgba(255,255,255,0.06); padding: 3px 8px; border-radius: 6px; font-size: 0.68rem; color: var(--text-secondary); font-weight: 500; }
-  .day-selector { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 10px; margin-bottom: 12px; scrollbar-width: none; }
-  .day-selector::-webkit-scrollbar { display: none; }
-  .day-chip { background: var(--input-bg); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 6px 14px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
-  .day-chip.active { background: var(--accent-rp); color: white; border-color: var(--accent-rp); }
-  .section-card { background: var(--card-bg); border-radius: 14px; padding: 16px; margin-bottom: 16px; border: 1px solid var(--border-color); }
-  .section-card h3 { font-size: 0.9rem; font-weight: 700; color: var(--accent-rp); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
-  .form-control { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-primary); font-size: 0.9rem; outline: none; margin-bottom: 12px; }
-  .btn-action { width: 100%; padding: 12px; border-radius: 10px; border: none; background: var(--accent-rp); color: white; font-weight: 700; font-size: 0.9rem; cursor: pointer; margin-top: 10px; }
-  
+  .rp-header-card {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    border: 1px solid var(--border-color);
+  }
+  .rp-title {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .rp-sub {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .rp-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .rp-tag {
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+  .day-selector {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    scrollbar-width: none;
+  }
+  .day-selector::-webkit-scrollbar {
+    display: none;
+  }
+  .day-chip {
+    background: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .day-chip.active {
+    background: var(--accent-rp);
+    color: white;
+    border-color: var(--accent-rp);
+  }
+  .section-card {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid var(--border-color);
+  }
+  .section-card h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-rp);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--input-bg);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .btn-action {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent-rp);
+    color: white;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+
   /* Modal Video Tracker */
-  .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(5px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-  .modal-video-card { background: var(--card-bg); border-radius: 16px; padding: 16px; width: 100%; max-width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 1px solid var(--border-color); position: relative; }
-  .modal-video-card iframe { width: 100%; aspect-ratio: 16/9; border-radius: 10px; border: none; margin-top: 10px; background: black; }
-  .modal-close-btn { position: absolute; top: 12px; right: 14px; background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; }
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+  }
+  .modal-video-card {
+    background: var(--card-bg);
+    border-radius: 16px;
+    padding: 16px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-color);
+    position: relative;
+  }
+  .modal-video-card iframe {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 10px;
+    border: none;
+    margin-top: 10px;
+    background: black;
+  }
+  .modal-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
 }

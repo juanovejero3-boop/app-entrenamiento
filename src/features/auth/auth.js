@@ -8,7 +8,7 @@ export function renderLanding() {
   setPublicBooking(true);
   state.currentTab = null;
   const navBar = document.querySelector('nav');
-  if(navBar) navBar.style.display = 'none';
+  if (navBar) navBar.style.display = 'none';
 
   const content = document.getElementById('app-content');
   content.innerHTML = `
@@ -108,7 +108,7 @@ export function renderPasswordUpdate() {
   `;
 }
 
-window.updatePassword = async function(e) {
+window.updatePassword = async function (e) {
   e.preventDefault();
   const password = document.getElementById('new-password').value;
   const { error } = await supaClient.auth.updateUser({ password });
@@ -118,7 +118,7 @@ window.updatePassword = async function(e) {
   await supaClient.auth.signOut();
 };
 
-window.avisoContraseña = function() {
+window.avisoContraseña = function () {
   window.alert('Comunicate con tu entrenador para que te regenere tu contraseña.');
 };
 

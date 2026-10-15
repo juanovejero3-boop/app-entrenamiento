@@ -1,40 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Prime Physique</title>
-    
-    <!-- Vite: estilos (Tailwind + Font Awesome) y lógica de la app -->
-    <link rel="stylesheet" href="/src/styles/main.css">
-    <script type="module" src="/src/main.js"></script>
-</head>
-<body class="pb-20 font-sans antialiased">
 
+    <!-- Vite: estilos (Tailwind + Font Awesome) y lógica de la app -->
+    <link rel="stylesheet" href="/src/styles/main.css" />
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body class="pb-20 font-sans antialiased">
     <div id="app-content" class="p-4 max-w-lg md:max-w-3xl mx-auto"></div>
 
     <nav class="fixed bottom-0 w-full bg-cyberDark border-t border-gray-800 p-3 pb-safe z-50">
-        <div class="max-w-lg mx-auto flex justify-around text-xs">
-            <button id="btn-perfil" onclick="switchTab('perfil')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-user text-lg mb-1"></i> Perfil
-            </button>
-            <button id="btn-entrenamiento" onclick="switchTab('entrenamiento')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-file-excel text-lg mb-1"></i> Planilla
-            </button>
-            <button id="btn-material" onclick="switchTab('material')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-                <i class="fa-solid fa-book-open text-lg mb-1"></i> Material
-            </button>
-        </div>
+      <div class="max-w-lg mx-auto flex justify-around text-xs">
+        <button
+          id="btn-perfil"
+          onclick="switchTab('perfil')"
+          class="flex flex-col items-center text-gray-500 hover:text-neonRed"
+        >
+          <i class="fa-solid fa-user text-lg mb-1"></i> Perfil
+        </button>
+        <button
+          id="btn-entrenamiento"
+          onclick="switchTab('entrenamiento')"
+          class="flex flex-col items-center text-gray-500 hover:text-neonRed"
+        >
+          <i class="fa-solid fa-file-excel text-lg mb-1"></i> Planilla
+        </button>
+        <button
+          id="btn-material"
+          onclick="switchTab('material')"
+          class="flex flex-col items-center text-gray-500 hover:text-neonRed"
+        >
+          <i class="fa-solid fa-book-open text-lg mb-1"></i> Material
+        </button>
+      </div>
     </nav>
 
     <!-- Modal inyectado del Tracker -->
     <div id="modal-video-preview" class="modal-overlay hidden">
       <div class="modal-video-card">
-        <button class="modal-close-btn" onclick="document.getElementById('modal-video-preview').classList.add('hidden'); document.getElementById('video-iframe-container').innerHTML=''">✕</button>
-        <h4 id="video-modal-title" style="font-size:0.95rem; font-weight:700; color:white; padding-right:20px;">Demostración</h4>
+        <button
+          class="modal-close-btn"
+          onclick="
+            document.getElementById('modal-video-preview').classList.add('hidden');
+            document.getElementById('video-iframe-container').innerHTML = '';
+          "
+        >
+          ✕
+        </button>
+        <h4 id="video-modal-title" style="font-size: 0.95rem; font-weight: 700; color: white; padding-right: 20px">
+          Demostración
+        </h4>
         <div id="video-iframe-container"></div>
       </div>
     </div>
-
-</body>
+  </body>
 </html>

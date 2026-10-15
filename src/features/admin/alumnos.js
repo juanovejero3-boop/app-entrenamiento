@@ -6,7 +6,9 @@ import { modalBase, modalCard, mostrarProcesando, ocultarProcesando, toast } fro
 import { state } from '../../state.js';
 
 async function llamarAdminUsuarios(action, body = {}) {
-  const { data: { session } } = await supaClient.auth.getSession();
+  const {
+    data: { session },
+  } = await supaClient.auth.getSession();
   if (!session) return { error: 'No hay sesión activa.' };
   mostrarProcesando();
   try {
@@ -14,9 +16,9 @@ async function llamarAdminUsuarios(action, body = {}) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`
+        Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ action, ...body })
+      body: JSON.stringify({ action, ...body }),
     });
     const data = await res.json();
     ocultarProcesando();
@@ -29,7 +31,7 @@ async function llamarAdminUsuarios(action, body = {}) {
 }
 
 // ---------- MODAL NUEVO ALUMNO ----------
-window.abrirModalNuevoAlumno = function() {
+window.abrirModalNuevoAlumno = function () {
   const overlay = modalBase();
   overlay.innerHTML = modalCard(`
     <p class="text-[11px] text-gray-400 uppercase tracking-wider mb-4">Nuevo alumno</p>
@@ -41,7 +43,7 @@ window.abrirModalNuevoAlumno = function() {
   document.getElementById('nuevo-alumno-email').focus();
 };
 
-window.crearNuevoAlumno = async function() {
+window.crearNuevoAlumno = async function () {
   const emailInput = document.getElementById('nuevo-alumno-email');
   const email = (emailInput.value || '').trim();
   if (!email) return alert('Ingresá el correo del alumno.');
@@ -76,24 +78,27 @@ function mostrarCredencialesNuevoAlumno(email, password) {
   `);
 }
 
-window.togglePasswordCampo = function(inputId, btn) {
+window.togglePasswordCampo = function (inputId, btn) {
   const input = document.getElementById(inputId);
   const isPassword = input.type === 'password';
   input.type = isPassword ? 'text' : 'password';
   btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm"></i>`;
 };
 
-window.copiarTexto = function(texto) {
-  navigator.clipboard.writeText(texto).then(() => {
-    toast(`${texto.includes('@') ? 'Correo copiado' : 'Contraseña copiada'} en portapapeles`);
-  }).catch(() => {
-    toast('No se pudo copiar', false);
-  });
+window.copiarTexto = function (texto) {
+  navigator.clipboard
+    .writeText(texto)
+    .then(() => {
+      toast(`${texto.includes('@') ? 'Correo copiado' : 'Contraseña copiada'} en portapapeles`);
+    })
+    .catch(() => {
+      toast('No se pudo copiar', false);
+    });
 };
 
 // ---------- MODAL DETALLE ALUMNO ----------
-window.abrirModalAlumno = function(userId) {
-  const u = state.adminAllUsers.find(x => x.id === userId);
+window.abrirModalAlumno = function (userId) {
+  const u = state.adminAllUsers.find((x) => x.id === userId);
   if (!u) return;
   const deshabilitado = !!u.disabled_at;
   const overlay = modalBase();
@@ -142,7 +147,7 @@ window.abrirModalAlumno = function(userId) {
   `);
 };
 
-window.guardarDatosAlumno = async function(userId) {
+window.guardarDatosAlumno = async function (userId) {
   const nombre = document.getElementById(`alu-name-${userId}`).value.trim();
   const sheet = document.getElementById(`alu-sheet-${userId}`).value.trim();
   const nutricion = document.getElementById(`alu-nutricion-${userId}`).value.trim();
@@ -150,14 +155,17 @@ window.guardarDatosAlumno = async function(userId) {
   const altura = parseFloat(document.getElementById(`alu-height-${userId}`).value) || null;
   const peso = parseFloat(document.getElementById(`alu-weight-${userId}`).value) || null;
   mostrarProcesando('Guardando...');
-  const { error } = await supaClient.from('profiles').update({
-    name: nombre || null,
-    sheet_url: sheet || null,
-    nutrition_url: nutricion || null,
-    goal: goal || null,
-    height_cm: altura,
-    weight_kg: peso
-  }).eq('id', userId);
+  const { error } = await supaClient
+    .from('profiles')
+    .update({
+      name: nombre || null,
+      sheet_url: sheet || null,
+      nutrition_url: nutricion || null,
+      goal: goal || null,
+      height_cm: altura,
+      weight_kg: peso,
+    })
+    .eq('id', userId);
   ocultarProcesando();
   if (error) return alert('Error al guardar: ' + error.message);
   toast('Alumno actualizado');
@@ -166,12 +174,14 @@ window.guardarDatosAlumno = async function(userId) {
   abrirModalAlumno(userId);
 };
 
-window.toggleDeshabilitarAlumno = async function(userId) {
-  const u = state.adminAllUsers.find(x => x.id === userId);
+window.toggleDeshabilitarAlumno = async function (userId) {
+  const u = state.adminAllUsers.find((x) => x.id === userId);
   const deshabilitado = !!u?.disabled_at;
-  const ok = await window.confirm(deshabilitado
-    ? `¿Querés habilitar a ${u?.email || 'este alumno'}?`
-    : `¿Querés deshabilitar a ${u?.email || 'este alumno'}?`);
+  const ok = await window.confirm(
+    deshabilitado
+      ? `¿Querés habilitar a ${u?.email || 'este alumno'}?`
+      : `¿Querés deshabilitar a ${u?.email || 'este alumno'}?`,
+  );
   if (!ok) return;
   const res = await llamarAdminUsuarios(deshabilitado ? 'habilitar' : 'deshabilitar', { user_id: userId });
   if (res.error) return alert(res.error);
@@ -182,9 +192,11 @@ window.toggleDeshabilitarAlumno = async function(userId) {
   document.getElementById('app-modal-overlay').style.display = 'none';
 };
 
-window.eliminarAlumno = async function(userId) {
-  const u = state.adminAllUsers.find(x => x.id === userId);
-  const ok = await window.confirm(`¿Seguro que querés ELIMINAR a ${u?.email || 'este alumno'}? Esta acción no se puede deshacer.`);
+window.eliminarAlumno = async function (userId) {
+  const u = state.adminAllUsers.find((x) => x.id === userId);
+  const ok = await window.confirm(
+    `¿Seguro que querés ELIMINAR a ${u?.email || 'este alumno'}? Esta acción no se puede deshacer.`,
+  );
   if (!ok) return;
   const res = await llamarAdminUsuarios('eliminar', { user_id: userId });
   if (res.error) return alert(res.error);
@@ -194,8 +206,10 @@ window.eliminarAlumno = async function(userId) {
   document.getElementById('app-modal-overlay').style.display = 'none';
 };
 
-window.generarPasswordAlumno = async function(userId, nombreAlumno) {
-  const ok = await window.confirm(`¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`);
+window.generarPasswordAlumno = async function (userId, nombreAlumno) {
+  const ok = await window.confirm(
+    `¿Seguro que querés generar una nueva contraseña para ${nombreAlumno || 'este alumno'}?`,
+  );
   if (!ok) return;
   const res = await llamarAdminUsuarios('reset', { user_id: userId });
   if (res.error) return alert(res.error);

@@ -18,7 +18,8 @@ export function modalBase() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'app-modal-overlay';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;';
     document.body.appendChild(overlay);
   } else {
     overlay.innerHTML = '';
@@ -33,7 +34,8 @@ export function modalBaseApilado() {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'app-modal-overlay-aux';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:20px;';
     document.body.appendChild(overlay);
   } else {
     overlay.innerHTML = '';
@@ -51,7 +53,7 @@ export function modalCard(inner) {
   `;
 }
 
-window.alert = function(message) {
+window.alert = function (message) {
   const overlay = modalBaseApilado();
   overlay.innerHTML = modalCard(`
     <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
@@ -59,7 +61,7 @@ window.alert = function(message) {
   `);
 };
 
-window.confirm = function(message) {
+window.confirm = function (message) {
   return new Promise((resolve) => {
     const overlay = modalBaseApilado();
     overlay.innerHTML = modalCard(`
@@ -73,7 +75,7 @@ window.confirm = function(message) {
   });
 };
 
-window.resolverModal = function(valor) {
+window.resolverModal = function (valor) {
   if (window._modalResolve) window._modalResolve(valor);
   window._modalResolve = null;
   document.getElementById('app-modal-overlay-aux').style.display = 'none';
@@ -87,7 +89,8 @@ export function mostrarProcesando(mensaje = 'Procesando...') {
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'app-processing';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:10020;background:rgba(0,0,0,0.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;';
     document.body.appendChild(overlay);
   }
   overlay.innerHTML = `
@@ -104,7 +107,7 @@ export function ocultarProcesando() {
   if (overlay) overlay.style.display = 'none';
 }
 
-window.togglePassword = function(inputId, btn) {
+window.togglePassword = function (inputId, btn) {
   const input = document.getElementById(inputId);
   const isPassword = input.type === 'password';
   input.type = isPassword ? 'text' : 'password';

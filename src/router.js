@@ -24,9 +24,13 @@ function setActiveNav(tab) {
   if (tab !== 'entrenamiento') {
     resetPlanillaPestanas();
   }
-  BOTONES_NAV.forEach(t => {
+  BOTONES_NAV.forEach((t) => {
     const btn = document.getElementById(`btn-${t}`);
-    if (btn) btn.className = (t === tab) ? "flex flex-col items-center text-neonRed" : "flex flex-col items-center text-gray-500 hover:text-neonRed";
+    if (btn)
+      btn.className =
+        t === tab
+          ? 'flex flex-col items-center text-neonRed'
+          : 'flex flex-col items-center text-gray-500 hover:text-neonRed';
   });
 }
 

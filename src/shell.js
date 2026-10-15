@@ -7,7 +7,7 @@ import { state } from './state.js';
 export function renderApp() {
   setPublicBooking(false);
   const navBar = document.querySelector('nav');
-  if(navBar) navBar.style.display = 'block';
+  if (navBar) navBar.style.display = 'block';
 
   const navContainer = document.querySelector('nav .max-w-lg');
   const btnAdmin = document.getElementById('btn-admin');
@@ -22,7 +22,12 @@ export function renderApp() {
   }
   // Si ya estamos en una tab de la app, no re-navegar (evita saltos al volver a la pestaña)
   if (state.currentTab) return;
-  const fichaCompleta = !!(state.userProfile?.name && state.userProfile?.goal && state.userProfile?.height_cm && state.userProfile?.weight_kg);
+  const fichaCompleta = !!(
+    state.userProfile?.name &&
+    state.userProfile?.goal &&
+    state.userProfile?.height_cm &&
+    state.userProfile?.weight_kg
+  );
   switchTab(fichaCompleta ? 'entrenamiento' : 'perfil');
 }
 

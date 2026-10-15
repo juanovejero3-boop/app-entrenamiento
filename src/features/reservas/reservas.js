@@ -4,32 +4,34 @@ import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
 
 window.APP_SCHEDULE = {
-    onboarding: { // PRIMERA VEZ (60 min)
-        start: "14:00", // Hora en la que empiezas
-        end: "20:00",   // Hora de tu último turno
-        days: {
-            1: true,  // Lunes
-            2: true,  // Martes
-            3: true,  // Miércoles
-            4: true,  // Jueves
-            5: false,  // Viernes
-            6: false, // Sábado
-            0: false  // Domingo
-        }
+  onboarding: {
+    // PRIMERA VEZ (60 min)
+    start: '14:00', // Hora en la que empiezas
+    end: '20:00', // Hora de tu último turno
+    days: {
+      1: true, // Lunes
+      2: true, // Martes
+      3: true, // Miércoles
+      4: true, // Jueves
+      5: false, // Viernes
+      6: false, // Sábado
+      0: false, // Domingo
     },
-    followup: { // SEGUIMIENTO ALUMNOS (45 min)
-        start: "08:30",
-        end: "19:30",
-        days: {
-            1: false,  // Lunes
-            2: false,  // Martes
-            3: false,  // Miércoles
-            4: false,  // Jueves
-            5: true,  // Viernes
-            6: true, // Sábado
-            0: false  // Domingo
-        }
-    }
+  },
+  followup: {
+    // SEGUIMIENTO ALUMNOS (45 min)
+    start: '08:30',
+    end: '19:30',
+    days: {
+      1: false, // Lunes
+      2: false, // Martes
+      3: false, // Miércoles
+      4: false, // Jueves
+      5: true, // Viernes
+      6: true, // Sábado
+      0: false, // Domingo
+    },
+  },
 };
 
 // VARIABLES DEL SISTEMA DE TURNOS
@@ -42,15 +44,15 @@ let webhookUrl = localStorage.getItem('pp_webhook_url') || '';
 let isPublicBooking = false;
 
 function startPublicBooking() {
-    selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
-    bookingStep = 1; // ESTO FUERZA A QUE ARRANQUE EN EL PASO 1 SÍ O SÍ
-    renderPublicBooking();
+  selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
+  bookingStep = 1; // ESTO FUERZA A QUE ARRANQUE EN EL PASO 1 SÍ O SÍ
+  renderPublicBooking();
 }
 
-window.renderPublicBooking = function() {
-    const content = document.getElementById('app-content');
-    
-    let html = `
+window.renderPublicBooking = function () {
+  const content = document.getElementById('app-content');
+
+  let html = `
     <div class="max-w-md mx-auto mt-4 space-y-6 pb-12">
         <div class="flex justify-between items-center border-b border-gray-800 pb-4">
             <h2 class="text-xl font-black text-white uppercase"><i class="fa-solid fa-bolt text-neonRed mr-2"></i> Asesoría Estratégica</h2>
@@ -58,8 +60,8 @@ window.renderPublicBooking = function() {
         </div>
     `;
 
-    if (bookingStep === 1) {
-        html += `
+  if (bookingStep === 1) {
+    html += `
         <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
             <div class="border-l-4 border-neonRed pl-3">
                 <h3 class="text-white font-black text-sm uppercase tracking-wide">Hablemos de tu caso real</h3>
@@ -86,8 +88,8 @@ window.renderPublicBooking = function() {
             </button>
         </div>
         `;
-    } else if (bookingStep === 2) {
-        html += `
+  } else if (bookingStep === 2) {
+    html += `
         <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
             <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-calendar-check mr-1"></i> Paso 2: Elige cuándo nos contactamos</p>
             
@@ -110,10 +112,10 @@ window.renderPublicBooking = function() {
             <button onclick="irAPasoReservaPublica(1)" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
         </div>
         `;
-    } else if (bookingStep === 3) {
-        const temp = window.tempBookingData || { name: '', job: '', challenge: '' };
-        
-        html += `
+  } else if (bookingStep === 3) {
+    const temp = window.tempBookingData || { name: '', job: '', challenge: '' };
+
+    html += `
         <div class="bg-cyberCard p-6 rounded-2xl border border-gray-800 space-y-4 shadow-2xl">
             <p class="text-xs text-neonRed font-bold uppercase tracking-wider mb-2"><i class="fa-solid fa-check-circle mr-1"></i> Paso 3: Confirma tu llamada</p>
             
@@ -147,9 +149,9 @@ window.renderPublicBooking = function() {
             </button>
         </div>
         `;
-    } else if (bookingStep === 4) {
-        // --- ¡AQUÍ ESTÁ LA NUEVA PANTALLA DE FELICITACIÓN! ---
-        html += `
+  } else if (bookingStep === 4) {
+    // --- ¡AQUÍ ESTÁ LA NUEVA PANTALLA DE FELICITACIÓN! ---
+    html += `
         <div class="bg-cyberCard p-8 rounded-2xl border border-neonRed space-y-4 shadow-2xl text-center">
             <i class="fa-solid fa-fire text-5xl text-neonRed mb-2 drop-shadow-[0_0_15px_rgba(255,0,0,0.8)]"></i>
             <h3 class="text-white font-black text-2xl uppercase tracking-wide">¡Llamada Agendada!</h3>
@@ -172,22 +174,24 @@ window.renderPublicBooking = function() {
             </button>
         </div>
         `;
-    }
-    
-    html += `</div>`;
-    content.innerHTML = html;
+  }
+
+  html += `</div>`;
+  content.innerHTML = html;
 };
 
 export function renderTabTurnos(content) {
-    selectedService = { name: 'Seguimiento Semanal de Progreso', duration: 30 };
-    if(bookingStep === 1 || isPublicBooking) bookingStep = 2; 
-    
-    content.innerHTML = `
+  selectedService = { name: 'Seguimiento Semanal de Progreso', duration: 30 };
+  if (bookingStep === 1 || isPublicBooking) bookingStep = 2;
+
+  content.innerHTML = `
       <div class="space-y-6 pb-8">
         <h2 class="text-xl font-black text-white uppercase tracking-wide border-l-4 border-neonRed pl-3"><i class="fa-solid fa-headset text-neonRed mr-2"></i> Seguimiento</h2>
         <p class="text-xs text-gray-400 -mt-4">Agenda tu check-in de 30 minutos.</p>
 
-        ${bookingStep === 2 ? `
+        ${
+          bookingStep === 2
+            ? `
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
           <div>
             <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
@@ -203,9 +207,13 @@ export function renderTabTurnos(content) {
             <button id="btnToStep3" disabled onclick="irAPasoTurnos(3)" class="w-full py-3 bg-neonRed disabled:opacity-40 text-white text-xs font-bold rounded-lg uppercase tracking-wider">Siguiente Paso</button>
           </div>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
 
-        ${bookingStep === 3 ? `
+        ${
+          bookingStep === 3
+            ? `
         <form onsubmit="confirmAppBooking(event)" class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4">
             <p class="text-xs text-neonRed font-bold bg-red-950/40 p-3 rounded border border-red-900 mb-4 text-center"><i class="fa-solid fa-calendar-check mr-2"></i> ${selectedDate} a las ${selectedTime} ART</p>
             
@@ -218,19 +226,27 @@ export function renderTabTurnos(content) {
               <button type="submit" id="b-submit" class="w-2/3 py-2 neon-glow-button text-white text-xs font-bold rounded-lg flex items-center justify-center uppercase"><i class="fa-solid fa-bolt mr-2"></i> AGENDAR</button>
             </div>
         </form>
-        ` : ''}
+        `
+            : ''
+        }
 
-        ${bookingStep === 4 ? `
+        ${
+          bookingStep === 4
+            ? `
         <div class="bg-cyberCard p-6 rounded-xl border border-emerald-900 text-center space-y-4 shadow-xl mt-10">
            <i class="fa-solid fa-circle-check text-5xl text-emerald-500"></i>
            <h2 class="text-lg font-black text-emerald-400 uppercase">¡Llamada Agendada!</h2>
            <button onclick="irAPasoTurnos(2)" class="mt-4 px-4 py-2 bg-cyberDark border border-gray-700 text-white text-xs font-bold rounded-lg">Programar otra</button>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
     `;
-    
-    if (bookingStep === 2 && selectedDate) { setTimeout(() => generateAppTimeSlots('internal'), 50); }
+
+  if (bookingStep === 2 && selectedDate) {
+    setTimeout(() => generateAppTimeSlots('internal'), 50);
+  }
 }
 
 export function renderAdminLlamadas() {
@@ -255,13 +271,22 @@ export function renderAdminLlamadas() {
               <tr><th class="p-2">Fecha/Hora</th><th class="p-2">Atleta</th><th class="p-2">Servicio</th></tr>
             </thead>
             <tbody class="divide-y divide-gray-800">
-              ${localBookings.length === 0 ? `<tr><td colspan="3" class="p-4 text-center text-gray-500">Sin citas pendientes</td></tr>` :
-                localBookings.slice().reverse().map(b => `
+              ${
+                localBookings.length === 0
+                  ? `<tr><td colspan="3" class="p-4 text-center text-gray-500">Sin citas pendientes</td></tr>`
+                  : localBookings
+                      .slice()
+                      .reverse()
+                      .map(
+                        (b) => `
                 <tr>
                   <td class="p-2 whitespace-nowrap"><span class="font-bold text-white">${b.date}</span><br>${b.time} ART</td>
                   <td class="p-2 font-semibold">${b.clientName}<br><span class="text-[10px] text-gray-500">${b.clientEmail}</span></td>
                   <td class="p-2 text-[10px]"><span class="text-neonRed font-bold border border-red-900 px-1 rounded bg-red-950/30">${b.service}</span><br><span class="text-gray-500 truncate max-w-[80px] block mt-1">${b.notes}</span></td>
-                </tr>`).join('')}
+                </tr>`,
+                      )
+                      .join('')
+              }
             </tbody>
           </table>
         </div>
@@ -270,80 +295,90 @@ export function renderAdminLlamadas() {
   `;
 }
 
-window.generateTimeSlots = function() {
-    const dateInput = document.getElementById('bookingDate');
-    const container = document.getElementById('timeSlotsContainer');
-    
-    if(!dateInput || !dateInput.value) return;
+window.generateTimeSlots = function () {
+  const dateInput = document.getElementById('bookingDate');
+  const container = document.getElementById('timeSlotsContainer');
 
-    // --- SOLUCIÓN DEFINITIVA ---
-    let type = 'onboarding'; // Por defecto, CUALQUIERA que entre asume horarios de Primera Vez.
-    
-    try {
-        // Solo si la variable currentUser existe y tiene datos (o sea, estás logueado en tu admin), usa Seguimiento.
-        if (typeof state.currentUser !== 'undefined' && state.currentUser !== null) {
-            type = 'followup';
-        }
-    } catch(e) {
-        // Si hay cualquier error al leer el usuario, seguimos forzando Primera Vez.
-        type = 'onboarding';
+  if (!dateInput || !dateInput.value) return;
+
+  // --- SOLUCIÓN DEFINITIVA ---
+  let type = 'onboarding'; // Por defecto, CUALQUIERA que entre asume horarios de Primera Vez.
+
+  try {
+    // Solo si la variable currentUser existe y tiene datos (o sea, estás logueado en tu admin), usa Seguimiento.
+    if (typeof state.currentUser !== 'undefined' && state.currentUser !== null) {
+      type = 'followup';
     }
-    // ---------------------------
-    
-    const config = window.APP_SCHEDULE[type]; 
-    
-    const [year, month, day] = dateInput.value.split('-');
-    const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0); 
-    const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
+  } catch (e) {
+    // Si hay cualquier error al leer el usuario, seguimos forzando Primera Vez.
+    type = 'onboarding';
+  }
+  // ---------------------------
 
-    // Comprobamos si le pusiste 'true' o 'false' a ese día en tu panel
-    if(!config.days[dayOfWeek]) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
-        return;
+  const config = window.APP_SCHEDULE[type];
+
+  const [year, month, day] = dateInput.value.split('-');
+  const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0);
+  const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
+
+  // Comprobamos si le pusiste 'true' o 'false' a ese día en tu panel
+  if (!config.days[dayOfWeek]) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
+    return;
+  }
+
+  const intervalMinutes = type === 'onboarding' ? 60 : 45;
+  const slots = [];
+
+  let current = new Date(`2000-01-01T${config.start}:00`);
+  const end = new Date(`2000-01-01T${config.end}:00`);
+
+  while (current < end) {
+    const hours = current.getHours().toString().padStart(2, '0');
+    const minutes = current.getMinutes().toString().padStart(2, '0');
+    const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
+
+    if (nextSlot <= end) {
+      slots.push(`${hours}:${minutes}`);
     }
+    current = new Date(current.getTime() + intervalMinutes * 60000);
+  }
 
-    const intervalMinutes = type === 'onboarding' ? 60 : 45;
-    const slots = [];
-    
-    let current = new Date(`2000-01-01T${config.start}:00`);
-    const end = new Date(`2000-01-01T${config.end}:00`);
+  if (slots.length === 0) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
+    return;
+  }
 
-    while(current < end) {
-        const hours = current.getHours().toString().padStart(2, '0');
-        const minutes = current.getMinutes().toString().padStart(2, '0');
-        const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
-        
-        if (nextSlot <= end) {
-            slots.push(`${hours}:${minutes}`);
-        }
-        current = new Date(current.getTime() + intervalMinutes * 60000);
-    }
-
-    if(slots.length === 0) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
-        return;
-    }
-
-    // Dibujamos los botones
-    container.innerHTML = slots.map(time => `
+  // Dibujamos los botones
+  container.innerHTML = slots
+    .map(
+      (time) => `
         <button type="button" onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
             ${time}
         </button>
-    `).join('');
+    `,
+    )
+    .join('');
 };
 
-window.selectAppTimeSlot = function(btnEl, slot) {
-  document.querySelectorAll('.slot-btn').forEach(b => b.className = "slot-btn p-2 rounded border border-gray-700 bg-cyberDark hover:border-neonRed text-white text-xs font-bold transition");
-  btnEl.className = "slot-btn p-2 rounded border border-neonRed bg-red-950 text-neonRed font-black text-xs transition";
+window.selectAppTimeSlot = function (btnEl, slot) {
+  document
+    .querySelectorAll('.slot-btn')
+    .forEach(
+      (b) =>
+        (b.className =
+          'slot-btn p-2 rounded border border-gray-700 bg-cyberDark hover:border-neonRed text-white text-xs font-bold transition'),
+    );
+  btnEl.className = 'slot-btn p-2 rounded border border-neonRed bg-red-950 text-neonRed font-black text-xs transition';
   selectedTime = slot;
   document.getElementById('btnToStep3').disabled = false;
-}
+};
 
-window.confirmAppBooking = function(e) {
+window.confirmAppBooking = function (e) {
   e.preventDefault();
   const btn = document.getElementById('b-submit');
   btn.disabled = true;
-  btn.innerHTML = "PROCESANDO...";
+  btn.innerHTML = 'PROCESANDO...';
 
   const emailToSave = isPublicBooking ? document.getElementById('b-email').value.trim() : state.currentUser.email;
 
@@ -355,7 +390,7 @@ window.confirmAppBooking = function(e) {
     clientName: document.getElementById('b-name').value.trim(),
     clientEmail: emailToSave,
     clientPhone: document.getElementById('b-phone').value.trim(),
-    notes: document.getElementById('b-notes').value.trim()
+    notes: document.getElementById('b-notes').value.trim(),
   };
 
   localBookings.push(newBooking);
@@ -366,28 +401,28 @@ window.confirmAppBooking = function(e) {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newBooking)
-    }).catch(err => console.log('Sincronización de fondo fallida', err));
+      body: JSON.stringify(newBooking),
+    }).catch((err) => console.log('Sincronización de fondo fallida', err));
   }
 
   setTimeout(() => {
     bookingStep = 4;
-    if(isPublicBooking) {
-        renderPublicBooking();
+    if (isPublicBooking) {
+      renderPublicBooking();
     } else {
-        switchTab('turnos');
+      switchTab('turnos');
     }
   }, 1000);
-}
+};
 
-window.saveAppWebhookUrl = function() {
+window.saveAppWebhookUrl = function () {
   webhookUrl = document.getElementById('appsScriptUrl').value.trim();
   localStorage.setItem('pp_webhook_url', webhookUrl);
-  alert("URL del Webhook guardada.");
-}
+  alert('URL del Webhook guardada.');
+};
 
-window.clearAppBookings = async function() {
-  const ok = await window.confirm("¿Borrar historial de turnos?");
+window.clearAppBookings = async function () {
+  const ok = await window.confirm('¿Borrar historial de turnos?');
   if (ok) {
     localBookings = [];
     localStorage.removeItem('pp_bookings_v4');
@@ -396,139 +431,151 @@ window.clearAppBookings = async function() {
 };
 
 // Función para validar el Paso 1 y pasar al calendario
-window.validateBookingStep1 = function() {
-    const nameInput = document.getElementById('booking-name');
-    const jobInput = document.getElementById('booking-job');
-    const challengeInput = document.getElementById('booking-challenge');
-    
-    // Verificamos que los campos existan en la pantalla
-    if(!nameInput || !jobInput || !challengeInput) {
-        console.error("Error: No se encontraron los campos del formulario.");
-        return;
-    }
+window.validateBookingStep1 = function () {
+  const nameInput = document.getElementById('booking-name');
+  const jobInput = document.getElementById('booking-job');
+  const challengeInput = document.getElementById('booking-challenge');
 
-    const name = nameInput.value.trim();
-    const job = jobInput.value.trim();
-    const challenge = challengeInput.value.trim();
-    
-    // Validamos que el usuario haya escrito algo
-    if(!name || !job || !challenge) {
-        alert('Por favor, completa todos los campos para que podamos prepararnos para tu caso.');
-        return;
-    }
-    
-    // Guardamos los datos para usarlos cuando confirme el turno final
-    window.tempBookingData = { name, job, challenge };
-    
-    // Cambiamos al paso 2 y actualizamos la vista
-    bookingStep = 2;
-    renderPublicBooking();
-}
+  // Verificamos que los campos existan en la pantalla
+  if (!nameInput || !jobInput || !challengeInput) {
+    console.error('Error: No se encontraron los campos del formulario.');
+    return;
+  }
 
-window.saveScheduleConfig = function(type) {
-    const startInput = document.getElementById(`config-start-${type}`);
-    const endInput = document.getElementById(`config-end-${type}`);
-    // Busca todos los checkboxes que estén marcados
-    const dayCheckboxes = document.querySelectorAll(`#days-${type} input[type="checkbox"]:checked`);
-    
-    if (!startInput || !endInput) return;
+  const name = nameInput.value.trim();
+  const job = jobInput.value.trim();
+  const challenge = challengeInput.value.trim();
 
-    // Convertimos los valores de los días a números
-    const selectedDays = Array.from(dayCheckboxes).map(cb => parseInt(cb.value));
+  // Validamos que el usuario haya escrito algo
+  if (!name || !job || !challenge) {
+    alert('Por favor, completa todos los campos para que podamos prepararnos para tu caso.');
+    return;
+  }
 
-    if(selectedDays.length === 0) {
-        alert("Por favor, selecciona al menos un día de la semana.");
-        return;
-    }
+  // Guardamos los datos para usarlos cuando confirme el turno final
+  window.tempBookingData = { name, job, challenge };
 
-    const config = {
-        start: startInput.value,
-        end: endInput.value,
-        days: selectedDays
-    };
-
-    localStorage.setItem(`pp_schedule_${type}`, JSON.stringify(config));
-    
-    const typeName = type === 'onboarding' ? 'Primera Vez' : 'Seguimiento';
-    alert(`¡Configuración de ${typeName} guardada!\nHorario: ${config.start} a ${config.end}\nDías seleccionados: ${selectedDays.length}`);
+  // Cambiamos al paso 2 y actualizamos la vista
+  bookingStep = 2;
+  renderPublicBooking();
 };
 
-window.generateTimeSlots = function() {
-    const dateInput = document.getElementById('bookingDate');
-    const container = document.getElementById('timeSlotsContainer');
-    
-    if(!dateInput || !dateInput.value) return;
+window.saveScheduleConfig = function (type) {
+  const startInput = document.getElementById(`config-start-${type}`);
+  const endInput = document.getElementById(`config-end-${type}`);
+  // Busca todos los checkboxes que estén marcados
+  const dayCheckboxes = document.querySelectorAll(`#days-${type} input[type="checkbox"]:checked`);
 
-    // FORZAMOS a que busque siempre la configuración de "onboarding" (Primera vez) 
-    // cuando alguien entra desde el link público.
-    const type = (typeof isPublicBooking !== 'undefined' && isPublicBooking) ? 'onboarding' : 'followup';
-    
-    // Leemos los datos guardados en el localStorage de tu navegador
-    const configString = localStorage.getItem(`pp_schedule_${type}`);
-    
-    if(!configString) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Error: El administrador aún no guardó los horarios de disponibilidad.</p>`;
-        return;
+  if (!startInput || !endInput) return;
+
+  // Convertimos los valores de los días a números
+  const selectedDays = Array.from(dayCheckboxes).map((cb) => parseInt(cb.value));
+
+  if (selectedDays.length === 0) {
+    alert('Por favor, selecciona al menos un día de la semana.');
+    return;
+  }
+
+  const config = {
+    start: startInput.value,
+    end: endInput.value,
+    days: selectedDays,
+  };
+
+  localStorage.setItem(`pp_schedule_${type}`, JSON.stringify(config));
+
+  const typeName = type === 'onboarding' ? 'Primera Vez' : 'Seguimiento';
+  alert(
+    `¡Configuración de ${typeName} guardada!\nHorario: ${config.start} a ${config.end}\nDías seleccionados: ${selectedDays.length}`,
+  );
+};
+
+window.generateTimeSlots = function () {
+  const dateInput = document.getElementById('bookingDate');
+  const container = document.getElementById('timeSlotsContainer');
+
+  if (!dateInput || !dateInput.value) return;
+
+  // FORZAMOS a que busque siempre la configuración de "onboarding" (Primera vez)
+  // cuando alguien entra desde el link público.
+  const type = typeof isPublicBooking !== 'undefined' && isPublicBooking ? 'onboarding' : 'followup';
+
+  // Leemos los datos guardados en el localStorage de tu navegador
+  const configString = localStorage.getItem(`pp_schedule_${type}`);
+
+  if (!configString) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Error: El administrador aún no guardó los horarios de disponibilidad.</p>`;
+    return;
+  }
+
+  const config = JSON.parse(configString);
+
+  // ARREGLO DE ZONA HORARIA: Evitamos que el día cambie por culpa del GMT
+  // Leemos la fecha exacta que seleccionó el usuario (ej: 2026-08-15)
+  const [year, month, day] = dateInput.value.split('-');
+  // Creamos una fecha local a las 12 del mediodía para que nunca cambie de día por el timezone
+  const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0);
+  const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
+
+  if (!config.days || !config.days.includes(dayOfWeek)) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
+    return;
+  }
+
+  // Calcular el intervalo: 60 min para primera vez, 45 min para seguimiento
+  const intervalMinutes = type === 'onboarding' ? 60 : 45;
+
+  const slots = [];
+  // Creamos fechas ficticias solo para poder sumar los minutos fácilmente
+  let current = new Date(`2000-01-01T${config.start}:00`);
+  const end = new Date(`2000-01-01T${config.end}:00`);
+
+  while (current < end) {
+    const hours = current.getHours().toString().padStart(2, '0');
+    const minutes = current.getMinutes().toString().padStart(2, '0');
+
+    const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
+
+    // Solo mostramos el turno si el bloque entero entra antes de la hora de fin
+    if (nextSlot <= end) {
+      slots.push(`${hours}:${minutes}`);
     }
 
-    const config = JSON.parse(configString);
-    
-    // ARREGLO DE ZONA HORARIA: Evitamos que el día cambie por culpa del GMT
-    // Leemos la fecha exacta que seleccionó el usuario (ej: 2026-08-15)
-    const [year, month, day] = dateInput.value.split('-');
-    // Creamos una fecha local a las 12 del mediodía para que nunca cambie de día por el timezone
-    const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0); 
-    const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
+    current = new Date(current.getTime() + intervalMinutes * 60000);
+  }
 
-    if(!config.days || !config.days.includes(dayOfWeek)) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
-        return;
-    }
+  if (slots.length === 0) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
+    return;
+  }
 
-    // Calcular el intervalo: 60 min para primera vez, 45 min para seguimiento
-    const intervalMinutes = type === 'onboarding' ? 60 : 45;
-
-    const slots = [];
-    // Creamos fechas ficticias solo para poder sumar los minutos fácilmente
-    let current = new Date(`2000-01-01T${config.start}:00`);
-    const end = new Date(`2000-01-01T${config.end}:00`);
-
-    while(current < end) {
-        const hours = current.getHours().toString().padStart(2, '0');
-        const minutes = current.getMinutes().toString().padStart(2, '0');
-        
-        const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
-        
-        // Solo mostramos el turno si el bloque entero entra antes de la hora de fin
-        if (nextSlot <= end) {
-            slots.push(`${hours}:${minutes}`);
-        }
-        
-        current = new Date(current.getTime() + intervalMinutes * 60000);
-    }
-
-    if(slots.length === 0) {
-        container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
-        return;
-    }
-
-    // Mostramos los botones en pantalla
-    container.innerHTML = slots.map(time => `
+  // Mostramos los botones en pantalla
+  container.innerHTML = slots
+    .map(
+      (time) => `
         <button onclick="selectTime('${time}')" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
             ${time}
         </button>
-    `).join('');
+    `,
+    )
+    .join('');
 };
 
-window.selectTime = function(time) {
-    selectedTime = time; // Guarda la hora que elegiste
-    selectedDate = document.getElementById('bookingDate').value; // Guarda la fecha
-    bookingStep = 3; // Nos manda al Paso 3 de confirmación
-    renderPublicBooking(); // Actualiza la pantalla
+window.selectTime = function (time) {
+  selectedTime = time; // Guarda la hora que elegiste
+  selectedDate = document.getElementById('bookingDate').value; // Guarda la fecha
+  bookingStep = 3; // Nos manda al Paso 3 de confirmación
+  renderPublicBooking(); // Actualiza la pantalla
 };
 
-function irAPasoReservaPublica(paso) { bookingStep = paso; renderPublicBooking(); }
-function irAPasoTurnos(paso) { bookingStep = paso; switchTab('turnos'); }
+function irAPasoReservaPublica(paso) {
+  bookingStep = paso;
+  renderPublicBooking();
+}
+function irAPasoTurnos(paso) {
+  bookingStep = paso;
+  switchTab('turnos');
+}
 
 // isPublicBooking lo modifican la landing y renderApp desde otros módulos.
 export function setPublicBooking(valor) {

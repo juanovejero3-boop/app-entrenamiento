@@ -10,17 +10,17 @@ let alumnosPagina = 0;
 const ALUMNOS_POR_PAGINA = 3;
 
 export async function renderTabAdmin(content) {
-    // --- CANDADO DE SEGURIDAD ---
-    if (state.userProfile?.role !== 'admin') {
-        alert('Acceso denegado. Esta área es exclusiva.');
-        switchTab('perfil');
-        return;
-    }
-    content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
-    const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
-    state.adminAllUsers = allUsers || [];
-    window.checkAndSendExpirationEmails();
-    content.innerHTML = `
+  // --- CANDADO DE SEGURIDAD ---
+  if (state.userProfile?.role !== 'admin') {
+    alert('Acceso denegado. Esta área es exclusiva.');
+    switchTab('perfil');
+    return;
+  }
+  content.innerHTML = `<p class="text-center text-neonRed mt-10 font-bold"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando paneles...</p>`;
+  const { data: allUsers } = await supaClient.from('profiles').select('*').order('email');
+  state.adminAllUsers = allUsers || [];
+  window.checkAndSendExpirationEmails();
+  content.innerHTML = `
       <div class="space-y-6 pb-10">
         <!-- SUB-TABS DEL ADMIN -->
         <div class="bg-cyberCard p-1 rounded-xl border border-gray-800 flex mt-4">
@@ -68,11 +68,12 @@ function renderAdminAsignacion() {
   `;
 }
 
-window.switchAdminSubTab = function(tab) {
+window.switchAdminSubTab = function (tab) {
   adminSubTab = tab;
-  ['asignacion', 'llamadas'].forEach(t => {
+  ['asignacion', 'llamadas'].forEach((t) => {
     const btn = document.getElementById(`subtabs-btn-${t}`);
-    if (btn) btn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${tab === t ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}`;
+    if (btn)
+      btn.className = `flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${tab === t ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}`;
   });
   const container = document.getElementById('admin-sub-content');
   if (container) container.innerHTML = renderAdminSubTab();
@@ -84,7 +85,10 @@ function renderAlumnos() {
   const desde = alumnosPagina * ALUMNOS_POR_PAGINA;
   const paginaActual = alumnosFiltrados.slice(desde, desde + ALUMNOS_POR_PAGINA);
 
-  const tarjetas = paginaActual.map(u => `
+  const tarjetas =
+    paginaActual
+      .map(
+        (u) => `
     <button onclick="abrirModalAlumno('${u.id}')" class="w-full text-left bg-cyberCard p-4 rounded-xl border border-gray-800 hover:border-neonRed transition">
       <div class="flex items-center justify-between gap-3">
         <div class="min-w-0">
@@ -94,14 +98,19 @@ function renderAlumnos() {
         ${u.disabled_at ? '<span class="text-[9px] uppercase tracking-widest text-red-400 bg-red-950/40 border border-red-900 px-2 py-0.5 rounded shrink-0">Deshabilitado</span>' : '<i class="fa-solid fa-chevron-right text-gray-600 shrink-0"></i>'}
       </div>
     </button>
-  `).join('') || '<p class="text-center text-xs text-gray-500 py-6">No se encontraron alumnos.</p>';
+  `,
+      )
+      .join('') || '<p class="text-center text-xs text-gray-500 py-6">No se encontraron alumnos.</p>';
 
-  const paginacion = alumnosFiltrados.length > ALUMNOS_POR_PAGINA ? `
+  const paginacion =
+    alumnosFiltrados.length > ALUMNOS_POR_PAGINA
+      ? `
     <div class="flex items-center justify-between pt-1">
       <button onclick="cambiarPaginaAlumnos(-1)" ${alumnosPagina === 0 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Anterior</button>
       <span class="text-[11px] text-gray-500">Página ${alumnosPagina + 1} de ${totalPaginas}</span>
       <button onclick="cambiarPaginaAlumnos(1)" ${alumnosPagina >= totalPaginas - 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition">Siguiente</button>
-    </div>` : '';
+    </div>`
+      : '';
 
   return `${tarjetas}${paginacion}`;
 }
@@ -109,8 +118,8 @@ function renderAlumnos() {
 export function refrescarListaAlumnos() {
   const searchEl = document.getElementById('alumno-search');
   const q = (searchEl ? searchEl.value : '').toLowerCase().trim();
-  alumnosFiltrados = state.adminAllUsers.filter(u =>
-    !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q)
+  alumnosFiltrados = state.adminAllUsers.filter(
+    (u) => !q || (u.email || '').toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q),
   );
   const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
   if (alumnosPagina >= totalPaginas) alumnosPagina = totalPaginas - 1;
@@ -118,12 +127,12 @@ export function refrescarListaAlumnos() {
   if (container) container.innerHTML = renderAlumnos();
 }
 
-window.filterAlumnos = function() {
+window.filterAlumnos = function () {
   alumnosPagina = 0;
   refrescarListaAlumnos();
 };
 
-window.cambiarPaginaAlumnos = function(dir) {
+window.cambiarPaginaAlumnos = function (dir) {
   const totalPaginas = Math.max(1, Math.ceil(alumnosFiltrados.length / ALUMNOS_POR_PAGINA));
   const nueva = alumnosPagina + dir;
   if (nueva < 0 || nueva >= totalPaginas) return;

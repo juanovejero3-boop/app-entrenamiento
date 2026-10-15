@@ -8,7 +8,12 @@ import { state } from '../../state.js';
 let profileEditing = false;
 
 function fichaCompleta() {
-  return !!(state.userProfile?.name && state.userProfile?.goal && state.userProfile?.height_cm && state.userProfile?.weight_kg);
+  return !!(
+    state.userProfile?.name &&
+    state.userProfile?.goal &&
+    state.userProfile?.height_cm &&
+    state.userProfile?.weight_kg
+  );
 }
 
 function renderFicha() {
@@ -54,12 +59,12 @@ function renderFicha() {
   `;
 }
 
-window.enableProfileEdit = function() {
+window.enableProfileEdit = function () {
   profileEditing = true;
   switchTab('perfil');
 };
 
-window.changePassword = async function(e) {
+window.changePassword = async function (e) {
   e.preventDefault();
   const current = document.getElementById('pw-current').value;
   const nuevo = document.getElementById('pw-new').value;
@@ -77,7 +82,7 @@ window.changePassword = async function(e) {
 };
 
 export function renderTabPerfil(content) {
-    content.innerHTML = `
+  content.innerHTML = `
       <div class="space-y-6">
         ${renderUserHeader()}
         ${renderFicha()}
@@ -112,19 +117,22 @@ export function renderTabPerfil(content) {
     `;
 }
 
-window.saveProfile = async function(e) {
+window.saveProfile = async function (e) {
   e.preventDefault();
   const name = document.getElementById('profile-name').value.trim();
   const goal = document.getElementById('profile-goal').value.trim();
   const heightCm = parseFloat(document.getElementById('profile-height').value) || null;
   const weightKg = parseFloat(document.getElementById('profile-weight').value) || null;
 
-  const { error } = await supaClient.from('profiles').update({
-    name: name || null,
-    goal: goal || null,
-    height_cm: heightCm,
-    weight_kg: weightKg
-  }).eq('id', state.currentUser.id);
+  const { error } = await supaClient
+    .from('profiles')
+    .update({
+      name: name || null,
+      goal: goal || null,
+      height_cm: heightCm,
+      weight_kg: weightKg,
+    })
+    .eq('id', state.currentUser.id);
 
   if (error) {
     toast('Error al guardar: ' + error.message, false);
