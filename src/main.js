@@ -3,7 +3,7 @@
 import './lib/acciones.js'; // listeners de data-click / data-input / data-change / data-submit
 import './lib/ui.js'; // instala los modales propios (window.alert / window.confirm)
 import './router.js';
-// Secciones que solo registran handlers en window (no las importa el router)
+// Secciones que no importa el router: se cargan para que registren sus acciones
 import './features/admin/alumnos.js';
 import './features/admin/vencimientos.js';
 import { iniciarSesion } from './session.js';
