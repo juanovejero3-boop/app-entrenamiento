@@ -246,3 +246,78 @@ export function propagarEjercicio(plan, w, d, b, e) {
   }
   return nuevo;
 }
+
+const TIPOS_INTENSIDAD = ['RIR', 'RPE', '%RM'];
+const texto = (v) => (v === undefined || v === null ? '' : String(v));
+const esObjeto = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Valida y completa un plan que viene de afuera (localStorage, un JSON importado o el
+ * prototipo del entrenador). Devuelve un plan nuevo con todos los campos; no modifica `dato`.
+ * - ids: los numéricos pasan a texto; los faltantes o repetidos se reemplazan.
+ * - días y bloques null (huecos) se reemplazan por vacíos para no correr las posiciones.
+ * - ejercicios null se descartan; el campo viejo `intensity` pasa a `intensityValue`.
+ * @returns {PlanEntrenamiento}
+ */
+export function normalizarPlan(dato) {
+  if (!esObjeto(dato)) throw new TypeError('El plan debe ser un objeto');
+  if (dato.weeks !== undefined && !Array.isArray(dato.weeks)) throw new TypeError('weeks debe ser una lista');
+
+  const usados = new Set();
+  const id = (v) => {
+    const candidato = v === undefined || v === null || v === '' ? '' : String(v);
+    const final = candidato && !usados.has(candidato) ? candidato : nuevoId();
+    usados.add(final);
+    return final;
+  };
+
+  const ejercicio = (e) => ({
+    id: id(e.id),
+    name: texto(e.name),
+    sets: texto(e.sets),
+    reps: texto(e.reps),
+    intensityType: TIPOS_INTENSIDAD.includes(e.intensityType) ? e.intensityType : 'RIR',
+    intensityValue: texto(e.intensityValue ?? e.intensity),
+    tech: texto(e.tech),
+    rest: texto(e.rest),
+    notes: texto(e.notes),
+    isSuperset: Boolean(e.isSuperset),
+  });
+
+  const bloque = (b) => {
+    const x = esObjeto(b) ? b : {};
+    return {
+      id: id(x.id),
+      type: texto(x.type) || 'fuerza',
+      exercises: (Array.isArray(x.exercises) ? x.exercises : []).filter(esObjeto).map(ejercicio),
+    };
+  };
+
+  const dia = (d, i) => {
+    const x = esObjeto(d) ? d : {};
+    return {
+      id: id(x.id),
+      name: texto(x.name) || `Día ${i + 1}`,
+      blocks: (Array.isArray(x.blocks) ? x.blocks : []).map(bloque),
+    };
+  };
+
+  const semana = (w, i) => {
+    const x = esObjeto(w) ? w : {};
+    return {
+      id: id(x.id),
+      name: texto(x.name) || `Semana ${i + 1}`,
+      objective: texto(x.objective),
+      targetVolume: texto(x.targetVolume),
+      days: (Array.isArray(x.days) ? x.days : []).map(dia),
+    };
+  };
+
+  const report = esObjeto(dato.report) ? dato.report : {};
+  return {
+    macroName: texto(dato.macroName) || 'Nuevo Macrociclo',
+    startDate: texto(dato.startDate),
+    report: { focus: texto(report.focus), evaluation: texto(report.evaluation) },
+    weeks: (dato.weeks ?? []).map(semana),
+  };
+}

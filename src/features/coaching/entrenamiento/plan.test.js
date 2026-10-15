@@ -16,6 +16,7 @@ import {
   eliminarEjercicio,
   fechasDeSemana,
   generarEstructura,
+  normalizarPlan,
   propagarDia,
   propagarEjercicio,
 } from './plan.js';
@@ -399,5 +400,112 @@ describe('inmutabilidad (operaciones de copia)', () => {
     const original = planDesparejo();
     operacion(original);
     expect(original).toEqual(planDesparejo());
+  });
+});
+
+describe('normalizarPlan', () => {
+  it('completa los campos que faltan de un plan vacío', () => {
+    expect(normalizarPlan({})).toEqual({
+      macroName: 'Nuevo Macrociclo',
+      startDate: '',
+      report: { focus: '', evaluation: '' },
+      weeks: [],
+    });
+  });
+
+  it('deja intacto un plan que ya es válido', () => {
+    const plan = planDesparejo();
+    // planDesparejo no tiene todos los campos de ejercicio: se completan con los valores por defecto
+    const normal = normalizarPlan(plan);
+    expect(normal.weeks.map((w) => w.id)).toEqual(['w1', 'w2', 'w3']);
+    expect(normal.weeks[0].days[1].blocks[1].exercises[0]).toEqual({
+      id: 'x3',
+      name: 'Remo',
+      sets: '3',
+      reps: '10',
+      intensityType: 'RIR',
+      intensityValue: '',
+      tech: '',
+      rest: '',
+      notes: '',
+      isSuperset: false,
+    });
+  });
+
+  it('completa semanas, días, bloques y ejercicios incompletos con valores por defecto', () => {
+    const plan = normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises: [{ name: 'Dominadas' }] }] }] }] });
+    const semana = plan.weeks[0];
+    expect(semana).toMatchObject({ name: 'Semana 1', objective: '', targetVolume: '' });
+    expect(semana.days[0].name).toBe('Día 1');
+    expect(semana.days[0].blocks[0].type).toBe('fuerza');
+    expect(semana.days[0].blocks[0].exercises[0]).toMatchObject({ name: 'Dominadas', sets: '', intensityType: 'RIR' });
+  });
+
+  it('convierte ids numéricos del prototipo a texto y reemplaza los repetidos o faltantes', () => {
+    const plan = normalizarPlan({
+      weeks: [
+        { id: 1729000000000.123, days: [] },
+        { id: 1729000000000.123, days: [] }, // repetido (Date.now() en el mismo milisegundo)
+        { days: [] }, // sin id
+      ],
+    });
+    const ids = plan.weeks.map((w) => w.id);
+    expect(ids[0]).toBe('1729000000000.123');
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('reemplaza los huecos (null) de días y bloques por vacíos sin correr las posiciones', () => {
+    const plan = normalizarPlan({
+      weeks: [
+        {
+          days: [null, { name: 'Día 2', blocks: [null, { type: 'hipertrofia', exercises: [{ name: 'Remo' }] }] }],
+        },
+      ],
+    });
+    const dias = plan.weeks[0].days;
+    expect(dias.map((d) => d.name)).toEqual(['Día 1', 'Día 2']);
+    expect(dias[0].blocks).toEqual([]);
+    expect(dias[1].blocks.map((b) => b.type)).toEqual(['fuerza', 'hipertrofia']);
+    expect(dias[1].blocks[1].exercises[0].name).toBe('Remo');
+  });
+
+  it('descarta ejercicios null', () => {
+    const plan = normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises: [null, { name: 'Curl' }] }] }] }] });
+    expect(plan.weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Curl']);
+  });
+
+  it('migra el campo viejo "intensity" a intensityValue', () => {
+    const plan = normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises: [{ name: 'X', intensity: '8' }] }] }] }] });
+    const ej = plan.weeks[0].days[0].blocks[0].exercises[0];
+    expect(ej.intensityValue).toBe('8');
+    expect(ej).not.toHaveProperty('intensity');
+  });
+
+  it('pasa a texto las series y repeticiones numéricas y usa RIR si el tipo de intensidad es desconocido', () => {
+    const plan = normalizarPlan({
+      weeks: [{ days: [{ blocks: [{ exercises: [{ sets: 4, reps: 10, intensityType: 'otro', isSuperset: 1 }] }] }] }],
+    });
+    expect(plan.weeks[0].days[0].blocks[0].exercises[0]).toMatchObject({
+      sets: '4',
+      reps: '10',
+      intensityType: 'RIR',
+      isSuperset: true,
+    });
+  });
+
+  it.each([[null], ['texto'], [[]]])('rechaza datos que no son un objeto: %j', (dato) => {
+    expect(() => normalizarPlan(dato)).toThrow(new TypeError('El plan debe ser un objeto'));
+  });
+
+  it('rechaza un plan cuyas semanas no son una lista, con un mensaje que lo explica', () => {
+    // Sin la validación igual explotaría ('texto'.map no existe), pero con un error que no dice qué pasó
+    expect(() => normalizarPlan({ weeks: 'no es lista' })).toThrow(new TypeError('weeks debe ser una lista'));
+  });
+
+  it('no modifica el objeto recibido', () => {
+    const dato = { weeks: [{ id: 5, days: [null] }] };
+    normalizarPlan(dato);
+    expect(dato).toEqual({ weeks: [{ id: 5, days: [null] }] });
   });
 });
