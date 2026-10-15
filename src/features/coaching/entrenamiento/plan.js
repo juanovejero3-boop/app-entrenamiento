@@ -118,6 +118,12 @@ export function agregarEjercicio(plan, w, d, b) {
   return nuevo;
 }
 
+export function eliminarSemana(plan, w) {
+  const nuevo = copiar(plan);
+  nuevo.weeks.splice(w, 1);
+  return nuevo;
+}
+
 export function eliminarDia(plan, w, d) {
   const nuevo = copiar(plan);
   nuevo.weeks[w].days.splice(d, 1);

@@ -14,6 +14,7 @@ import {
   eliminarBloque,
   eliminarDia,
   eliminarEjercicio,
+  eliminarSemana,
   fechasDeSemana,
   generarEstructura,
   normalizarPlan,
@@ -143,6 +144,12 @@ describe('agregar y eliminar', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('eliminarSemana quita la semana indicada y conserva el orden del resto', () => {
+    let plan = agregarSemana(agregarSemana(planChico())); // Semana 1, 2, 3
+    plan = eliminarSemana(plan, 1);
+    expect(plan.weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 3']);
+  });
+
   it('eliminarDia, eliminarBloque y eliminarEjercicio quitan el elemento indicado', () => {
     let plan = agregarDia(planChico(), 0); // días: d1, nuevo
     plan = eliminarDia(plan, 0, 0);
@@ -181,6 +188,7 @@ describe('inmutabilidad', () => {
     ['agregarDia', (p) => agregarDia(p, 0)],
     ['agregarBloque', (p) => agregarBloque(p, 0, 0)],
     ['agregarEjercicio', (p) => agregarEjercicio(p, 0, 0, 0)],
+    ['eliminarSemana', (p) => eliminarSemana(p, 0)],
     ['eliminarDia', (p) => eliminarDia(p, 0, 0)],
     ['eliminarBloque', (p) => eliminarBloque(p, 0, 0, 0)],
     ['eliminarEjercicio', (p) => eliminarEjercicio(p, 0, 0, 0, 0)],
