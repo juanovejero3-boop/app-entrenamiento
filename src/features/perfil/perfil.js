@@ -1,6 +1,7 @@
 // Perfil del usuario: ficha (datos físicos y objetivo) y cambio de contraseña.
 import { switchTab } from '../../router.js';
 import { renderUserHeader } from '../../shell.js';
+import { registrarAcciones } from '../../lib/acciones.js';
 import { supaClient } from '../../lib/supabase.js';
 import { toast } from '../../lib/ui.js';
 import { state } from '../../state.js';
@@ -31,10 +32,10 @@ function renderFicha() {
         <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-id-card mr-2"></i> Mi Ficha</h3>
         <div class="flex items-center gap-2">
           ${badge}
-          ${!editing ? `<button onclick="enableProfileEdit()" class="text-gray-500 hover:text-neonRed transition" title="Editar ficha"><i class="fa-solid fa-pen text-lg"></i></button>` : ''}
+          ${!editing ? `<button data-click="enableProfileEdit" class="text-gray-500 hover:text-neonRed transition" title="Editar ficha"><i class="fa-solid fa-pen text-lg"></i></button>` : ''}
         </div>
       </div>
-      <form onsubmit="saveProfile(event)" class="space-y-3 text-sm">
+      <form data-submit="saveProfile" class="space-y-3 text-sm">
         <div>
           <label class="block text-[10px] text-gray-400 mb-1">Nombre</label>
           <input type="text" id="profile-name" value="${state.userProfile?.name || ''}" ${readOnly} class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed ${readOnly ? 'opacity-60' : ''}" />
@@ -59,12 +60,12 @@ function renderFicha() {
   `;
 }
 
-window.enableProfileEdit = function () {
+function enableProfileEdit() {
   profileEditing = true;
   switchTab('perfil');
-};
+}
 
-window.changePassword = async function (e) {
+async function changePassword(e) {
   e.preventDefault();
   const current = document.getElementById('pw-current').value;
   const nuevo = document.getElementById('pw-new').value;
@@ -79,7 +80,7 @@ window.changePassword = async function (e) {
   document.getElementById('pw-current').value = '';
   document.getElementById('pw-new').value = '';
   document.getElementById('pw-confirm').value = '';
-};
+}
 
 export function renderTabPerfil(content) {
   content.innerHTML = `
@@ -88,26 +89,26 @@ export function renderTabPerfil(content) {
         ${renderFicha()}
         <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-4 shadow-lg">
           <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2"><i class="fa-solid fa-key mr-2"></i> Cambiar Contraseña</h3>
-          <form onsubmit="changePassword(event)" class="space-y-3 text-sm">
+          <form data-submit="changePassword" class="space-y-3 text-sm">
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">Contraseña actual</label>
               <div class="relative">
                 <input type="password" id="pw-current" required class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="current-password" />
-                <button type="button" onclick="togglePassword('pw-current', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+                <button type="button" data-click="togglePassword" data-campo="pw-current" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
               </div>
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">Nueva contraseña</label>
               <div class="relative">
                 <input type="password" id="pw-new" required minlength="6" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="new-password" />
-                <button type="button" onclick="togglePassword('pw-new', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+                <button type="button" data-click="togglePassword" data-campo="pw-new" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
               </div>
             </div>
             <div>
               <label class="block text-[10px] text-gray-400 mb-1">Repetir nueva contraseña</label>
               <div class="relative">
                 <input type="password" id="pw-confirm" required minlength="6" class="w-full bg-cyberDark border border-gray-700 rounded p-2.5 text-white outline-none focus:border-neonRed pr-10" autocomplete="new-password" />
-                <button type="button" onclick="togglePassword('pw-confirm', this)" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
+                <button type="button" data-click="togglePassword" data-campo="pw-confirm" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-neonRed"><i class="fa-solid fa-eye text-sm"></i></button>
               </div>
             </div>
             <button type="submit" class="w-full neon-glow-button text-white font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider">Guardar Contraseña</button>
@@ -117,7 +118,7 @@ export function renderTabPerfil(content) {
     `;
 }
 
-window.saveProfile = async function (e) {
+async function saveProfile(e) {
   e.preventDefault();
   const name = document.getElementById('profile-name').value.trim();
   const goal = document.getElementById('profile-goal').value.trim();
@@ -147,4 +148,10 @@ window.saveProfile = async function (e) {
   profileEditing = false;
   toast('Ficha guardada');
   switchTab('perfil');
-};
+}
+
+registrarAcciones({
+  enableProfileEdit: () => enableProfileEdit(),
+  saveProfile: (el, e) => saveProfile(e),
+  changePassword: (el, e) => changePassword(e),
+});

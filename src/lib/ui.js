@@ -123,9 +123,14 @@ export function ocultarProcesando() {
   if (overlay) overlay.style.display = 'none';
 }
 
-window.togglePassword = function (inputId, btn) {
+function togglePassword(inputId, btn) {
   const input = document.getElementById(inputId);
   const isPassword = input.type === 'password';
   input.type = isPassword ? 'text' : 'password';
   btn.innerHTML = `<i class="fa-solid ${isPassword ? 'fa-eye-slash' : 'fa-eye'} text-sm"></i>`;
-};
+}
+
+registrarAcciones({
+  // <button data-click="togglePassword" data-campo="id-del-input">
+  togglePassword: (el) => togglePassword(el.dataset.campo, el),
+});
