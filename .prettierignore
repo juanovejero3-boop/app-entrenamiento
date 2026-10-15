@@ -1,0 +1,7 @@
+dist/
+node_modules/
+package-lock.json
+supabase/
+nueva-integracion/
+index-reloj.html
+src/data/
