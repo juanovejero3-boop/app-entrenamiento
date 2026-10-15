@@ -278,9 +278,7 @@ describe('constructor de planes: bloques y ejercicios', () => {
     cambiar(campoEj('rest'), '3 min');
     cambiar(campoEj('tech'), 'Rest-Pause');
     cambiar(campoEj('notes'), 'Pausa abajo');
-    const superserie = campoEj('isSuperset');
-    superserie.checked = true;
-    superserie.dispatchEvent(new Event('change', { bubbles: true }));
+    cambiar(campoEj('group'), 'A');
     await esperar();
 
     expect((await guardado()).weeks[0].days[0].blocks[0].exercises[0]).toMatchObject({
@@ -292,7 +290,7 @@ describe('constructor de planes: bloques y ejercicios', () => {
       rest: '3 min',
       tech: 'Rest-Pause',
       notes: 'Pausa abajo',
-      isSuperset: true,
+      group: 'A',
     });
   });
 
@@ -434,5 +432,40 @@ describe('constructor de planes: exportar e importar', () => {
     const aviso = document.getElementById('app-modal-overlay-aux').textContent;
     expect(aviso).toContain('no es un plan válido');
     expect((await guardado()).weeks).toHaveLength(2);
+  });
+});
+
+describe('constructor de planes: superseries', () => {
+  it('muestra A1, A2, B1... según el grupo de cada ejercicio y las recalcula al cambiarlo', async () => {
+    await abrir();
+    await generar(1, 1);
+    $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+    await esperar();
+    for (let i = 0; i < 4; i++) {
+      $('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]').click();
+      await esperar();
+    }
+    const grupo = (e) => $(`[data-ejercicio="0-0-0-${e}"] [data-campo="group"]`);
+    const etiquetas = () =>
+      $$('[data-ejercicio]').map((ej) => ej.querySelector('[data-etiqueta]')?.textContent.trim() ?? '');
+
+    cambiar(grupo(0), 'A');
+    await esperar();
+    cambiar(grupo(1), 'A');
+    await esperar();
+    cambiar(grupo(2), 'B');
+    await esperar();
+    cambiar(grupo(3), 'B');
+    await esperar();
+    expect(etiquetas()).toEqual(['A1', 'A2', 'B1', 'B2']);
+
+    cambiar(grupo(2), 'A'); // triserie A + B suelto
+    await esperar();
+    expect(etiquetas()).toEqual(['A1', 'A2', 'A3', 'B1']);
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises.map((e) => e.group)).toEqual(['A', 'A', 'A', 'B']);
+
+    cambiar(grupo(0), ''); // sale de la superserie
+    await esperar();
+    expect(etiquetas()).toEqual(['', 'A1', 'A2', 'B1']);
   });
 });

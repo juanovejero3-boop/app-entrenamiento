@@ -23,6 +23,16 @@ export const TIPOS_BLOQUE = {
 
 export const TIPOS_INTENSIDAD = ['RIR', 'RPE', '%RM'];
 
+/** Letras de superserie disponibles en el constructor, con su color (A1/A2, B1/B2...). */
+export const GRUPOS_SUPERSERIE = {
+  A: '#f43f5e',
+  B: '#38bdf8',
+  C: '#a3e635',
+  D: '#fbbf24',
+  E: '#c084fc',
+  F: '#2dd4bf',
+};
+
 /** Técnicas de intensidad ('' = ninguna). */
 export const TECNICAS = [
   '',

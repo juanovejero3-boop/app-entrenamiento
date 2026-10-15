@@ -5,7 +5,7 @@
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { repo } from '../repo/index.js';
-import { DESCANSOS, FASES, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
+import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
 import {
   actualizarBloque,
   actualizarDia,
@@ -22,6 +22,7 @@ import {
   eliminarDia,
   eliminarEjercicio,
   eliminarSemana,
+  etiquetasSuperserie,
   fechasDeSemana,
   generarEstructura,
   normalizarPlan,
@@ -265,13 +266,14 @@ function dibujarBloque(bloque, w, d, b) {
     .map(([clave, t]) => `<option value="${clave}" ${bloque.type === clave ? 'selected' : ''}>${esc(t.label)}</option>`)
     .join('');
   const pos = `data-w="${w}" data-d="${d}" data-b="${b}"`;
+  const etiquetas = etiquetasSuperserie(bloque);
   return `
     <div data-bloque="${w}-${d}-${b}" class="bg-cyberCard rounded p-2 space-y-2 border-l-4" style="border-left-color: ${esc(tipo.color)}">
       <div class="flex items-center justify-between gap-2">
         <select data-change="bloqueCampo" ${pos} data-campo="type" class="bg-transparent font-bold text-xs outline-none" style="color: ${esc(tipo.color)}">${opciones}</select>
         <button data-click="bloqueEliminar" ${pos} class="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold">Quitar bloque</button>
       </div>
-      ${bloque.exercises.map((ej, e) => dibujarEjercicio(ej, w, d, b, e)).join('')}
+      ${bloque.exercises.map((ej, e) => dibujarEjercicio(ej, w, d, b, e, etiquetas[e])).join('')}
       <button data-click="ejercicioAgregar" ${pos} class="px-3 py-1 bg-cyberCarbon border border-gray-700 text-gray-300 text-[11px] font-bold rounded hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-1"></i>Ejercicio</button>
     </div>
   `;
@@ -282,15 +284,18 @@ const opcionesDe = (valores, actualValor, vacio) =>
     .map((v) => `<option value="${esc(v)}" ${actualValor === v ? 'selected' : ''}>${esc(v || vacio)}</option>`)
     .join('');
 
-function dibujarEjercicio(ej, w, d, b, e) {
+function dibujarEjercicio(ej, w, d, b, e, etiqueta) {
   const pos = `data-w="${w}" data-d="${d}" data-b="${b}" data-e="${e}"`;
   const campo = (nombre) => `data-change="ejercicioCampo" ${pos} data-campo="${nombre}"`;
   const claseCampo =
     'w-full bg-black border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed';
   const descansos = ['', ...DESCANSOS];
+  const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
+  const grupos = ['', ...Object.keys(GRUPOS_SUPERSERIE)];
   return `
-    <div data-ejercicio="${w}-${d}-${b}-${e}" class="bg-cyberDark rounded p-2 space-y-2 border ${ej.isSuperset ? 'border-dashed border-neonRed' : 'border-gray-800'}">
+    <div data-ejercicio="${w}-${d}-${b}-${e}" class="bg-cyberDark rounded p-2 space-y-2 border ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${color}"` : ''}>
       <div class="flex items-center gap-2">
+        ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${color}; background: ${color}22; border: 1px solid ${color}">${esc(etiqueta)}</span>` : ''}
         <input ${campo('name')} list="${ID_CATALOGO}" value="${esc(ej.name)}" placeholder="Nombre del ejercicio" class="${claseCampo} font-bold">
         <button data-click="ejercicioPropagar" ${pos} title="Agregar este ejercicio a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
         <button data-click="ejercicioEliminar" ${pos} class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-xmark"></i></button>
@@ -309,8 +314,9 @@ function dibujarEjercicio(ej, w, d, b, e) {
       </div>
       <div class="flex items-center gap-2">
         <input ${campo('notes')} value="${esc(ej.notes)}" placeholder="Notas" class="${claseCampo}">
-        <label class="flex items-center gap-1 text-[10px] text-gray-400 whitespace-nowrap cursor-pointer">
-          <input type="checkbox" ${campo('isSuperset')} ${ej.isSuperset ? 'checked' : ''}> Superserie
+        <label class="flex items-center gap-1 text-[10px] text-gray-400 whitespace-nowrap" title="Los ejercicios del bloque con la misma letra forman la superserie (A1, A2, A3...)">
+          Superserie
+          <select ${campo('group')} class="bg-black border border-gray-700 rounded p-1 text-xs font-bold outline-none" style="color: ${color}">${opcionesDe(grupos, ej.group, '—')}</select>
         </label>
       </div>
     </div>
@@ -415,15 +421,8 @@ async function eliminarBloqueConfirmando(w, d, b) {
 function cambiarCampoEjercicio(el) {
   const [w, d, b, e] = ['w', 'd', 'b', 'e'].map((k) => indice(el, k));
   const campo = el.dataset.campo;
-  const valor = campo === 'isSuperset' ? el.checked : el.value;
-  if (campo === 'isSuperset') {
-    // Solo cambia el borde del ejercicio: no hace falta redibujar
-    const caja = el.closest('[data-ejercicio]');
-    caja.classList.toggle('border-dashed', valor);
-    caja.classList.toggle('border-neonRed', valor);
-    caja.classList.toggle('border-gray-800', !valor);
-  }
-  return aplicar(actualizarEjercicio(actual.plan, w, d, b, e, { [campo]: valor }), { redibujar: false });
+  // Cambiar el grupo renumera las etiquetas (A1, A2...) del bloque: ahí sí se redibuja
+  return aplicar(actualizarEjercicio(actual.plan, w, d, b, e, { [campo]: el.value }), { redibujar: campo === 'group' });
 }
 
 async function eliminarDiaConfirmando(w, d) {
