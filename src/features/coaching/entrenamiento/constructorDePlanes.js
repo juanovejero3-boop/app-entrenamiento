@@ -10,10 +10,13 @@ import {
   actualizarBloque,
   actualizarDia,
   actualizarEjercicio,
+  actualizarPrioridad,
+  actualizarReporte,
   actualizarSemana,
   agregarBloque,
   agregarDia,
   agregarEjercicio,
+  agregarPrioridad,
   agregarSemana,
   contarSeries,
   crearPlan,
@@ -21,6 +24,7 @@ import {
   eliminarBloque,
   eliminarDia,
   eliminarEjercicio,
+  eliminarPrioridad,
   eliminarSemana,
   etiquetasSuperserie,
   fechasDeSemana,
@@ -114,7 +118,7 @@ function dibujar() {
         </div>
         <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado (local)' : ''}</span>
       </div>
-      ${plan ? dibujarCabecera(plan) : dibujarSinPlan()}
+      ${plan ? dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarSinPlan()}
       ${dibujarGenerador(plan)}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
@@ -145,17 +149,45 @@ function dibujarCabecera(plan) {
           <input type="date" data-change="planCampo" data-campo="startDate" value="${esc(plan.startDate)}" class="${claseInput}">
         </label>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <label class="block">
-          <span class="text-[10px] text-gray-400 uppercase font-bold">Foco biomecánico</span>
-          <textarea data-change="planCampo" data-campo="focus" rows="2" class="${claseInput} resize-none">${esc(plan.report.focus)}</textarea>
-        </label>
-        <label class="block">
-          <span class="text-[10px] text-gray-400 uppercase font-bold">Método de evaluación</span>
-          <textarea data-change="planCampo" data-campo="evaluation" rows="2" class="${claseInput} resize-none">${esc(plan.report.evaluation)}</textarea>
-        </label>
-      </div>
     </div>
+  `;
+}
+
+const etiqueta = (texto) => `<span class="text-[10px] text-gray-400 uppercase font-bold">${texto}</span>`;
+
+/** Objetivos y lineamientos del ciclo: es lo que va al PDF de lineamientos para el alumno. */
+function dibujarLineamientos(plan) {
+  const { report } = plan;
+  const texto = (campo, titulo, filas, placeholder) => `
+    <label class="block">
+      ${etiqueta(titulo)}
+      <textarea data-change="reporteCampo" data-campo="${campo}" rows="${filas}" placeholder="${placeholder}" class="${claseInput} resize-y">${esc(report[campo])}</textarea>
+    </label>`;
+  const prioridades = report.priorities
+    .map(
+      (p, i) => `
+      <div class="flex flex-col md:flex-row gap-2 items-stretch">
+        <input data-change="prioridadCampo" data-i="${i}" data-campo="target" value="${esc(p.target)}" placeholder="Ejercicio o músculo" class="${claseInput} md:w-1/3 font-bold">
+        <input data-change="prioridadCampo" data-i="${i}" data-campo="progression" value="${esc(p.progression)}" placeholder="Cómo progresar (ej: +2,5 kg por semana manteniendo RIR 2)" class="${claseInput} flex-1">
+        <button data-click="prioridadEliminar" data-i="${i}" title="Quitar prioridad" class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-xmark"></i></button>
+      </div>`,
+    )
+    .join('');
+  return `
+    <section class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+      <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2 text-sm">Objetivos y lineamientos del ciclo</h3>
+      ${texto('objective', 'Objetivo del macrociclo', 2, 'Qué buscamos en este ciclo')}
+      <div class="space-y-2">
+        ${etiqueta('Ejercicios / músculos prioritarios y cómo progresar')}
+        ${prioridades}
+        <button data-click="prioridadAgregar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed"><i class="fa-solid fa-plus mr-1"></i>Agregar prioridad</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        ${texto('focus', 'Foco biomecánico', 2, '')}
+        ${texto('evaluation', 'Método de evaluación', 2, '')}
+      </div>
+      ${texto('guidelines', 'Lineamientos generales', 3, 'Descanso, alimentación, técnica, lo que el alumno tenga que saber')}
+    </section>
   `;
 }
 
@@ -344,10 +376,8 @@ async function generar() {
 }
 
 function cambiarCampoPlan(el) {
-  const campo = el.dataset.campo;
   const nuevo = structuredClone(actual.plan);
-  if (campo === 'focus' || campo === 'evaluation') nuevo.report[campo] = el.value;
-  else nuevo[campo] = el.value;
+  nuevo[el.dataset.campo] = el.value;
   return aplicar(nuevo, { redibujar: false });
 }
 
@@ -386,6 +416,13 @@ registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
   planGenerar: () => generar(),
   planCampo: (el) => cambiarCampoPlan(el),
+  reporteCampo: (el) => aplicar(actualizarReporte(actual.plan, { [el.dataset.campo]: el.value }), { redibujar: false }),
+  prioridadAgregar: () => aplicar(agregarPrioridad(actual.plan)),
+  prioridadCampo: (el) =>
+    aplicar(actualizarPrioridad(actual.plan, Number(el.dataset.i), { [el.dataset.campo]: el.value }), {
+      redibujar: false,
+    }),
+  prioridadEliminar: (el) => aplicar(eliminarPrioridad(actual.plan, Number(el.dataset.i))),
   semanaAgregar: () => aplicar(agregarSemana(actual.plan)),
   semanaCampo: (el) =>
     aplicar(actualizarSemana(actual.plan, indice(el, 'w'), { [el.dataset.campo]: el.value }), { redibujar: false }),

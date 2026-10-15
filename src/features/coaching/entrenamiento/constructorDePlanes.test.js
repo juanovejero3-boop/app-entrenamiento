@@ -393,3 +393,60 @@ describe('constructor de planes: superseries', () => {
     expect(etiquetas()).toEqual(['', 'A1', 'A2', 'B1']);
   });
 });
+
+describe('constructor de planes: objetivos y lineamientos', () => {
+  it('objetivo, foco, evaluación y lineamientos se guardan al editarlos', async () => {
+    await abrir();
+    await generar(1, 1);
+
+    cambiar($('[data-change="reporteCampo"][data-campo="objective"]'), 'Subir el 1RM de sentadilla');
+    cambiar($('[data-change="reporteCampo"][data-campo="focus"]'), 'Control de rodilla');
+    cambiar($('[data-change="reporteCampo"][data-campo="evaluation"]'), 'Test de 3RM en semana 4');
+    cambiar($('[data-change="reporteCampo"][data-campo="guidelines"]'), 'Dormir 8 h\nHidratarse');
+    await esperar();
+
+    expect((await guardado()).report).toMatchObject({
+      objective: 'Subir el 1RM de sentadilla',
+      focus: 'Control de rodilla',
+      evaluation: 'Test de 3RM en semana 4',
+      guidelines: 'Dormir 8 h\nHidratarse',
+    });
+  });
+
+  it('agregar, completar y quitar prioridades', async () => {
+    await abrir();
+    await generar(1, 1);
+
+    $('[data-click="prioridadAgregar"]').click();
+    await esperar();
+    $('[data-click="prioridadAgregar"]').click();
+    await esperar();
+    cambiar($('[data-change="prioridadCampo"][data-i="0"][data-campo="target"]'), 'Sentadilla');
+    cambiar($('[data-change="prioridadCampo"][data-i="0"][data-campo="progression"]'), '+2,5 kg/semana');
+    cambiar($('[data-change="prioridadCampo"][data-i="1"][data-campo="target"]'), 'Glúteo medio');
+    await esperar();
+    expect((await guardado()).report.priorities.map((p) => p.target)).toEqual(['Sentadilla', 'Glúteo medio']);
+    expect((await guardado()).report.priorities[0].progression).toBe('+2,5 kg/semana');
+
+    $('[data-click="prioridadEliminar"][data-i="0"]').click();
+    await esperar();
+    expect((await guardado()).report.priorities.map((p) => p.target)).toEqual(['Glúteo medio']);
+    expect($('[data-change="prioridadCampo"][data-i="0"][data-campo="target"]').value).toBe('Glúteo medio');
+  });
+
+  it('los textos de lineamientos con comillas y < se muestran intactos al volver a abrir', async () => {
+    await abrir();
+    await generar(1, 1);
+    $('[data-click="prioridadAgregar"]').click();
+    await esperar();
+    cambiar($('[data-change="prioridadCampo"][data-i="0"][data-campo="target"]'), 'Press "inclinado" <30°>');
+    cambiar($('[data-change="reporteCampo"][data-campo="guidelines"]'), '</textarea><b>x</b>');
+    await esperar();
+
+    await abrir();
+
+    expect($('[data-change="prioridadCampo"][data-i="0"][data-campo="target"]').value).toBe('Press "inclinado" <30°>');
+    expect($('[data-change="reporteCampo"][data-campo="guidelines"]').value).toBe('</textarea><b>x</b>');
+    expect(content.querySelector('b')).toBeNull();
+  });
+});
