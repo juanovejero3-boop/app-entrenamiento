@@ -241,3 +241,122 @@ describe('constructor de planes: días', () => {
     expect($('[data-change="diaCampo"][data-w="2"][data-d="0"]').value).toBe('Torso A');
   });
 });
+
+describe('constructor de planes: bloques y ejercicios', () => {
+  /** Plan de 2 semanas x 1 día, con un bloque y un ejercicio en la semana 1. */
+  async function abrirConEjercicio() {
+    await abrir();
+    await generar(2, 1);
+    $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+    await esperar();
+    $('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]').click();
+    await esperar();
+  }
+  const campoEj = (campo, pos = '0-0-0-0') => $(`[data-ejercicio="${pos}"] [data-campo="${campo}"]`);
+
+  it('agregar un bloque (fuerza por defecto) y cambiarle el tipo', async () => {
+    await abrir();
+    await generar(1, 1);
+
+    $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].type).toBe('fuerza');
+
+    cambiar($('[data-bloque="0-0-0"] [data-change="bloqueCampo"]'), 'hipertrofia');
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].type).toBe('hipertrofia');
+  });
+
+  it('cargar todos los campos de un ejercicio', async () => {
+    await abrirConEjercicio();
+
+    cambiar(campoEj('name'), 'Sentadilla con barra');
+    cambiar(campoEj('sets'), '4');
+    cambiar(campoEj('reps'), '6-8');
+    cambiar(campoEj('intensityType'), 'RPE');
+    cambiar(campoEj('intensityValue'), '8');
+    cambiar(campoEj('rest'), '3 min');
+    cambiar(campoEj('tech'), 'Rest-Pause');
+    cambiar(campoEj('notes'), 'Pausa abajo');
+    const superserie = campoEj('isSuperset');
+    superserie.checked = true;
+    superserie.dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar();
+
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises[0]).toMatchObject({
+      name: 'Sentadilla con barra',
+      sets: '4',
+      reps: '6-8',
+      intensityType: 'RPE',
+      intensityValue: '8',
+      rest: '3 min',
+      tech: 'Rest-Pause',
+      notes: 'Pausa abajo',
+      isSuperset: true,
+    });
+  });
+
+  it('editar las series actualiza el total del mapa sin redibujar el campo (no se pierde el foco)', async () => {
+    await abrirConEjercicio();
+    const series = campoEj('sets');
+
+    cambiar(series, '5');
+    await esperar();
+
+    expect($('[data-resumen-semana="0"]').textContent).toContain('5 series');
+    expect(campoEj('sets')).toBe(series); // el mismo elemento: no se redibujó
+  });
+
+  it('eliminar un ejercicio', async () => {
+    await abrirConEjercicio();
+    $('[data-click="ejercicioEliminar"][data-w="0"][data-d="0"][data-b="0"][data-e="0"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises).toEqual([]);
+  });
+
+  it('eliminar un bloque con ejercicios pide confirmación', async () => {
+    await abrirConEjercicio();
+
+    $('[data-click="bloqueEliminar"][data-w="0"][data-d="0"][data-b="0"]').click();
+    await esperar();
+    await responderConfirmacion(false);
+    expect((await guardado()).weeks[0].days[0].blocks).toHaveLength(1);
+
+    $('[data-click="bloqueEliminar"][data-w="0"][data-d="0"][data-b="0"]').click();
+    await esperar();
+    await responderConfirmacion(true);
+    expect((await guardado()).weeks[0].days[0].blocks).toEqual([]);
+  });
+
+  it('propagar un ejercicio lo agrega a las semanas siguientes', async () => {
+    await abrirConEjercicio();
+    cambiar(campoEj('name'), 'Press banca');
+    await esperar();
+
+    $('[data-click="ejercicioPropagar"][data-w="0"][data-d="0"][data-b="0"][data-e="0"]').click();
+    await esperar();
+
+    expect((await guardado()).weeks[1].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Press banca']);
+    expect(campoEj('name', '1-0-0-0').value).toBe('Press banca');
+  });
+
+  it('el nombre del ejercicio se autocompleta con la base de ejercicios', async () => {
+    await abrirConEjercicio();
+    await new Promise((r) => setTimeout(r, 50)); // la base se carga aparte (import dinámico)
+
+    const lista = document.getElementById(campoEj('name').getAttribute('list'));
+    const opciones = [...lista.querySelectorAll('option')].map((o) => o.value);
+    expect(opciones.length).toBeGreaterThan(1000);
+    expect(opciones).toContain('02 Paused Air Squat');
+  });
+
+  it('un nombre con comillas y < se guarda y se vuelve a mostrar intacto', async () => {
+    await abrirConEjercicio();
+    cambiar(campoEj('name'), 'Remo "Pendlay" <con pausa>');
+    await esperar();
+
+    await abrir();
+
+    expect(campoEj('name').value).toBe('Remo "Pendlay" <con pausa>');
+  });
+});
