@@ -273,7 +273,7 @@ window.adminPlanillaCerrarPestana = function (userId) {
     adminPlanillaActivo = adminPlanillaAbiertos.length ? adminPlanillaAbiertos[adminPlanillaAbiertos.length - 1] : null;
   }
   if (!adminPlanillaActivo) {
-    adminPlanillaMostrarBuscador();
+    window.adminPlanillaMostrarBuscador();
   } else {
     const u = state.adminAllUsers.find((x) => x.id === adminPlanillaActivo);
     if (u) {

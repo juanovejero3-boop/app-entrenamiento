@@ -71,7 +71,7 @@ async function handleAuth(e) {
   const email = document.getElementById('auth-email').value.trim();
   const password = document.getElementById('auth-password').value;
 
-  const { data, error } = await supaClient.auth.signInWithPassword({ email, password });
+  const { error } = await supaClient.auth.signInWithPassword({ email, password });
   if (error) {
     if (error.message === 'Email not confirmed') {
       return alert('Todavía no confirmaste tu email. Revisá tu casilla de correo (y el spam).');

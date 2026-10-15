@@ -171,7 +171,7 @@ window.guardarDatosAlumno = async function (userId) {
   toast('Alumno actualizado');
   await loadAdminData();
   refrescarListaAlumnos();
-  abrirModalAlumno(userId);
+  window.abrirModalAlumno(userId);
 };
 
 window.toggleDeshabilitarAlumno = async function (userId) {
