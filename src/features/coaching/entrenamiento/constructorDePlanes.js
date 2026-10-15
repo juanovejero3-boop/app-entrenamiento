@@ -25,7 +25,6 @@ import {
   etiquetasSuperserie,
   fechasDeSemana,
   generarEstructura,
-  normalizarPlan,
   propagarDia,
   propagarEjercicio,
 } from './plan.js';
@@ -115,24 +114,11 @@ function dibujar() {
         </div>
         <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado (local)' : ''}</span>
       </div>
-      ${dibujarArchivo(plan)}
       ${plan ? dibujarCabecera(plan) : dibujarSinPlan()}
       ${dibujarGenerador(plan)}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
-    </div>
-  `;
-}
-
-function dibujarArchivo(plan) {
-  return `
-    <div class="flex flex-wrap gap-2 justify-end">
-      ${plan ? `<button data-click="planExportar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed"><i class="fa-solid fa-download mr-1"></i>Exportar JSON</button>` : ''}
-      <label class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed cursor-pointer">
-        <i class="fa-solid fa-upload mr-1"></i>Importar JSON
-        <input type="file" accept=".json,application/json" data-change="planImportar" class="hidden">
-      </label>
     </div>
   `;
 }
@@ -365,44 +351,6 @@ function cambiarCampoPlan(el) {
   return aplicar(nuevo, { redibujar: false });
 }
 
-/** "Ana Pérez" -> "ana-perez" (para el nombre del archivo). */
-const slug = (texto) =>
-  String(texto)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'alumno';
-
-function exportar() {
-  const { alumno, plan } = actual;
-  const blob = new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const enlace = document.createElement('a');
-  enlace.href = url;
-  enlace.setAttribute('download', `plan-${slug(alumno.name || alumno.email)}-${hoy()}.json`);
-  enlace.click();
-  URL.revokeObjectURL(url);
-}
-
-async function importar(input) {
-  const archivo = input.files?.[0];
-  input.value = ''; // permite volver a elegir el mismo archivo
-  if (!archivo) return;
-  let plan;
-  try {
-    plan = normalizarPlan(JSON.parse(await archivo.text()));
-  } catch (error) {
-    window.alert(`El archivo no es un plan válido (${error.message}).`);
-    return;
-  }
-  if (actual.plan?.weeks.length) {
-    const ok = await window.confirm('Importar reemplaza el plan actual de este alumno. ¿Continuar?');
-    if (!ok) return;
-  }
-  await aplicar(plan);
-}
-
 async function eliminarSemanaConfirmando(w) {
   const semana = actual.plan.weeks[w];
   const ok = await window.confirm(`¿Eliminar "${semana.name}" y todo su contenido?`);
@@ -437,8 +385,6 @@ async function eliminarDiaConfirmando(w, d) {
 registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
   planGenerar: () => generar(),
-  planExportar: () => exportar(),
-  planImportar: (el) => importar(el),
   planCampo: (el) => cambiarCampoPlan(el),
   semanaAgregar: () => aplicar(agregarSemana(actual.plan)),
   semanaCampo: (el) =>
