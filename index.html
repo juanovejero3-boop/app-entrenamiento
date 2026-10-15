@@ -44,15 +44,7 @@
     <!-- Modal inyectado del Tracker -->
     <div id="modal-video-preview" class="modal-overlay hidden">
       <div class="modal-video-card">
-        <button
-          class="modal-close-btn"
-          onclick="
-            document.getElementById('modal-video-preview').classList.add('hidden');
-            document.getElementById('video-iframe-container').innerHTML = '';
-          "
-        >
-          ✕
-        </button>
+        <button class="modal-close-btn" data-click="cerrarModalVideo">✕</button>
         <h4 id="video-modal-title" style="font-size: 0.95rem; font-weight: 700; color: white; padding-right: 20px">
           Demostración
         </h4>
