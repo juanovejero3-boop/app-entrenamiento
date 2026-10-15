@@ -1,6 +1,7 @@
 // UI compartida: toast, modales propios (reemplazan alert/confirm del navegador),
 // overlay de "procesando" y toggle de visibilidad de contraseñas.
-// Importar este módulo instala window.alert / window.confirm / window.resolverModal.
+// Importar este módulo instala window.alert / window.confirm y registra las acciones de los modales.
+import { registrarAcciones } from './acciones.js';
 
 export function toast(message, ok = true) {
   const el = document.createElement('div');
@@ -57,9 +58,12 @@ window.alert = function (message) {
   const overlay = modalBaseApilado();
   overlay.innerHTML = modalCard(`
     <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
-    <button onclick="document.getElementById('app-modal-overlay-aux').style.display='none'" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Entendido</button>
+    <button data-click="cerrarModalAux" class="w-full py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Entendido</button>
   `);
 };
+
+// resolve de la promesa del window.confirm abierto
+let modalResolve = null;
 
 window.confirm = function (message) {
   return new Promise((resolve) => {
@@ -67,19 +71,31 @@ window.confirm = function (message) {
     overlay.innerHTML = modalCard(`
       <p class="text-sm text-white font-medium mb-5 break-words whitespace-pre-line">${String(message).replace(/</g, '&lt;')}</p>
       <div class="flex gap-2">
-        <button onclick="resolverModal(false)" class="flex-1 py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
-        <button onclick="resolverModal(true)" class="flex-1 py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Confirmar</button>
+        <button data-click="resolverModal" data-valor="false" class="flex-1 py-3 bg-cyberCarbon border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition">Cancelar</button>
+        <button data-click="resolverModal" data-valor="true" class="flex-1 py-3 bg-neonRed text-white font-black text-xs rounded-xl uppercase tracking-wider hover:bg-red-700 transition">Confirmar</button>
       </div>
     `);
-    window._modalResolve = resolve;
+    modalResolve = resolve;
   });
 };
 
-window.resolverModal = function (valor) {
-  if (window._modalResolve) window._modalResolve(valor);
-  window._modalResolve = null;
+function resolverModal(valor) {
+  if (modalResolve) modalResolve(valor);
+  modalResolve = null;
   document.getElementById('app-modal-overlay-aux').style.display = 'none';
-};
+}
+
+registrarAcciones({
+  resolverModal: (el) => resolverModal(el.dataset.valor === 'true'),
+  // Cierra la modal apilada (avisos de window.alert)
+  cerrarModalAux: () => {
+    document.getElementById('app-modal-overlay-aux').style.display = 'none';
+  },
+  // Cierra la modal principal (#app-modal-overlay)
+  cerrarModal: () => {
+    document.getElementById('app-modal-overlay').style.display = 'none';
+  },
+});
 
 // ============================================
 // OVERLAY DE PROCESANDO

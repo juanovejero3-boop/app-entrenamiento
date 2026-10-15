@@ -5,6 +5,7 @@ import { renderTabMaterial } from './features/material/material.js';
 import { renderTabPerfil } from './features/perfil/perfil.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './features/planilla/planilla.js';
 import { renderTabTurnos } from './features/reservas/reservas.js';
+import { registrarAcciones } from './lib/acciones.js';
 import { state } from './state.js';
 
 /** @type {Record<string, (content: HTMLElement) => void | Promise<void>>} */
@@ -41,7 +42,6 @@ export async function switchTab(tab) {
   if (render) await render(content);
 }
 
-// Usada desde handlers inline (onclick) del HTML
-Object.assign(window, {
-  switchTab,
+registrarAcciones({
+  switchTab: (el) => switchTab(el.dataset.tab),
 });

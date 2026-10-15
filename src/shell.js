@@ -13,7 +13,7 @@ export function renderApp() {
   const btnAdmin = document.getElementById('btn-admin');
   if (state.userProfile?.role === 'admin' && !btnAdmin) {
     navContainer.innerHTML += `
-        <button id="btn-admin" onclick="switchTab('admin')" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+        <button id="btn-admin" data-click="switchTab" data-tab="admin" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
             <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
         </button>
     `;
