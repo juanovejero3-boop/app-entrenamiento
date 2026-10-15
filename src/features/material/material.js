@@ -4,6 +4,7 @@ import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { supaClient } from '../../lib/supabase.js';
 import { state } from '../../state.js';
+import { materialEsYouTube } from './youtube.js';
 
 let materialEditando = false;
 
@@ -20,12 +21,6 @@ export async function renderTabMaterial(content) {
 }
 
 let materialData = null;
-
-function materialEsYouTube(link) {
-  if (!link) return null;
-  const match = link.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-  return match ? match[1] : null;
-}
 
 async function materialCargar() {
   if (materialData) return materialData;
