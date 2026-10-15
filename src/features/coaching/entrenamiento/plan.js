@@ -178,3 +178,71 @@ export function contarSeries(semana) {
   }
   return total;
 }
+
+/** Aplica `cambios` (name) al día indicado. */
+export function actualizarDia(plan, w, d, cambios) {
+  const nuevo = copiar(plan);
+  Object.assign(nuevo.weeks[w].days[d], cambios);
+  return nuevo;
+}
+
+/** Aplica `cambios` (type) al bloque indicado. */
+export function actualizarBloque(plan, w, d, b, cambios) {
+  const nuevo = copiar(plan);
+  Object.assign(nuevo.weeks[w].days[d].blocks[b], cambios);
+  return nuevo;
+}
+
+/** Copia profunda de un día, bloque o ejercicio con ids nuevos en todos sus niveles. */
+function conIdsNuevos(x) {
+  const copia = structuredClone(x);
+  (function renovar(nodo) {
+    nodo.id = nuevoId();
+    for (const hijo of nodo.days ?? nodo.blocks ?? nodo.exercises ?? []) renovar(hijo);
+  })(copia);
+  return copia;
+}
+
+/** Completa con días vacíos ("Día N") hasta que exista la posición `d`. */
+function asegurarDia(semana, d) {
+  while (semana.days.length <= d) semana.days.push(diaVacio(semana.days.length + 1));
+}
+
+/** Inserta una copia de la semana `w` justo después, con el número del nombre incrementado. */
+export function duplicarSemana(plan, w) {
+  const nuevo = copiar(plan);
+  const original = nuevo.weeks[w];
+  const copia = conIdsNuevos(original);
+  const match = original.name.match(/(.*?)(\d+)(\D*)$/);
+  copia.name = match ? match[1] + (parseInt(match[2], 10) + 1) + match[3] : `${original.name} (Copia)`;
+  nuevo.weeks.splice(w + 1, 0, copia);
+  return nuevo;
+}
+
+/** Copia el día `d` de la semana `w` a la misma posición de todas las semanas siguientes. */
+export function propagarDia(plan, w, d) {
+  const nuevo = copiar(plan);
+  const dia = nuevo.weeks[w].days[d];
+  for (const semana of nuevo.weeks.slice(w + 1)) {
+    asegurarDia(semana, d);
+    semana.days[d] = conIdsNuevos(dia);
+  }
+  return nuevo;
+}
+
+/**
+ * Agrega una copia del ejercicio al mismo día y bloque de todas las semanas siguientes.
+ * Si faltan días o bloques los crea (los bloques nuevos toman el tipo del bloque de origen).
+ */
+export function propagarEjercicio(plan, w, d, b, e) {
+  const nuevo = copiar(plan);
+  const bloqueOrigen = nuevo.weeks[w].days[d].blocks[b];
+  const ejercicio = bloqueOrigen.exercises[e];
+  for (const semana of nuevo.weeks.slice(w + 1)) {
+    asegurarDia(semana, d);
+    const bloques = semana.days[d].blocks;
+    while (bloques.length <= b) bloques.push({ id: nuevoId(), type: bloqueOrigen.type, exercises: [] });
+    bloques[b].exercises.push(conIdsNuevos(ejercicio));
+  }
+  return nuevo;
+}

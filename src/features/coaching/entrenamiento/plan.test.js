@@ -6,13 +6,18 @@ import {
   agregarDia,
   agregarEjercicio,
   agregarSemana,
+  actualizarBloque,
+  actualizarDia,
   contarSeries,
   crearPlan,
+  duplicarSemana,
   eliminarBloque,
   eliminarDia,
   eliminarEjercicio,
   fechasDeSemana,
   generarEstructura,
+  propagarDia,
+  propagarEjercicio,
 } from './plan.js';
 
 /** Todos los ids del plan (semanas, días, bloques y ejercicios). */
@@ -235,5 +240,164 @@ describe('contarSeries', () => {
 
   it('una semana sin días cuenta 0', () => {
     expect(contarSeries({ days: [] })).toBe(0);
+  });
+});
+
+/** Saca los ids recursivamente para comparar solo el contenido. */
+function sinIds(x) {
+  if (Array.isArray(x)) return x.map(sinIds);
+  if (x && typeof x === 'object') {
+    const { id, ...resto } = x; // eslint-disable-line no-unused-vars
+    return Object.fromEntries(Object.entries(resto).map(([k, v]) => [k, sinIds(v)]));
+  }
+  return x;
+}
+
+/** Plan de 3 semanas: la 1 completa (2 días), la 2 con 1 día y la 3 sin días. */
+function planDesparejo() {
+  const ej = (id, name) => ({ id, name, sets: '3', reps: '10' });
+  return {
+    ...planChico(),
+    weeks: [
+      {
+        id: 'w1',
+        name: 'Semana 1',
+        objective: '',
+        targetVolume: '',
+        days: [
+          {
+            id: 'w1d1',
+            name: 'Día 1',
+            blocks: [{ id: 'w1d1b1', type: 'fuerza', exercises: [ej('x1', 'Sentadilla')] }],
+          },
+          {
+            id: 'w1d2',
+            name: 'Día 2',
+            blocks: [
+              { id: 'w1d2b1', type: 'fuerza', exercises: [ej('x2', 'Press banca')] },
+              { id: 'w1d2b2', type: 'hipertrofia', exercises: [ej('x3', 'Remo'), ej('x4', 'Curl')] },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'w2',
+        name: 'Semana 2',
+        objective: '',
+        targetVolume: '',
+        days: [{ id: 'w2d1', name: 'Día 1', blocks: [] }],
+      },
+      { id: 'w3', name: 'Semana 3', objective: '', targetVolume: '', days: [] },
+    ],
+  };
+}
+
+describe('actualizarDia y actualizarBloque', () => {
+  it('cambian el nombre del día y el tipo del bloque', () => {
+    let plan = actualizarDia(planChico(), 0, 0, { name: 'Lunes - Torso' });
+    plan = actualizarBloque(plan, 0, 0, 0, { type: 'hipertrofia' });
+    expect(plan.weeks[0].days[0].name).toBe('Lunes - Torso');
+    expect(plan.weeks[0].days[0].blocks[0].type).toBe('hipertrofia');
+  });
+});
+
+describe('duplicarSemana', () => {
+  it('inserta la copia justo después de la original con el mismo contenido', () => {
+    const plan = duplicarSemana(planDesparejo(), 0);
+    expect(plan.weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 2', 'Semana 2', 'Semana 3']);
+    expect(sinIds(plan.weeks[1].days)).toEqual(sinIds(planDesparejo().weeks[0].days));
+  });
+
+  it.each([
+    ['Semana 3', 'Semana 4'],
+    ['Bloque 2 (descarga)', 'Bloque 3 (descarga)'],
+    ['Semana 9', 'Semana 10'],
+    ['Descarga', 'Descarga (Copia)'],
+  ])('nombra la copia de "%s" como "%s"', (nombre, esperado) => {
+    let plan = actualizarSemana(planChico(), 0, { name: nombre });
+    plan = duplicarSemana(plan, 0);
+    expect(plan.weeks[1].name).toBe(esperado);
+  });
+
+  it('la copia tiene ids nuevos en semana, días, bloques y ejercicios', () => {
+    const plan = duplicarSemana(planDesparejo(), 0);
+    const ids = idsDe(plan);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('propagarDia', () => {
+  it('copia el día a la misma posición de todas las semanas siguientes', () => {
+    const plan = propagarDia(planDesparejo(), 0, 0);
+    expect(sinIds(plan.weeks[1].days[0])).toEqual(sinIds(planDesparejo().weeks[0].days[0]));
+    expect(sinIds(plan.weeks[2].days[0])).toEqual(sinIds(planDesparejo().weeks[0].days[0]));
+  });
+
+  it('reemplaza el día que ya existía en esa posición', () => {
+    const plan = propagarDia(planDesparejo(), 0, 0);
+    expect(plan.weeks[1].days).toHaveLength(1);
+    expect(plan.weeks[1].days[0].blocks[0].exercises[0].name).toBe('Sentadilla');
+  });
+
+  it('si a una semana le faltan días, los completa vacíos hasta la posición (el prototipo lo ponía al final)', () => {
+    const plan = propagarDia(planDesparejo(), 0, 1); // Día 2
+    // Semana 3 no tenía días: queda "Día 1" vacío y el Día 2 copiado en su lugar
+    expect(plan.weeks[2].days.map((d) => d.name)).toEqual(['Día 1', 'Día 2']);
+    expect(plan.weeks[2].days[0].blocks).toEqual([]);
+    expect(plan.weeks[2].days[1].blocks.map((b) => b.type)).toEqual(['fuerza', 'hipertrofia']);
+  });
+
+  it('no toca las semanas anteriores ni la de origen', () => {
+    const plan = propagarDia(planDesparejo(), 1, 0);
+    expect(plan.weeks[0]).toEqual(planDesparejo().weeks[0]);
+    expect(plan.weeks[1]).toEqual(planDesparejo().weeks[1]);
+  });
+
+  it('las copias tienen ids nuevos', () => {
+    const ids = idsDe(propagarDia(planDesparejo(), 0, 1));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('propagarEjercicio', () => {
+  it('agrega una copia del ejercicio al mismo día y bloque de las semanas siguientes', () => {
+    const base = propagarDia(planDesparejo(), 0, 1); // las semanas 2 y 3 ya tienen el Día 2
+    const plan = propagarEjercicio(base, 0, 1, 1, 0); // Remo
+    expect(plan.weeks[1].days[1].blocks[1].exercises.map((e) => e.name)).toEqual(['Remo', 'Curl', 'Remo']);
+    expect(plan.weeks[2].days[1].blocks[1].exercises.map((e) => e.name)).toEqual(['Remo', 'Curl', 'Remo']);
+  });
+
+  it('si faltan días o bloques los crea sin dejar huecos (el prototipo dejaba posiciones vacías)', () => {
+    const plan = propagarEjercicio(planDesparejo(), 0, 1, 1, 0); // Día 2, bloque 2 (hipertrofia), Remo
+    const semana3 = plan.weeks[2];
+    expect(semana3.days.map((d) => d.name)).toEqual(['Día 1', 'Día 2']);
+    expect(semana3.days[1].blocks.map((b) => b.type)).toEqual(['hipertrofia', 'hipertrofia']);
+    expect(semana3.days[1].blocks[1].exercises.map((e) => e.name)).toEqual(['Remo']);
+    // ningún hueco: todas las posiciones son objetos
+    for (const semana of plan.weeks) {
+      expect(semana.days.every(Boolean)).toBe(true);
+      for (const dia of semana.days) expect(dia.blocks.every(Boolean)).toBe(true);
+    }
+  });
+
+  it('las copias tienen ids nuevos y no cambia la semana de origen', () => {
+    const plan = propagarEjercicio(planDesparejo(), 0, 1, 1, 0);
+    expect(plan.weeks[0]).toEqual(planDesparejo().weeks[0]);
+    const ids = idsDe(plan);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('inmutabilidad (operaciones de copia)', () => {
+  it.each([
+    ['duplicarSemana', (p) => duplicarSemana(p, 0)],
+    ['propagarDia', (p) => propagarDia(p, 0, 1)],
+    ['propagarEjercicio', (p) => propagarEjercicio(p, 0, 1, 1, 0)],
+    ['actualizarDia', (p) => actualizarDia(p, 0, 0, { name: 'X' })],
+    ['actualizarBloque', (p) => actualizarBloque(p, 0, 0, 0, { type: 'X' })],
+  ])('%s no modifica el plan original', (_, operacion) => {
+    const original = planDesparejo();
+    operacion(original);
+    expect(original).toEqual(planDesparejo());
   });
 });
