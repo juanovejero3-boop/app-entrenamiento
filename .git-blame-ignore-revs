@@ -1,0 +1,5 @@
+# Commits de solo formato que git blame debe ignorar
+# (git config blame.ignoreRevsFile .git-blame-ignore-revs; GitHub lo usa solo)
+
+# Formato: aplicar Prettier a todo el proyecto
+6b10180da34ea3bbb9f02b10bd37941f9d1da466
