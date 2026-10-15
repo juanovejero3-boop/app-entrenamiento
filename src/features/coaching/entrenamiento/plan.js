@@ -40,7 +40,19 @@
  * @typedef {object} PlanEntrenamiento
  * @property {string} macroName
  * @property {string} startDate       AAAA-MM-DD (vacío si no se definió)
- * @property {{ focus: string, evaluation: string }} report  Foco biomecánico y método de evaluación
+ * @property {Reporte} report        Objetivos y lineamientos del ciclo (van al PDF de lineamientos)
+ *
+ * @typedef {object} Prioridad
+ * @property {string} id
+ * @property {string} target          Ejercicio o músculo prioritario
+ * @property {string} progression     Cómo progresar en él
+ *
+ * @typedef {object} Reporte
+ * @property {string} objective       Objetivo del macrociclo
+ * @property {Prioridad[]} priorities
+ * @property {string} focus           Foco biomecánico
+ * @property {string} evaluation      Método de evaluación
+ * @property {string} guidelines      Lineamientos generales
  * @property {Semana[]} weeks
  */
 
@@ -58,17 +70,45 @@ const semanaVacia = (numero) => ({
 
 const diaVacio = (numero) => ({ id: nuevoId(), name: `Día ${numero}`, blocks: [] });
 
+const reporteVacio = () => ({ objective: '', priorities: [], focus: '', evaluation: '', guidelines: '' });
+
 /** @returns {PlanEntrenamiento} */
 export function crearPlan({ fechaInicio }) {
   return {
     macroName: 'Nuevo Macrociclo',
     startDate: fechaInicio,
-    report: { focus: '', evaluation: '' },
+    report: reporteVacio(),
     weeks: [],
   };
 }
 
 /** Reemplaza las semanas del plan por `cantSemanas` semanas de `diasPorSemana` días vacíos. */
+/** Aplica `cambios` a los textos del ciclo (objective, focus, evaluation, guidelines). */
+export function actualizarReporte(plan, cambios) {
+  const nuevo = copiar(plan);
+  Object.assign(nuevo.report, cambios);
+  return nuevo;
+}
+
+export function agregarPrioridad(plan) {
+  const nuevo = copiar(plan);
+  nuevo.report.priorities.push({ id: nuevoId(), target: '', progression: '' });
+  return nuevo;
+}
+
+/** Aplica `cambios` (target, progression) a la prioridad `i`. */
+export function actualizarPrioridad(plan, i, cambios) {
+  const nuevo = copiar(plan);
+  Object.assign(nuevo.report.priorities[i], cambios);
+  return nuevo;
+}
+
+export function eliminarPrioridad(plan, i) {
+  const nuevo = copiar(plan);
+  nuevo.report.priorities.splice(i, 1);
+  return nuevo;
+}
+
 export function generarEstructura(plan, cantSemanas, diasPorSemana) {
   for (const [nombre, valor] of [
     ['semanas', cantSemanas],
@@ -358,7 +398,17 @@ export function normalizarPlan(dato) {
   return {
     macroName: texto(dato.macroName) || 'Nuevo Macrociclo',
     startDate: texto(dato.startDate),
-    report: { focus: texto(report.focus), evaluation: texto(report.evaluation) },
+    report: {
+      objective: texto(report.objective),
+      priorities: (Array.isArray(report.priorities) ? report.priorities : []).filter(esObjeto).map((p) => ({
+        id: id(p.id),
+        target: texto(p.target),
+        progression: texto(p.progression),
+      })),
+      focus: texto(report.focus),
+      evaluation: texto(report.evaluation),
+      guidelines: texto(report.guidelines),
+    },
     weeks: (dato.weeks ?? []).map(semana),
   };
 }

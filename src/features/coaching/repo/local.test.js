@@ -4,7 +4,7 @@ import { crearRepoLocal } from './local.js';
 const plan = (nombre) => ({
   macroName: nombre,
   startDate: '2026-10-19',
-  report: { focus: 'Rodilla', evaluation: '' },
+  report: { objective: '', priorities: [], focus: 'Rodilla', evaluation: '', guidelines: '' },
   weeks: [{ id: 'w1', name: 'Semana 1', objective: 'Hipertrofia', targetVolume: '', days: [] }],
 });
 

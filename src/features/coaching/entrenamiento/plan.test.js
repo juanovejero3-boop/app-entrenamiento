@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   actualizarEjercicio,
+  actualizarReporte,
+  actualizarPrioridad,
   actualizarSemana,
   agregarBloque,
   agregarDia,
   agregarEjercicio,
+  agregarPrioridad,
   agregarSemana,
   actualizarBloque,
   actualizarDia,
@@ -14,6 +17,7 @@ import {
   eliminarBloque,
   eliminarDia,
   eliminarEjercicio,
+  eliminarPrioridad,
   eliminarSemana,
   etiquetasSuperserie,
   fechasDeSemana,
@@ -60,7 +64,7 @@ describe('crearPlan', () => {
     expect(crearPlan({ fechaInicio: '2026-10-19' })).toEqual({
       macroName: 'Nuevo Macrociclo',
       startDate: '2026-10-19',
-      report: { focus: '', evaluation: '' },
+      report: { objective: '', priorities: [], focus: '', evaluation: '', guidelines: '' },
       weeks: [],
     });
   });
@@ -417,7 +421,7 @@ describe('normalizarPlan', () => {
     expect(normalizarPlan({})).toEqual({
       macroName: 'Nuevo Macrociclo',
       startDate: '',
-      report: { focus: '', evaluation: '' },
+      report: { objective: '', priorities: [], focus: '', evaluation: '', guidelines: '' },
       weeks: [],
     });
   });
@@ -580,5 +584,76 @@ describe('normalizarPlan: superseries', () => {
   it('el ejercicio normalizado ya no tiene isSuperset', () => {
     const plan = normalizarPlan({ weeks: [{ days: [{ blocks: [{ exercises: [{ isSuperset: true }, {}] }] }] }] });
     expect(plan.weeks[0].days[0].blocks[0].exercises[0]).not.toHaveProperty('isSuperset');
+  });
+});
+
+describe('objetivos y lineamientos del ciclo (report)', () => {
+  it('actualizarReporte cambia los textos del ciclo y conserva el resto', () => {
+    const plan = actualizarReporte(crearPlan({ fechaInicio: '' }), {
+      objective: 'Ganar fuerza en básicos',
+      guidelines: 'Dormir 8 h',
+    });
+    expect(plan.report).toEqual({
+      objective: 'Ganar fuerza en básicos',
+      priorities: [],
+      focus: '',
+      evaluation: '',
+      guidelines: 'Dormir 8 h',
+    });
+  });
+
+  it('agregar, editar y eliminar prioridades (ejercicio o músculo + cómo progresar)', () => {
+    let plan = agregarPrioridad(agregarPrioridad(crearPlan({ fechaInicio: '' })));
+    plan = actualizarPrioridad(plan, 0, { target: 'Sentadilla', progression: '+2,5 kg por semana' });
+    plan = actualizarPrioridad(plan, 1, { target: 'Glúteo medio' });
+
+    expect(plan.report.priorities.map(({ target, progression }) => ({ target, progression }))).toEqual([
+      { target: 'Sentadilla', progression: '+2,5 kg por semana' },
+      { target: 'Glúteo medio', progression: '' },
+    ]);
+
+    plan = eliminarPrioridad(plan, 0);
+    expect(plan.report.priorities.map((p) => p.target)).toEqual(['Glúteo medio']);
+  });
+
+  it('cada prioridad agregada tiene un id único', () => {
+    const plan = agregarPrioridad(agregarPrioridad(crearPlan({ fechaInicio: '' })));
+    const [a, b] = plan.report.priorities.map((p) => p.id);
+    expect(a).toBeTruthy();
+    expect(a).not.toBe(b);
+  });
+
+  it.each([
+    ['actualizarReporte', (p) => actualizarReporte(p, { objective: 'X' })],
+    ['agregarPrioridad', (p) => agregarPrioridad(p)],
+  ])('%s no modifica el plan original', (_, operacion) => {
+    const original = crearPlan({ fechaInicio: '' });
+    operacion(original);
+    expect(original).toEqual(crearPlan({ fechaInicio: '' }));
+  });
+});
+
+describe('normalizarPlan: objetivos y lineamientos', () => {
+  it('un plan con el reporte viejo (solo foco y evaluación) conserva esos textos y completa el resto', () => {
+    const plan = normalizarPlan({ report: { focus: 'Rodilla', evaluation: 'Test 5RM' } });
+    expect(plan.report).toEqual({
+      objective: '',
+      priorities: [],
+      focus: 'Rodilla',
+      evaluation: 'Test 5RM',
+      guidelines: '',
+    });
+  });
+
+  it('normaliza las prioridades: completa campos, asigna ids y descarta las que no son objetos', () => {
+    const plan = normalizarPlan({
+      report: {
+        priorities: [{ target: 'Press banca' }, null, { id: 'p9', target: 'Dorsal', progression: 'RIR 3 → 1' }],
+      },
+    });
+    expect(plan.report.priorities).toHaveLength(2);
+    expect(plan.report.priorities[0]).toMatchObject({ target: 'Press banca', progression: '' });
+    expect(plan.report.priorities[0].id).toBeTruthy();
+    expect(plan.report.priorities[1]).toEqual({ id: 'p9', target: 'Dorsal', progression: 'RIR 3 → 1' });
   });
 });
