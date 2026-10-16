@@ -3,11 +3,13 @@ import { abrirConstructorDePlanes } from './constructorDePlanes.js';
 import { crearRepoLocal } from '../repo/local.js';
 import '../../../lib/ui.js'; // modales propios: window.confirm real de la app
 import { textoDe } from '../pdf/test-utils.js';
-import { descargarPdf } from '../pdf/descargar.js';
+import { generarPdfBlob } from '../pdf/generar.js';
 
-// La descarga es lo único que se reemplaza: toca el navegador (pdfmake + archivo). El documento
-// que se le pasa se arma con el código real.
-vi.mock('../pdf/descargar.js', () => ({ descargarPdf: vi.fn(async () => {}) }));
+// Solo se reemplaza el motor de PDF (pdfmake en el navegador): el documento que recibe se arma
+// con el código real, y la vista previa y la descarga también son las reales.
+vi.mock('../pdf/generar.js', () => ({
+  generarPdfBlob: vi.fn(async () => new Blob(['%PDF-1.7'], { type: 'application/pdf' })),
+}));
 
 const ALUMNO = { id: 'alumno-1', name: 'Ana Pérez', email: 'ana@ejemplo.com' };
 const repo = crearRepoLocal();
@@ -24,7 +26,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
-  vi.mocked(descargarPdf).mockClear();
+  vi.mocked(generarPdfBlob).mockClear();
 });
 
 const $ = (selector) => content.querySelector(selector);
@@ -459,7 +461,7 @@ describe('constructor de planes: objetivos y lineamientos', () => {
 });
 
 describe('constructor de planes: PDF', () => {
-  it('los botones generan el PDF de lineamientos y el del entrenamiento con el plan actual', async () => {
+  it('cada botón abre la vista previa del PDF correspondiente, armado con el plan actual', async () => {
     await abrir();
     await generar(1, 1);
     cambiar($('[data-campo="macroName"]'), 'Fuerza base');
@@ -468,17 +470,34 @@ describe('constructor de planes: PDF', () => {
 
     $('[data-click="pdfLineamientos"]').click();
     await esperar();
+    const vista = () => document.getElementById('pdf-vista-previa');
+    expect(vista().textContent).toContain('PDF de lineamientos');
+    expect(textoDe(vi.mocked(generarPdfBlob).mock.calls[0][0])).toContain('Subir el 1RM');
+
+    vista().querySelector('[data-click="vistaPreviaCerrar"]').click();
     $('[data-click="pdfEntrenamiento"]').click();
     await esperar();
-
-    expect(descargarPdf).toHaveBeenCalledTimes(2);
-    const [docLin, nombreLin] = descargarPdf.mock.calls[0];
-    const [docEnt, nombreEnt] = descargarPdf.mock.calls[1];
-    expect(nombreLin).toMatch(/^lineamientos-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
-    expect(nombreEnt).toMatch(/^entrenamiento-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
-    expect(textoDe(docLin)).toContain('Subir el 1RM');
+    expect(vista().textContent).toContain('PDF del entrenamiento');
+    const docEnt = vi.mocked(generarPdfBlob).mock.calls[1][0];
     expect(textoDe(docEnt)).toContain('Fuerza base');
-    expect(textoDe(docEnt)).toContain('Día 1'.toUpperCase());
+    expect(textoDe(docEnt)).not.toContain('Subir el 1RM');
+  });
+
+  it('"Descargar" en la vista previa baja el archivo con nombre tipo-alumno-fecha.pdf', async () => {
+    await abrir();
+    await generar(1, 1);
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:pdf');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    let descargado;
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+      descargado = this.getAttribute('download');
+    });
+
+    $('[data-click="pdfEntrenamiento"]').click();
+    await esperar();
+    document.querySelector('#pdf-vista-previa [data-click="vistaPreviaDescargar"]').click();
+
+    expect(descargado).toMatch(/^entrenamiento-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
 
   it('sin plan no hay botones de PDF', async () => {

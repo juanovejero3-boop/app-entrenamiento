@@ -5,10 +5,11 @@
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { mostrarProcesando, ocultarProcesando, toast } from '../../../lib/ui.js';
-import { descargarPdf } from '../pdf/descargar.js';
 import { docEntrenamiento } from '../pdf/entrenamiento.js';
+import { generarPdfBlob } from '../pdf/generar.js';
 import { docLineamientos } from '../pdf/lineamientos.js';
 import { nombreArchivo } from '../pdf/nombre.js';
+import { abrirVistaPrevia } from '../pdf/vistaPrevia.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
 import {
@@ -397,14 +398,19 @@ function cambiarCampoPlan(el) {
   return aplicar(nuevo, { redibujar: false });
 }
 
-/** Genera y descarga uno de los PDF del plan ('lineamientos' o 'entrenamiento'). */
+/** Genera uno de los PDF del plan ('lineamientos' o 'entrenamiento') y lo muestra en la vista previa. */
 async function generarPdf(tipo) {
   const { plan, alumno } = actual;
   const armar = tipo === 'lineamientos' ? docLineamientos : docEntrenamiento;
   const fecha = hoy();
   mostrarProcesando('Generando PDF...');
   try {
-    await descargarPdf(armar(plan, alumno, { fecha }), nombreArchivo(tipo, alumno, fecha));
+    const blob = await generarPdfBlob(armar(plan, alumno, { fecha }));
+    abrirVistaPrevia({
+      blob,
+      nombreArchivo: nombreArchivo(tipo, alumno, fecha),
+      titulo: tipo === 'lineamientos' ? 'PDF de lineamientos' : 'PDF del entrenamiento',
+    });
   } catch (error) {
     console.error('No se pudo generar el PDF', error);
     toast('No se pudo generar el PDF', false);
