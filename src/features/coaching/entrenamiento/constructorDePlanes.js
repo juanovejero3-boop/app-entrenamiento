@@ -4,6 +4,11 @@
 // (para no perder el foco al pasar de un campo a otro): solo actualizan el mapa de semanas.
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
+import { mostrarProcesando, ocultarProcesando, toast } from '../../../lib/ui.js';
+import { descargarPdf } from '../pdf/descargar.js';
+import { docEntrenamiento } from '../pdf/entrenamiento.js';
+import { docLineamientos } from '../pdf/lineamientos.js';
+import { nombreArchivo } from '../pdf/nombre.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
 import {
@@ -118,11 +123,22 @@ function dibujar() {
         </div>
         <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado (local)' : ''}</span>
       </div>
-      ${plan ? dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarSinPlan()}
+      ${plan ? dibujarBotonesPdf() + dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarSinPlan()}
       ${dibujarGenerador(plan)}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
+    </div>
+  `;
+}
+
+function dibujarBotonesPdf() {
+  const boton = (accion, icono, texto) =>
+    `<button data-click="${accion}" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed"><i class="fa-solid ${icono} mr-1"></i>${texto}</button>`;
+  return `
+    <div class="flex flex-wrap gap-2 justify-end">
+      ${boton('pdfLineamientos', 'fa-file-lines', 'PDF de lineamientos')}
+      ${boton('pdfEntrenamiento', 'fa-file-pdf', 'PDF del entrenamiento')}
     </div>
   `;
 }
@@ -381,6 +397,22 @@ function cambiarCampoPlan(el) {
   return aplicar(nuevo, { redibujar: false });
 }
 
+/** Genera y descarga uno de los PDF del plan ('lineamientos' o 'entrenamiento'). */
+async function generarPdf(tipo) {
+  const { plan, alumno } = actual;
+  const armar = tipo === 'lineamientos' ? docLineamientos : docEntrenamiento;
+  const fecha = hoy();
+  mostrarProcesando('Generando PDF...');
+  try {
+    await descargarPdf(armar(plan, alumno, { fecha }), nombreArchivo(tipo, alumno, fecha));
+  } catch (error) {
+    console.error('No se pudo generar el PDF', error);
+    toast('No se pudo generar el PDF', false);
+  } finally {
+    ocultarProcesando();
+  }
+}
+
 async function eliminarSemanaConfirmando(w) {
   const semana = actual.plan.weeks[w];
   const ok = await window.confirm(`¿Eliminar "${semana.name}" y todo su contenido?`);
@@ -416,6 +448,8 @@ registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
   planGenerar: () => generar(),
   planCampo: (el) => cambiarCampoPlan(el),
+  pdfLineamientos: () => generarPdf('lineamientos'),
+  pdfEntrenamiento: () => generarPdf('entrenamiento'),
   reporteCampo: (el) => aplicar(actualizarReporte(actual.plan, { [el.dataset.campo]: el.value }), { redibujar: false }),
   prioridadAgregar: () => aplicar(agregarPrioridad(actual.plan)),
   prioridadCampo: (el) =>

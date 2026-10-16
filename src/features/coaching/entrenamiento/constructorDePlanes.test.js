@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirConstructorDePlanes } from './constructorDePlanes.js';
 import { crearRepoLocal } from '../repo/local.js';
 import '../../../lib/ui.js'; // modales propios: window.confirm real de la app
+import { textoDe } from '../pdf/test-utils.js';
+import { descargarPdf } from '../pdf/descargar.js';
+
+// La descarga es lo único que se reemplaza: toca el navegador (pdfmake + archivo). El documento
+// que se le pasa se arma con el código real.
+vi.mock('../pdf/descargar.js', () => ({ descargarPdf: vi.fn(async () => {}) }));
 
 const ALUMNO = { id: 'alumno-1', name: 'Ana Pérez', email: 'ana@ejemplo.com' };
 const repo = crearRepoLocal();
@@ -18,6 +24,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
+  vi.mocked(descargarPdf).mockClear();
 });
 
 const $ = (selector) => content.querySelector(selector);
@@ -448,5 +455,35 @@ describe('constructor de planes: objetivos y lineamientos', () => {
     expect($('[data-change="prioridadCampo"][data-i="0"][data-campo="target"]').value).toBe('Press "inclinado" <30°>');
     expect($('[data-change="reporteCampo"][data-campo="guidelines"]').value).toBe('</textarea><b>x</b>');
     expect(content.querySelector('b')).toBeNull();
+  });
+});
+
+describe('constructor de planes: PDF', () => {
+  it('los botones generan el PDF de lineamientos y el del entrenamiento con el plan actual', async () => {
+    await abrir();
+    await generar(1, 1);
+    cambiar($('[data-campo="macroName"]'), 'Fuerza base');
+    cambiar($('[data-change="reporteCampo"][data-campo="objective"]'), 'Subir el 1RM');
+    await esperar();
+
+    $('[data-click="pdfLineamientos"]').click();
+    await esperar();
+    $('[data-click="pdfEntrenamiento"]').click();
+    await esperar();
+
+    expect(descargarPdf).toHaveBeenCalledTimes(2);
+    const [docLin, nombreLin] = descargarPdf.mock.calls[0];
+    const [docEnt, nombreEnt] = descargarPdf.mock.calls[1];
+    expect(nombreLin).toMatch(/^lineamientos-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(nombreEnt).toMatch(/^entrenamiento-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
+    expect(textoDe(docLin)).toContain('Subir el 1RM');
+    expect(textoDe(docEnt)).toContain('Fuerza base');
+    expect(textoDe(docEnt)).toContain('Día 1'.toUpperCase());
+  });
+
+  it('sin plan no hay botones de PDF', async () => {
+    await abrir();
+    expect($('[data-click="pdfLineamientos"]')).toBeNull();
+    expect($('[data-click="pdfEntrenamiento"]')).toBeNull();
   });
 });
