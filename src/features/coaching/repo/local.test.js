@@ -100,3 +100,55 @@ describe('repositorio local: plan de entrenamiento', () => {
     await expect(repo.cargarPlanEntrenamiento(alumnoId)).rejects.toThrow('alumnoId');
   });
 });
+
+describe('repositorio local: registro del alumno', () => {
+  const registro = { e1: { 1: { kg: '80', reps: '8', done: true } } };
+
+  it('lo que se guarda se vuelve a cargar igual', async () => {
+    const repo = crearRepoLocal();
+    await repo.guardarRegistro('alumno-1', registro);
+    expect(await repo.cargarRegistro('alumno-1')).toEqual(registro);
+  });
+
+  it('un alumno sin registro devuelve uno vacío', async () => {
+    expect(await crearRepoLocal().cargarRegistro('sin-registro')).toEqual({});
+  });
+
+  it('cada alumno tiene su propio registro, aparte de su plan', async () => {
+    const repo = crearRepoLocal();
+    await repo.guardarRegistro('alumno-1', registro);
+    await repo.guardarRegistro('alumno-2', { e9: { 1: { kg: '50', reps: '10', done: false } } });
+    await repo.guardarPlanEntrenamiento('alumno-1', plan('Plan de Ana'));
+
+    expect(Object.keys(await repo.cargarRegistro('alumno-1'))).toEqual(['e1']);
+    expect(Object.keys(await repo.cargarRegistro('alumno-2'))).toEqual(['e9']);
+    expect((await repo.cargarPlanEntrenamiento('alumno-1')).macroName).toBe('Plan de Ana');
+  });
+
+  it('persiste bajo una clave versionada por alumno', async () => {
+    await crearRepoLocal().guardarRegistro('alumno-1', registro);
+    expect(JSON.parse(localStorage.getItem('pp:v1:registro:alumno-1'))).toEqual(registro);
+  });
+
+  it('al cargar normaliza lo guardado', async () => {
+    localStorage.setItem('pp:v1:registro:alumno-1', JSON.stringify({ e1: { 1: { kg: 80 } }, e2: 'basura' }));
+    expect(await crearRepoLocal().cargarRegistro('alumno-1')).toEqual({
+      e1: { 1: { kg: '80', reps: '', done: false } },
+    });
+  });
+
+  it('si lo guardado está corrupto devuelve vacío, avisa por consola y no lo borra', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.setItem('pp:v1:registro:alumno-1', '{no es json');
+
+    expect(await crearRepoLocal().cargarRegistro('alumno-1')).toEqual({});
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('alumno-1'), expect.anything());
+    expect(localStorage.getItem('pp:v1:registro:alumno-1')).toBe('{no es json');
+  });
+
+  it('exige un id de alumno', async () => {
+    const repo = crearRepoLocal();
+    await expect(repo.cargarRegistro('')).rejects.toThrow('alumnoId');
+    await expect(repo.guardarRegistro(null, registro)).rejects.toThrow('alumnoId');
+  });
+});
