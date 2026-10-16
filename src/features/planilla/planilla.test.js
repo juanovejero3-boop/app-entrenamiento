@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
+import { repo } from '../coaching/repo/index.js';
 import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
 import { state } from '../../state.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
@@ -62,6 +63,22 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
     expect(content.textContent).not.toContain('todavía no cargó tu plan');
     expect($('a[href="https://docs.google.com/hoja"]')).not.toBeNull();
+  });
+
+  it('si tiene ciclos anteriores los ve plegados debajo del activo', async () => {
+    await repo.crearCiclo(ALUMNO.id, { ...planCompleto(), macroName: 'Ciclo viejo' }, 'finalizado');
+    await sembrarPlan(ALUMNO.id, planCompleto());
+
+    await renderTabEntrenamiento(content);
+
+    expect($('[data-ciclo-anterior-nombre]').textContent).toBe('Ciclo viejo');
+    expect($('[data-ciclo-anterior-contenido]').hidden).toBe(true);
+  });
+
+  it('un ciclo en borrador no le muestra la sección de plan', async () => {
+    await repo.crearCiclo(ALUMNO.id, planCompleto(), 'borrador');
+    await renderTabEntrenamiento(content);
+    expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
   it('no mezcla el plan de otro alumno', async () => {

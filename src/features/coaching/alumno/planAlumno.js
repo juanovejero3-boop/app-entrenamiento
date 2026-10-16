@@ -26,6 +26,7 @@ import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesio
 /**
  * @typedef {{
  *   content: HTMLElement, alumno: { id: string, name?: string, email?: string }, cicloId: string | null,
+ *   esperandoProximo: boolean, sinBarra: boolean,
  *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento | null,
  *   registro: import('./registro.js').Registro, sesiones: import('./sesiones.js').Sesiones, hoy: string,
  *   soloLectura: boolean, alVolver: (() => void) | null,
@@ -56,16 +57,17 @@ async function cargarVideos() {
  * Muestra el plan del alumno dentro de `content`.
  * @param {HTMLElement} content
  * @param {{ id: string, name?: string, email?: string }} alumno
- * @param {{ cicloId?: string, soloLectura?: boolean, alVolver?: (() => void) | null, hoy?: string }} [opciones]
+ * @param {{ cicloId?: string, soloLectura?: boolean, sinBarra?: boolean, alVolver?: (() => void) | null, hoy?: string }} [opciones]
  *   cicloId: qué ciclo mostrar (por defecto, el activo del alumno).
  *   soloLectura: modo del coach, sin poder anotar. alVolver: agrega un botón "Volver".
+ *   sinBarra: no muestra la barra superior (aviso de lectura y Volver), para usarla dentro de otra pantalla.
  *   hoy: AAAA-MM-DD, para elegir la semana inicial (por defecto, la de hoy).
  * @returns {Promise<boolean>} si el alumno tiene un plan para mostrar
  */
 export async function abrirPlanAlumno(
   content,
   alumno,
-  { cicloId = null, soloLectura = false, alVolver = null, hoy = hoyISO() } = {},
+  { cicloId = null, soloLectura = false, sinBarra = false, alVolver = null, hoy = hoyISO() } = {},
 ) {
   const ciclos = await repo.listarCiclos(alumno.id);
   const ciclo = cicloId ? (ciclos.find((c) => c.id === cicloId) ?? null) : cicloActivo(ciclos);
@@ -78,6 +80,9 @@ export async function abrirPlanAlumno(
     content,
     alumno,
     cicloId: ciclo?.id ?? null,
+    // sin ciclo activo pero con ciclos anteriores: el próximo todavía no está
+    esperandoProximo: !cicloId && !ciclo && ciclos.some((c) => c.estado === 'finalizado'),
+    sinBarra,
     plan,
     registro,
     sesiones,
@@ -122,7 +127,7 @@ function crearVista(vista) {
     const { content, plan, soloLectura } = vista;
     content.innerHTML = `
     <div class="space-y-4">
-      ${soloLectura || vista.alVolver ? dibujarBarraSuperior() : ''}
+      ${!vista.sinBarra && (soloLectura || vista.alVolver) ? dibujarBarraSuperior() : ''}
       ${plan ? dibujarPlan() : dibujarSinPlan()}
     </div>
   `;
@@ -144,8 +149,12 @@ function crearVista(vista) {
 
   function dibujarSinPlan() {
     const mensaje = vista.soloLectura
-      ? 'Este alumno todavía no tiene un plan armado en la app.'
-      : 'Tu entrenador todavía no cargó tu plan en la app.';
+      ? vista.esperandoProximo
+        ? 'Este alumno no tiene un ciclo activo en este momento.'
+        : 'Este alumno todavía no tiene un plan armado en la app.'
+      : vista.esperandoProximo
+        ? 'Tu entrenador está armando tu próximo ciclo.'
+        : 'Tu entrenador todavía no cargó tu plan en la app.';
     return `
     <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 text-center text-sm text-gray-400">
       <i class="fa-solid fa-dumbbell text-2xl text-neonRed mb-2 block"></i>${mensaje}

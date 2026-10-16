@@ -5,7 +5,7 @@ import { escapeAttr } from '../../lib/dom.js';
 import { renderUserHeader } from '../../shell.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
-import { abrirPlanAlumno } from '../coaching/alumno/planAlumno.js';
+import { abrirPlanesDelAlumno } from '../coaching/alumno/planesDelAlumno.js';
 import { abrirCiclosDelAlumno } from '../coaching/ciclos/ciclosDelAlumno.js';
 
 let adminPlanillaAbiertos = [];
@@ -26,7 +26,7 @@ const SECCION_MI_PLAN = `
 /** Muestra el plan propio dentro de la sección, o la quita si no hay plan (la pantalla queda como siempre). */
 async function montarMiPlan(content) {
   const seccion = content.querySelector('[data-mi-plan]');
-  const hayPlan = await abrirPlanAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
+  const hayPlan = await abrirPlanesDelAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
   if (hayPlan) seccion.hidden = false;
   else seccion.remove();
 }
@@ -358,7 +358,7 @@ registrarAcciones({
   planillaVerComoAlumno: (el) => {
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
-    abrirPlanAlumno(document.getElementById('app-content'), u, {
+    abrirPlanesDelAlumno(document.getElementById('app-content'), u, {
       soloLectura: u.id !== state.userProfile?.id, // su propio plan sí lo puede completar
       alVolver: () => adminPlanillaActivar(u.id),
     });
