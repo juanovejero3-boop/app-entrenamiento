@@ -121,3 +121,63 @@ describe('Planilla del coach: ver como alumno', () => {
     expect(content.textContent).toContain('todavía no tiene un plan');
   });
 });
+
+describe('Planilla del coach: su propio plan', () => {
+  const PERFIL_COACH = { ...COACH, name: 'Coach Prime' };
+  beforeEach(() => {
+    state.currentUser = { id: COACH.id, email: COACH.email };
+    state.userProfile = PERFIL_COACH;
+    state.adminAllUsers = [PERFIL_COACH, PERFIL_ALUMNO];
+  });
+
+  it('si tiene un plan asignado lo ve en su Planilla y puede completarlo', async () => {
+    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+
+    await renderTabEntrenamiento(content);
+
+    expect(content.textContent).toContain('Mi plan de entrenamiento');
+    expect(content.textContent).toContain('Hipertrofia base');
+    expect(content.textContent).not.toContain('Modo lectura');
+    const inputs = [...content.querySelectorAll('[data-change="alumnoSerie"]')];
+    expect(inputs.length).toBeGreaterThan(0);
+    expect(inputs.some((i) => i.disabled)).toBe(false);
+
+    inputs[0].value = '100';
+    inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
+    await esperar();
+    expect(Object.values((await repo.cargarRegistro(COACH.id)).e1)[0].kg).toBe('100');
+  });
+
+  it('el buscador de alumnos sigue estando', async () => {
+    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+    await renderTabEntrenamiento(content);
+    expect($('#admin-planilla-search')).not.toBeNull();
+  });
+
+  it('sin un plan propio la pantalla queda como antes', async () => {
+    await renderTabEntrenamiento(content);
+    expect(content.textContent).not.toContain('Mi plan de entrenamiento');
+  });
+
+  it('el plan de un alumno no aparece como plan del coach', async () => {
+    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await renderTabEntrenamiento(content);
+    expect(content.textContent).not.toContain('Mi plan de entrenamiento');
+  });
+
+  it('en su propia ficha, "Ver mi plan" abre el plan para completarlo (no en solo lectura)', async () => {
+    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+    await renderTabEntrenamiento(content);
+    $(`[data-click="adminPlanillaSeleccionar"][data-id="${COACH.id}"]`).click();
+
+    const boton = $('[data-click="planillaVerComoAlumno"]');
+    expect(boton.textContent).toContain('Ver mi plan');
+    boton.click();
+    await esperar();
+
+    expect(content.textContent).not.toContain('Modo lectura');
+    expect([...content.querySelectorAll('[data-change="alumnoSerie"]')].some((i) => i.disabled)).toBe(false);
+    $('[data-click="alumnoVolver"]').click(); // y se puede volver a la ficha
+    expect($('[data-click="planillaAbrirConstructorDePlanes"]')).not.toBeNull();
+  });
+});

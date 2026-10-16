@@ -91,20 +91,24 @@ function dibujar() {
   const { content, plan, soloLectura } = vista;
   content.innerHTML = `
     <div class="space-y-4">
-      ${soloLectura ? dibujarAvisoDeLectura() : ''}
+      ${soloLectura || vista.alVolver ? dibujarBarraSuperior() : ''}
       ${plan ? dibujarPlan() : dibujarSinPlan()}
     </div>
   `;
 }
 
-function dibujarAvisoDeLectura() {
-  const { alVolver, alumno } = vista;
-  return `
-    <div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
-      ${alVolver ? `<button data-click="alumnoVolver" class="text-gray-300 hover:text-neonRed" title="Volver"><i class="fa-solid fa-arrow-left"></i></button>` : ''}
-      <p><b class="uppercase tracking-wide">Modo lectura</b> · Así ve el plan ${esc(nombreDelAlumno(alumno))}. Desde acá no se puede anotar.</p>
-    </div>
-  `;
+/** Botón Volver (si hay a dónde volver) y, en modo lectura del coach, el aviso de que no se puede anotar. */
+function dibujarBarraSuperior() {
+  const { alVolver, alumno, soloLectura } = vista;
+  const volver = alVolver
+    ? `<button data-click="alumnoVolver" class="text-gray-300 hover:text-neonRed" title="Volver"><i class="fa-solid fa-arrow-left"></i></button>`
+    : '';
+  return soloLectura
+    ? `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
+        ${volver}
+        <p><b class="uppercase tracking-wide">Modo lectura</b> · Así ve el plan ${esc(nombreDelAlumno(alumno))}. Desde acá no se puede anotar.</p>
+      </div>`
+    : `<div class="flex items-center gap-3 text-xs text-gray-400">${volver}<span class="uppercase tracking-wide font-bold">Mi plan</span></div>`;
 }
 
 function dibujarSinPlan() {

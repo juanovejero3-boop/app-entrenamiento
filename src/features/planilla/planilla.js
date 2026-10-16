@@ -13,6 +13,24 @@ let adminPlanillaActivo = null;
 let adminPlanillaPagina = 0;
 const ALUMNOS_PLANILLA_POR_PAGINA = 3;
 
+// Sección "Mi plan de entrenamiento": la usan el alumno y también el coach si tiene un plan asignado
+const SECCION_MI_PLAN = `
+  <section data-mi-plan hidden class="space-y-3">
+    <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+      <i class="fa-solid fa-layer-group text-neonRed mr-2"></i> Mi plan de entrenamiento
+    </h3>
+    <div data-mi-plan-contenido></div>
+  </section>
+`;
+
+/** Muestra el plan propio dentro de la sección, o la quita si no hay plan (la pantalla queda como siempre). */
+async function montarMiPlan(content) {
+  const seccion = content.querySelector('[data-mi-plan]');
+  const hayPlan = await abrirPlanAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
+  if (hayPlan) seccion.hidden = false;
+  else seccion.remove();
+}
+
 export async function renderTabEntrenamiento(content) {
   if (state.userProfile?.role === 'admin') {
     if (!state.adminAllUsers.length) await loadAdminData();
@@ -32,6 +50,9 @@ export async function renderTabEntrenamiento(content) {
         const input = document.getElementById('admin-planilla-search');
         if (input) input.focus();
       }, 50);
+      // El coach también puede tener un plan asignado: lo ve y lo completa acá
+      content.insertAdjacentHTML('beforeend', `<div class="mt-6">${SECCION_MI_PLAN}</div>`);
+      await montarMiPlan(content);
     }
   } else {
     const sheetUrl = state.userProfile?.sheet_url;
@@ -80,19 +101,10 @@ export async function renderTabEntrenamiento(content) {
             ${nutricionCard}
           </div>
 
-          <section data-mi-plan hidden class="space-y-3">
-            <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-              <i class="fa-solid fa-layer-group text-neonRed mr-2"></i> Mi plan de entrenamiento
-            </h3>
-            <div data-mi-plan-contenido></div>
-          </section>
+          ${SECCION_MI_PLAN}
         </div>
       `;
-    // El plan se muestra solo si el entrenador armó uno; si no, la pantalla queda como siempre
-    const seccion = content.querySelector('[data-mi-plan]');
-    const hayPlan = await abrirPlanAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
-    if (hayPlan) seccion.hidden = false;
-    else seccion.remove();
+    await montarMiPlan(content);
   }
 }
 
@@ -268,7 +280,7 @@ function renderAdminPlanillaAlumno(u) {
           <i class="fa-solid fa-pen-ruler mr-2"></i> Armar / editar macrociclo
         </button>
         <button data-click="planillaVerComoAlumno" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-gray-300 font-black text-sm py-3 rounded-2xl uppercase tracking-wider border border-gray-600 hover:border-neonRed hover:text-neonRed transition">
-          <i class="fa-solid fa-eye mr-2"></i> Ver como alumno (solo lectura)
+          <i class="fa-solid fa-eye mr-2"></i> ${u.id === state.userProfile?.id ? 'Ver mi plan (podés completarlo)' : 'Ver como alumno (solo lectura)'}
         </button>
       </div>
     </div>
@@ -347,7 +359,7 @@ registrarAcciones({
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
     abrirPlanAlumno(document.getElementById('app-content'), u, {
-      soloLectura: true,
+      soloLectura: u.id !== state.userProfile?.id, // su propio plan sí lo puede completar
       alVolver: () => adminPlanillaActivar(u.id),
     });
   },

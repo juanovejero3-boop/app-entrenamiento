@@ -395,3 +395,17 @@ describe('vista del alumno: series con rango y series omitidas', () => {
     expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].skipped).toBe(true); // sigue igual
   });
 });
+
+describe('vista del alumno: botón Volver', () => {
+  beforeEach(() => guardarPlan());
+
+  it('con alVolver pero sin modo lectura muestra Volver y no el aviso de lectura (es el plan propio)', async () => {
+    const alVolver = vi.fn();
+    await abrir({ alVolver });
+
+    expect(content.textContent).not.toContain('Modo lectura');
+    $('[data-click="alumnoVolver"]').click();
+    expect(alVolver).toHaveBeenCalledTimes(1);
+    expect($$('[data-change="alumnoSerie"]').some((i) => i.disabled)).toBe(false);
+  });
+});
