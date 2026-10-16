@@ -42,5 +42,5 @@ export function docLineamientos(plan, alumno, { fecha }) {
   if (report.evaluation) contenido.push(tituloSeccion('Método de evaluación'), { text: report.evaluation });
   if (report.guidelines) contenido.push(cajaTexto('Lineamientos generales', report.guidelines));
 
-  return documento(contenido);
+  return documento(contenido, `Lineamientos · ${alumno.name || alumno.email || 'Alumno'}`);
 }

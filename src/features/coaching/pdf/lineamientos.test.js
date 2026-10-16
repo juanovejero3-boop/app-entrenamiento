@@ -54,4 +54,9 @@ describe('PDF de lineamientos', () => {
     const plan = { ...planCompleto(), startDate: '' };
     expect(generar(plan)).toContain('Sin fecha de inicio');
   });
+
+  it('lleva título y autor en los metadatos (lo que muestra el visor de PDF)', () => {
+    const doc = docLineamientos(planCompleto(), ALUMNO, { fecha: '2026-10-15' });
+    expect(doc.info).toEqual({ title: 'Lineamientos · Franco Soria', author: 'Prime Physique' });
+  });
 });

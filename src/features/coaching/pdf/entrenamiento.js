@@ -99,5 +99,5 @@ export function docEntrenamiento(plan, alumno, { fecha }) {
     semana.days.forEach((d) => contenido.push(...dia(d)));
   });
 
-  return documento(contenido);
+  return documento(contenido, `Entrenamiento · ${alumno.name || alumno.email || 'Alumno'}`);
 }

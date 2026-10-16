@@ -17,9 +17,10 @@ export const COLOR = {
 
 const ANCHO_UTIL = 515; // A4 (595 pt) menos márgenes de 40 pt a cada lado
 
-/** Documento base: A4, tipografía, pie con número de página. */
-export function documento(contenido) {
+/** Documento base: A4, tipografía, pie con número de página y título en los metadatos. */
+export function documento(contenido, titulo) {
   return {
+    info: { title: titulo, author: 'Prime Physique' },
     pageSize: 'A4',
     pageMargins: [40, 40, 40, 50],
     defaultStyle: { fontSize: 10, color: COLOR.texto, lineHeight: 1.15 },

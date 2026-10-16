@@ -60,4 +60,9 @@ describe('PDF del entrenamiento', () => {
     expect(texto).not.toContain('Dormir 8 horas.');
     expect(texto).not.toContain('Retracción escapular en empujes');
   });
+
+  it('lleva título y autor en los metadatos (lo que muestra el visor de PDF)', () => {
+    const doc = docEntrenamiento(planCompleto(), ALUMNO, { fecha: '2026-10-15' });
+    expect(doc.info).toEqual({ title: 'Entrenamiento · Franco Soria', author: 'Prime Physique' });
+  });
 });
