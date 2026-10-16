@@ -1,6 +1,7 @@
 // PDF corto de "Objetivos y lineamientos del ciclo" para mandarle al alumno.
 // No incluye nada del entrenamiento: solo lo que el entrenador escribió en ese bloque.
 import { rangoDelPlan } from '../entrenamiento/plan.js';
+import { nombreDelAlumno } from './alumno.js';
 import { cajaTexto, celdaNombre, documento, encabezado, tabla, tarjeta, tituloSeccion } from './documento.js';
 
 /** Datos del alumno y del ciclo que comparten los dos PDF. */
@@ -8,7 +9,7 @@ export function camposDelCiclo(plan, alumno) {
   const rango = rangoDelPlan(plan);
   const semanas = plan.weeks.length;
   return [
-    ['Alumno', alumno.name || alumno.email || 'Alumno'],
+    ['Alumno', nombreDelAlumno(alumno)],
     ['Macrociclo', plan.macroName],
     ['Fechas', rango ? `${rango.inicio} – ${rango.fin}` : 'Sin fecha de inicio'],
     ['Duración', `${semanas} ${semanas === 1 ? 'semana' : 'semanas'}`],
@@ -42,5 +43,5 @@ export function docLineamientos(plan, alumno, { fecha }) {
   if (report.evaluation) contenido.push(tituloSeccion('Método de evaluación'), { text: report.evaluation });
   if (report.guidelines) contenido.push(cajaTexto('Lineamientos generales', report.guidelines));
 
-  return documento(contenido, `Lineamientos · ${alumno.name || alumno.email || 'Alumno'}`);
+  return documento(contenido, `Lineamientos · ${nombreDelAlumno(alumno)}`);
 }

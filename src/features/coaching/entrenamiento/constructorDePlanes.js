@@ -8,6 +8,7 @@ import { mostrarProcesando, ocultarProcesando, toast } from '../../../lib/ui.js'
 import { docEntrenamiento } from '../pdf/entrenamiento.js';
 import { generarPdfBlob } from '../pdf/generar.js';
 import { docLineamientos } from '../pdf/lineamientos.js';
+import { nombreDelAlumno } from '../pdf/alumno.js';
 import { nombreArchivo } from '../pdf/nombre.js';
 import { abrirVistaPrevia } from '../pdf/vistaPrevia.js';
 import { repo } from '../repo/index.js';
@@ -120,7 +121,7 @@ function dibujar() {
         </button>
         <div class="flex-1 min-w-0">
           <h2 class="text-lg font-black text-white uppercase tracking-wide truncate">Plan de entrenamiento</h2>
-          <p class="text-xs text-gray-400 truncate">${esc(alumno.name || alumno.email || 'Alumno')}</p>
+          <p class="text-xs text-gray-400 truncate">${esc(nombreDelAlumno(alumno))}</p>
         </div>
         <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado (local)' : ''}</span>
       </div>

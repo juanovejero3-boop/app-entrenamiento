@@ -1,4 +1,5 @@
 // Nombre de archivo de los PDF: <tipo>-<alumno>-<fecha>.pdf
+import { nombreDelAlumno } from './alumno.js';
 
 /** "Ana Pérez" -> "ana-perez" */
 const slug = (texto) =>
@@ -15,5 +16,5 @@ const slug = (texto) =>
  * @param {string} fecha  AAAA-MM-DD
  */
 export function nombreArchivo(tipo, alumno, fecha) {
-  return `${tipo}-${slug(alumno.name || alumno.email || '') || 'alumno'}-${fecha}.pdf`;
+  return `${tipo}-${slug(nombreDelAlumno(alumno))}-${fecha}.pdf`;
 }
