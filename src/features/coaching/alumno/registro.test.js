@@ -5,11 +5,17 @@ const ej = (id, sets) => ({ id, name: id, sets });
 const dia = (...ejercicios) => ({
   blocks: [{ exercises: ejercicios.slice(0, 1) }, { exercises: ejercicios.slice(1) }],
 });
+const VACIA = { kg: '', reps: '', done: false, skipped: false };
 
 describe('cantidadDeSeries', () => {
   it.each([
     ['4', 4],
-    ['3-4', 3],
+    ['3-4', 4], // un rango se registra hasta el máximo
+    ['3 - 4', 4],
+    ['3–4', 4], // con guion largo
+    ['3 a 4', 4],
+    ['10-12', 12],
+    ['4-3', 4], // rango al revés
     ['4 x', 4],
     ['', 1],
     ['al fallo', 1],
@@ -20,8 +26,8 @@ describe('cantidadDeSeries', () => {
 });
 
 describe('serieDe y actualizarSerie', () => {
-  it('una serie sin datos viene vacía y sin hacer', () => {
-    expect(serieDe({}, 'e1', 1)).toEqual({ kg: '', reps: '', done: false });
+  it('una serie sin datos viene vacía: sin hacer y sin omitir', () => {
+    expect(serieDe({}, 'e1', 1)).toEqual(VACIA);
   });
 
   it('guarda kg, reps y check de una serie sin tocar las demás', () => {
@@ -29,9 +35,30 @@ describe('serieDe y actualizarSerie', () => {
     r = actualizarSerie(r, 'e1', 1, { reps: '8', done: true });
     r = actualizarSerie(r, 'e1', 2, { kg: '82.5' });
 
-    expect(serieDe(r, 'e1', 1)).toEqual({ kg: '80', reps: '8', done: true });
-    expect(serieDe(r, 'e1', 2)).toEqual({ kg: '82.5', reps: '', done: false });
-    expect(serieDe(r, 'e2', 1)).toEqual({ kg: '', reps: '', done: false });
+    expect(serieDe(r, 'e1', 1)).toEqual({ kg: '80', reps: '8', done: true, skipped: false });
+    expect(serieDe(r, 'e1', 2)).toEqual({ ...VACIA, kg: '82.5' });
+    expect(serieDe(r, 'e2', 1)).toEqual(VACIA);
+  });
+
+  it('marcar una serie como omitida la saca de hechas, y marcarla como hecha la saca de omitidas', () => {
+    let r = actualizarSerie({}, 'e1', 1, { done: true });
+    r = actualizarSerie(r, 'e1', 1, { skipped: true });
+    expect(serieDe(r, 'e1', 1)).toMatchObject({ done: false, skipped: true });
+
+    r = actualizarSerie(r, 'e1', 1, { done: true });
+    expect(serieDe(r, 'e1', 1)).toMatchObject({ done: true, skipped: false });
+  });
+
+  it('desmarcar una serie omitida la devuelve a pendiente', () => {
+    let r = actualizarSerie({}, 'e1', 1, { skipped: true });
+    r = actualizarSerie(r, 'e1', 1, { skipped: false });
+    expect(serieDe(r, 'e1', 1)).toMatchObject({ done: false, skipped: false });
+  });
+
+  it('omitir una serie no borra lo que ya había anotado en ella', () => {
+    let r = actualizarSerie({}, 'e1', 1, { kg: '80', reps: '5' });
+    r = actualizarSerie(r, 'e1', 1, { skipped: true });
+    expect(serieDe(r, 'e1', 1)).toEqual({ kg: '80', reps: '5', done: false, skipped: true });
   });
 
   it('no modifica el registro original', () => {
@@ -42,31 +69,55 @@ describe('serieDe y actualizarSerie', () => {
 });
 
 describe('progresoDelDia', () => {
-  it('cuenta las series hechas sobre el total de todos los bloques del día', () => {
+  it('cuenta las series hechas y las omitidas sobre el total de todos los bloques del día', () => {
     const d = dia(ej('a', '3'), ej('b', '2'), ej('c', '1'));
     let r = actualizarSerie({}, 'a', 1, { done: true });
     r = actualizarSerie(r, 'a', 2, { done: true });
+    r = actualizarSerie(r, 'a', 3, { skipped: true });
     r = actualizarSerie(r, 'b', 1, { done: true });
 
-    expect(progresoDelDia(d, r)).toEqual({ hechas: 3, total: 6 });
+    expect(progresoDelDia(d, r)).toEqual({ hechas: 3, omitidas: 1, total: 6 });
+  });
+
+  it('un ejercicio con rango cuenta sus filas hasta el máximo', () => {
+    expect(progresoDelDia(dia(ej('a', '3-4')), {})).toEqual({ hechas: 0, omitidas: 0, total: 4 });
   });
 
   it('las series marcadas pero fuera del rango de series del ejercicio no cuentan', () => {
     // el entrenador bajó las series de 3 a 1 después de que el alumno ya había marcado la 3
     const d = dia(ej('a', '1'));
-    const r = actualizarSerie({}, 'a', 3, { done: true });
-    expect(progresoDelDia(d, r)).toEqual({ hechas: 0, total: 1 });
+    let r = actualizarSerie({}, 'a', 3, { done: true });
+    r = actualizarSerie(r, 'a', 2, { skipped: true });
+    expect(progresoDelDia(d, r)).toEqual({ hechas: 0, omitidas: 0, total: 1 });
   });
 
   it('un día sin ejercicios no tiene progreso', () => {
-    expect(progresoDelDia({ blocks: [] }, {})).toEqual({ hechas: 0, total: 0 });
+    expect(progresoDelDia({ blocks: [] }, {})).toEqual({ hechas: 0, omitidas: 0, total: 0 });
   });
 });
 
 describe('normalizarRegistro', () => {
   it('conserva un registro válido', () => {
-    const r = { e1: { 1: { kg: '80', reps: '8', done: true } } };
+    const r = {
+      e1: {
+        1: { kg: '80', reps: '8', done: true, skipped: false },
+        2: { kg: '', reps: '', done: false, skipped: true },
+      },
+    };
     expect(normalizarRegistro(r)).toEqual(r);
+  });
+
+  it('un registro guardado antes de existir "omitida" se completa con skipped: false', () => {
+    expect(normalizarRegistro({ e1: { 1: { kg: '80', reps: '8', done: true } } })).toEqual({
+      e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } },
+    });
+  });
+
+  it('una serie no puede estar hecha y omitida a la vez: gana hecha', () => {
+    expect(normalizarRegistro({ e1: { 1: { done: true, skipped: true } } }).e1[1]).toMatchObject({
+      done: true,
+      skipped: false,
+    });
   });
 
   it('descarta lo que no tiene la forma esperada y fuerza los tipos', () => {
@@ -76,7 +127,7 @@ describe('normalizarRegistro', () => {
         e2: 'basura',
         e3: null,
       }),
-    ).toEqual({ e1: { 1: { kg: '80', reps: '', done: true } } });
+    ).toEqual({ e1: { 1: { kg: '80', reps: '', done: true, skipped: false } } });
   });
 
   it.each([[null], ['texto'], [[]], [undefined]])('un dato que no es un objeto (%j) da un registro vacío', (dato) => {

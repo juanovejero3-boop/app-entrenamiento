@@ -162,7 +162,7 @@ describe('vista del alumno: registro de series', () => {
     escribir(campo('e1', 1, 'reps'), '9');
     await esperar();
 
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1]).toEqual({ kg: '80', reps: '9', done: false });
+    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1]).toEqual({ kg: '80', reps: '9', done: false, skipped: false });
 
     await abrir();
     expect(campo('e1', 1, 'kg').value).toBe('80');

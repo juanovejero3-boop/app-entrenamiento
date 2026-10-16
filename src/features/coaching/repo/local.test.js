@@ -102,7 +102,7 @@ describe('repositorio local: plan de entrenamiento', () => {
 });
 
 describe('repositorio local: registro del alumno', () => {
-  const registro = { e1: { 1: { kg: '80', reps: '8', done: true } } };
+  const registro = { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } };
 
   it('lo que se guarda se vuelve a cargar igual', async () => {
     const repo = crearRepoLocal();
@@ -133,7 +133,7 @@ describe('repositorio local: registro del alumno', () => {
   it('al cargar normaliza lo guardado', async () => {
     localStorage.setItem('pp:v1:registro:alumno-1', JSON.stringify({ e1: { 1: { kg: 80 } }, e2: 'basura' }));
     expect(await crearRepoLocal().cargarRegistro('alumno-1')).toEqual({
-      e1: { 1: { kg: '80', reps: '', done: false } },
+      e1: { 1: { kg: '80', reps: '', done: false, skipped: false } },
     });
   });
 
