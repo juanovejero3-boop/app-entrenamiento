@@ -11,6 +11,7 @@ Este directorio contiene las migraciones de la base de datos, versionadas y orde
 | `migrations/20260812000002_fix_prevent_role_escalation.sql` | Permite operaciones de servidor (auth.uid() null) en el trigger anti-escalada |
 | `migrations/20260812000003_fix_admin_policy_recursion.sql` | Corrige recursión infinita de RLS en políticas admin (función `is_admin` security definer) |
 | `migrations/20260812000004_profile_fields.sql` | Agrega columnas de ficha del alumno: `name`, `goal`, `height_cm`, `weight_kg` |
+| `migrations/20261016000000_training_tables.sql` | Entrenamiento: `training_cycles` (N macrociclos por alumno, plan en jsonb), `training_sessions` (día terminado o no entrenado) y `training_set_logs` (series anotadas), con RLS. Se prueba en `src/features/coaching/repo/esquema.test.js` sobre un Postgres en memoria (PGlite) |
 
 ## Convención
 
