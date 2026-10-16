@@ -307,3 +307,91 @@ describe('vista del alumno: video de demostración', () => {
     expect($('[data-ejercicio="e2"] [data-click="materialAbrirLink"]')).toBeNull(); // "Remo con barra"
   });
 });
+
+describe('vista del alumno: series con rango y series omitidas', () => {
+  beforeEach(() => guardarPlan());
+  const omitir = (ejercicio, serie) => $(`[data-click="alumnoOmitir"][data-e="${ejercicio}"][data-n="${serie}"]`);
+
+  it('un ejercicio con rango de series (3-4) muestra una fila por cada serie hasta el máximo', async () => {
+    const plan = planCompleto();
+    plan.weeks[0].days[0].blocks[0].exercises[0].sets = '3-4';
+    await guardarPlan(plan);
+    await abrir();
+
+    expect($$('[data-ejercicio="e1"] [data-serie]')).toHaveLength(4);
+    expect($('[data-progreso]').textContent).toContain('0 / 11 series'); // 4 + 4 + 3
+  });
+
+  it('cada serie tiene un botón para marcarla como "no la hice", pendiente al principio', async () => {
+    await abrir();
+    expect($$('[data-click="alumnoOmitir"]')).toHaveLength(11);
+    expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('omitir una serie la marca, se guarda y el progreso cuenta las omitidas', async () => {
+    await abrir();
+    omitir('e1', 4).click();
+    await esperar();
+
+    expect(omitir('e1', 4).getAttribute('aria-pressed')).toBe('true');
+    expect(check('e1', 4).getAttribute('aria-pressed')).toBe('false');
+    expect((await repo.cargarRegistro(ALUMNO.id)).e1[4]).toMatchObject({ done: false, skipped: true });
+    expect($('[data-progreso]').textContent).toContain('0 / 11 series · 1 omitida');
+
+    omitir('e2', 4).click();
+    await esperar();
+    expect($('[data-progreso]').textContent).toContain('2 omitidas');
+  });
+
+  it('hecha y omitida se excluyen: marcar una desmarca la otra', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    omitir('e1', 1).click();
+    await esperar();
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('false');
+    expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('true');
+    expect($('[data-progreso]').textContent).toContain('0 / 11 series · 1 omitida');
+
+    check('e1', 1).click();
+    await esperar();
+    expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('false');
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true');
+    expect($('[data-progreso]').textContent).toBe('1 / 11 series');
+  });
+
+  it('tocar de nuevo "no la hice" la devuelve a pendiente', async () => {
+    await abrir();
+    omitir('e1', 1).click();
+    await esperar();
+    omitir('e1', 1).click();
+    await esperar();
+    expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('false');
+    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].skipped).toBe(false);
+    expect($('[data-progreso]').textContent).toBe('0 / 11 series');
+  });
+
+  it('lo omitido se ve al volver a abrir y no redibuja la pantalla al marcarlo', async () => {
+    await abrir();
+    const kg = campo('e1', 1, 'kg');
+    omitir('e1', 2).click();
+    await esperar();
+    expect(campo('e1', 1, 'kg')).toBe(kg);
+
+    await abrir();
+    expect(omitir('e1', 2).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('en modo lectura se ve lo omitido pero no se puede cambiar', async () => {
+    await repo.guardarRegistro(ALUMNO.id, { e1: { 1: { kg: '', reps: '', done: false, skipped: true } } });
+    await abrir({ soloLectura: true });
+
+    expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('true');
+    expect($$('[data-click="alumnoOmitir"]').every((b) => b.disabled)).toBe(true);
+
+    omitir('e1', 1).disabled = false; // como desde las herramientas del navegador
+    omitir('e1', 1).click();
+    await esperar();
+    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].skipped).toBe(true); // sigue igual
+  });
+});

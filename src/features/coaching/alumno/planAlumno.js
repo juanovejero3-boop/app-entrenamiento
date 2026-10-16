@@ -82,6 +82,8 @@ const claseChip = (activa) =>
 const claseBotonChico =
   'text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed transition';
 const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
+const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
+const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
 const claseInput =
   'w-full bg-black border border-gray-700 rounded-lg py-2 text-center text-sm text-white outline-none focus:border-neonRed disabled:opacity-60';
 
@@ -166,17 +168,18 @@ function dibujarPlan() {
 function dibujarDia(dia) {
   const bloques = dia.blocks.filter((b) => b.exercises.length);
   if (!bloques.length) return '<p class="text-sm text-gray-500 italic">Sin ejercicios cargados.</p>';
-  const { hechas, total } = progresoDelDia(dia, vista.registro);
+  const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
   return `
     <div class="space-y-1">
-      <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-400">${textoProgreso(hechas, total)}</p>
+      <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-400">${textoProgreso(hechas, omitidas, total)}</p>
       <div class="h-1.5 bg-gray-800 rounded"><div data-progreso-barra class="h-1.5 bg-emerald-500 rounded transition-all" style="width: ${porcentaje(hechas, total)}%"></div></div>
     </div>
     ${bloques.map(dibujarBloque).join('')}
   `;
 }
 
-const textoProgreso = (hechas, total) => `${hechas} / ${total} series`;
+const textoProgreso = (hechas, omitidas, total) =>
+  `${hechas} / ${total} series${omitidas ? ` · ${omitidas} ${omitidas === 1 ? 'omitida' : 'omitidas'}` : ''}`;
 const porcentaje = (hechas, total) => (total ? Math.round((hechas / total) * 100) : 0);
 
 function dibujarBloque(bloque) {
@@ -222,16 +225,17 @@ function dibujarSeries(ej) {
     const serie = serieDe(vista.registro, ej.id, n);
     const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
     return `
-      <div data-serie="${esc(ej.id)}-${n}" class="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center">
+      <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
         <span class="text-center text-xs font-bold text-gray-500">${n}</span>
         <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}" aria-label="Kg de la serie ${n}">
         <input data-change="alumnoSerie" ${pos} data-campo="reps" type="text" inputmode="numeric" placeholder="${esc(ej.reps || '-')}" value="${esc(serie.reps)}" ${dis} class="${claseInput}" aria-label="Repeticiones de la serie ${n}">
         <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
+        <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>
       </div>`;
   }).join('');
   return `
     <div class="space-y-2">
-      <div class="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 text-center text-[10px] font-bold uppercase text-gray-500"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span></div>
+      <div class="grid ${COLUMNAS} gap-1.5 text-center text-[10px] font-bold uppercase text-gray-500"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span><span>No</span></div>
       ${filas}
     </div>
   `;
@@ -247,15 +251,31 @@ function actualizarProgreso() {
   const dia = plan.weeks[w].days[d];
   const texto = content.querySelector('[data-progreso]');
   if (!dia || !texto) return;
-  const { hechas, total } = progresoDelDia(dia, registro);
-  texto.textContent = textoProgreso(hechas, total);
+  const { hechas, omitidas, total } = progresoDelDia(dia, registro);
+  texto.textContent = textoProgreso(hechas, omitidas, total);
   const barra = content.querySelector('[data-progreso-barra]');
   if (barra) barra.style.width = `${porcentaje(hechas, total)}%`;
+}
+
+/** Pinta los botones de hecha / no la hice de una serie según el registro (sin redibujar el resto). */
+function pintarEstadoDeSerie(ejercicioId, numero) {
+  const fila = [...vista.content.querySelectorAll('[data-serie]')].find(
+    (f) => f.dataset.serie === `${ejercicioId}-${numero}`,
+  );
+  if (!fila) return;
+  const { done, skipped } = serieDe(vista.registro, ejercicioId, numero);
+  const check = fila.querySelector('[data-click="alumnoCheck"]');
+  const omitir = fila.querySelector('[data-click="alumnoOmitir"]');
+  check.setAttribute('aria-pressed', String(done));
+  check.className = `${claseCheck(done)} disabled:opacity-60`;
+  omitir.setAttribute('aria-pressed', String(skipped));
+  omitir.className = `${claseOmitir(skipped)} disabled:opacity-60`;
 }
 
 async function anotarSerie(ejercicioId, numero, cambios) {
   if (!vista || vista.soloLectura) return;
   vista.registro = actualizarSerie(vista.registro, ejercicioId, numero, cambios);
+  pintarEstadoDeSerie(ejercicioId, numero);
   actualizarProgreso();
   try {
     await repo.guardarRegistro(vista.alumno.id, vista.registro);
@@ -265,12 +285,11 @@ async function anotarSerie(ejercicioId, numero, cambios) {
   }
 }
 
-function alternarCheck(boton) {
+/** Hecha / "no la hice": tocar el estado activo lo vuelve a pendiente. */
+function alternarEstado(boton, campo) {
   const { e, n } = boton.dataset;
-  const hecha = !serieDe(vista.registro, e, Number(n)).done;
-  boton.setAttribute('aria-pressed', String(hecha));
-  boton.className = `${claseCheck(hecha)} disabled:opacity-60`;
-  return anotarSerie(e, Number(n), { done: hecha });
+  const activa = serieDe(vista.registro, e, Number(n))[campo];
+  return anotarSerie(e, Number(n), { [campo]: !activa });
 }
 
 registrarAcciones({
@@ -287,6 +306,7 @@ registrarAcciones({
     dibujar();
   },
   alumnoSerie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
-  alumnoCheck: (el) => (vista && !vista.soloLectura ? alternarCheck(el) : undefined),
+  alumnoCheck: (el) => (vista ? alternarEstado(el, 'done') : undefined),
+  alumnoOmitir: (el) => (vista ? alternarEstado(el, 'skipped') : undefined),
   alumnoPdf: (el) => (vista?.plan ? mostrarPdf(el.dataset.tipo, vista.plan, vista.alumno) : undefined),
 });
