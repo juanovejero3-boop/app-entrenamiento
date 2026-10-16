@@ -24,15 +24,17 @@ import {
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
 
 /**
- * @type {{
+ * @typedef {{
  *   content: HTMLElement, alumno: { id: string, name?: string, email?: string }, cicloId: string | null,
  *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento | null,
  *   registro: import('./registro.js').Registro, sesiones: import('./sesiones.js').Sesiones, hoy: string,
  *   soloLectura: boolean, alVolver: (() => void) | null,
  *   w: number, d: number, videos: Map<string, string>
- * } | null}
+ * }} VistaDelPlan
  */
-let vista = null;
+
+/** Una instancia de la vista por contenedor (así se pueden mostrar varios ciclos a la vez). */
+const instancias = new WeakMap();
 
 let catalogoVideos = null;
 
@@ -72,7 +74,7 @@ export async function abrirPlanAlumno(
     : [{}, {}];
   const plan = ciclo?.plan.weeks.length ? ciclo.plan : null;
   const videos = plan ? await cargarVideos() : new Map();
-  vista = {
+  const vista = {
     content,
     alumno,
     cicloId: ciclo?.id ?? null,
@@ -86,76 +88,86 @@ export async function abrirPlanAlumno(
     d: 0,
     videos,
   };
-  dibujar();
+  content.dataset.planAlumno = 'true';
+  const instancia = crearVista(vista);
+  instancias.set(content, instancia);
+  instancia.dibujar();
   return Boolean(plan);
 }
 
-// ---------------------------------------------------------------------------
-// Vista
-// ---------------------------------------------------------------------------
+/**
+ * Arma la vista de un contenedor: dibuja y atiende las acciones sobre su propio estado.
+ * @param {VistaDelPlan} vista
+ */
+function crearVista(vista) {
+  // ---------------------------------------------------------------------------
+  // Vista
+  // ---------------------------------------------------------------------------
 
-const claseChip = (activa) =>
-  `shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition ${
-    activa ? 'bg-neonRed border-neonRed text-white' : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
-  }`;
-const claseBotonChico =
-  'text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed transition';
-const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
-const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
-const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
-const claseInput =
-  'w-full bg-black border border-gray-700 rounded-lg py-2 text-center text-sm text-white outline-none focus:border-neonRed disabled:opacity-60';
+  const claseChip = (activa) =>
+    `shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition ${
+      activa
+        ? 'bg-neonRed border-neonRed text-white'
+        : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
+    }`;
+  const claseBotonChico =
+    'text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed transition';
+  const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
+  const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
+  const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
+  const claseInput =
+    'w-full bg-black border border-gray-700 rounded-lg py-2 text-center text-sm text-white outline-none focus:border-neonRed disabled:opacity-60';
 
-function dibujar() {
-  const { content, plan, soloLectura } = vista;
-  content.innerHTML = `
+  function dibujar() {
+    const { content, plan, soloLectura } = vista;
+    content.innerHTML = `
     <div class="space-y-4">
       ${soloLectura || vista.alVolver ? dibujarBarraSuperior() : ''}
       ${plan ? dibujarPlan() : dibujarSinPlan()}
     </div>
   `;
-}
+  }
 
-/** Botón Volver (si hay a dónde volver) y, en modo lectura del coach, el aviso de que no se puede anotar. */
-function dibujarBarraSuperior() {
-  const { alVolver, alumno, soloLectura } = vista;
-  const volver = alVolver
-    ? `<button data-click="alumnoVolver" class="text-gray-300 hover:text-neonRed" title="Volver"><i class="fa-solid fa-arrow-left"></i></button>`
-    : '';
-  return soloLectura
-    ? `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
+  /** Botón Volver (si hay a dónde volver) y, en modo lectura del coach, el aviso de que no se puede anotar. */
+  function dibujarBarraSuperior() {
+    const { alVolver, alumno, soloLectura } = vista;
+    const volver = alVolver
+      ? `<button data-click="alumnoVolver" class="text-gray-300 hover:text-neonRed" title="Volver"><i class="fa-solid fa-arrow-left"></i></button>`
+      : '';
+    return soloLectura
+      ? `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
         ${volver}
         <p><b class="uppercase tracking-wide">Modo lectura</b> · Así ve el plan ${esc(nombreDelAlumno(alumno))}. Desde acá no se puede anotar.</p>
       </div>`
-    : `<div class="flex items-center gap-3 text-xs text-gray-400">${volver}<span class="uppercase tracking-wide font-bold">Mi plan</span></div>`;
-}
+      : `<div class="flex items-center gap-3 text-xs text-gray-400">${volver}<span class="uppercase tracking-wide font-bold">Mi plan</span></div>`;
+  }
 
-function dibujarSinPlan() {
-  const mensaje = vista.soloLectura
-    ? 'Este alumno todavía no tiene un plan armado en la app.'
-    : 'Tu entrenador todavía no cargó tu plan en la app.';
-  return `
+  function dibujarSinPlan() {
+    const mensaje = vista.soloLectura
+      ? 'Este alumno todavía no tiene un plan armado en la app.'
+      : 'Tu entrenador todavía no cargó tu plan en la app.';
+    return `
     <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 text-center text-sm text-gray-400">
       <i class="fa-solid fa-dumbbell text-2xl text-neonRed mb-2 block"></i>${mensaje}
     </div>
   `;
-}
+  }
 
-const tieneLineamientos = ({ objective, priorities, focus, evaluation, guidelines }) =>
-  Boolean(objective || focus || evaluation || guidelines || priorities.some((p) => p.target || p.progression));
+  const tieneLineamientos = ({ objective, priorities, focus, evaluation, guidelines }) =>
+    Boolean(objective || focus || evaluation || guidelines || priorities.some((p) => p.target || p.progression));
 
-function dibujarPlan() {
-  const { plan, w, d } = vista;
-  const semana = plan.weeks[w];
-  const rango = rangoDelPlan(plan);
-  const n = plan.weeks.length;
-  const meta = [
-    semana.objective && `Fase: ${semana.objective}`,
-    semana.targetVolume && `Volumen: ${semana.targetVolume}`,
-  ]
-    .filter(Boolean)
-    .join('  ·  ');
-  return `
+  function dibujarPlan() {
+    const { plan, w, d } = vista;
+    const semana = plan.weeks[w];
+    const rango = rangoDelPlan(plan);
+    const n = plan.weeks.length;
+    const meta = [
+      semana.objective && `Fase: ${semana.objective}`,
+      semana.targetVolume && `Volumen: ${semana.targetVolume}`,
+    ]
+      .filter(Boolean)
+      .join('  ·  ');
+    return `
     <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
       <div>
         <h2 class="text-lg font-black text-white uppercase tracking-wide">${esc(plan.macroName)}</h2>
@@ -200,15 +212,15 @@ function dibujarPlan() {
         : '<p class="text-sm text-gray-500 italic">Sin días cargados.</p>'
     }
   `;
-}
+  }
 
-function dibujarDia(dia) {
-  const bloques = dia.blocks.filter((b) => b.exercises.length);
-  if (!bloques.length) return '<p class="text-sm text-gray-500 italic">Sin ejercicios cargados.</p>';
-  const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
-  const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
-  const sesion = sesionDe(vista.sesiones, dia.id);
-  return `
+  function dibujarDia(dia) {
+    const bloques = dia.blocks.filter((b) => b.exercises.length);
+    if (!bloques.length) return '<p class="text-sm text-gray-500 italic">Sin ejercicios cargados.</p>';
+    const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
+    const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
+    const sesion = sesionDe(vista.sesiones, dia.id);
+    return `
     ${sesion ? dibujarSesionTerminada(sesion) : vista.soloLectura ? '<p data-sin-terminar class="text-xs text-gray-500 italic">Sesión sin terminar.</p>' : ''}
     <div class="space-y-1">
       <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-400">${textoProgreso(hechas, omitidas, total)}</p>
@@ -220,39 +232,39 @@ function dibujarDia(dia) {
     ${bloques.map(dibujarBloque).join('')}
     ${sesion || vista.soloLectura ? '' : dibujarCierreDeSesion()}
   `;
-}
+  }
 
-const textoProgreso = (hechas, omitidas, total) =>
-  `${hechas} / ${total} series${omitidas ? ` · ${omitidas} ${omitidas === 1 ? 'omitida' : 'omitidas'}` : ''}`;
-const porcentaje = (parte, total) => (total ? Math.round((parte / total) * 100) : 0);
+  const textoProgreso = (hechas, omitidas, total) =>
+    `${hechas} / ${total} series${omitidas ? ` · ${omitidas} ${omitidas === 1 ? 'omitida' : 'omitidas'}` : ''}`;
+  const porcentaje = (parte, total) => (total ? Math.round((parte / total) * 100) : 0);
 
-/** Anchos (en %) de las dos partes de la barra: hechas en verde y omitidas en rojo a continuación. */
-function anchosDeBarra(hechas, omitidas, total) {
-  const verde = porcentaje(hechas, total);
-  return { verde, rojo: Math.min(porcentaje(omitidas, total), 100 - verde) }; // el redondeo no pasa del 100 %
-}
+  /** Anchos (en %) de las dos partes de la barra: hechas en verde y omitidas en rojo a continuación. */
+  function anchosDeBarra(hechas, omitidas, total) {
+    const verde = porcentaje(hechas, total);
+    return { verde, rojo: Math.min(porcentaje(omitidas, total), 100 - verde) }; // el redondeo no pasa del 100 %
+  }
 
-const formatearFecha = (fecha) => fecha.split('-').reverse().join('/');
+  const formatearFecha = (fecha) => fecha.split('-').reverse().join('/');
 
-function dibujarSesionTerminada(sesion) {
-  const noEntrenado = sesion.estado === 'omitida';
-  const marca = noEntrenado ? 'data-dia-no-entrenado' : 'data-sesion-terminada';
-  const colores = noEntrenado
-    ? 'bg-red-950/30 border-red-900 text-red-200'
-    : 'bg-emerald-950/30 border-emerald-800 text-emerald-200';
-  const titulo = noEntrenado
-    ? '<i class="fa-solid fa-circle-xmark mr-1"></i><b class="uppercase tracking-wide">Día no entrenado</b>'
-    : '<i class="fa-solid fa-circle-check mr-1"></i><b class="uppercase tracking-wide">Sesión terminada</b>';
-  return `
+  function dibujarSesionTerminada(sesion) {
+    const noEntrenado = sesion.estado === 'omitida';
+    const marca = noEntrenado ? 'data-dia-no-entrenado' : 'data-sesion-terminada';
+    const colores = noEntrenado
+      ? 'bg-red-950/30 border-red-900 text-red-200'
+      : 'bg-emerald-950/30 border-emerald-800 text-emerald-200';
+    const titulo = noEntrenado
+      ? '<i class="fa-solid fa-circle-xmark mr-1"></i><b class="uppercase tracking-wide">Día no entrenado</b>'
+      : '<i class="fa-solid fa-circle-check mr-1"></i><b class="uppercase tracking-wide">Sesión terminada</b>';
+    return `
     <div ${marca} class="${colores} border rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
       <p>${titulo} el ${esc(formatearFecha(sesion.fecha))}</p>
       ${vista.soloLectura ? '' : `<button data-click="alumnoReabrir" class="${claseBotonChico}">Reabrir sesión</button>`}
     </div>
   `;
-}
+  }
 
-function dibujarCierreDeSesion() {
-  return `
+  function dibujarCierreDeSesion() {
+    return `
     <div class="bg-cyberCard rounded-xl border border-gray-800 p-3 space-y-3">
       <label class="flex items-center justify-between gap-2 text-xs text-gray-400">Fecha de la sesión
         <input type="date" data-fecha-sesion value="${esc(vista.hoy)}" max="${esc(vista.hoy)}" class="bg-black border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-neonRed">
@@ -261,29 +273,29 @@ function dibujarCierreDeSesion() {
       <button data-click="alumnoNoEntrene" class="w-full py-2.5 bg-black border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider"><i class="fa-solid fa-xmark mr-2"></i>No entrené este día</button>
     </div>
   `;
-}
+  }
 
-function dibujarBloque(bloque) {
-  const tipo = TIPOS_BLOQUE[bloque.type] ?? { label: bloque.type, color: '#888' };
-  const etiquetas = etiquetasSuperserie(bloque);
-  return `
+  function dibujarBloque(bloque) {
+    const tipo = TIPOS_BLOQUE[bloque.type] ?? { label: bloque.type, color: '#888' };
+    const etiquetas = etiquetasSuperserie(bloque);
+    return `
     <section class="space-y-2">
       <h3 class="text-[11px] font-black uppercase tracking-wider pl-2 border-l-4" style="color: ${esc(tipo.color)}; border-color: ${esc(tipo.color)}">${esc(tipo.label)}</h3>
       ${bloque.exercises.map((ej, i) => dibujarEjercicio(ej, etiquetas[i])).join('')}
     </section>
   `;
-}
+  }
 
-function dibujarEjercicio(ej, etiqueta) {
-  const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
-  const video = vista.videos.get(ej.name.trim().toLowerCase());
-  const insignias = [
-    ej.reps && `Reps ${ej.reps}`,
-    ej.intensityValue && `${ej.intensityType} ${ej.intensityValue}`,
-    ej.rest && `Descanso ${ej.rest}`,
-    ej.tech,
-  ].filter(Boolean);
-  return `
+  function dibujarEjercicio(ej, etiqueta) {
+    const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
+    const video = vista.videos.get(ej.name.trim().toLowerCase());
+    const insignias = [
+      ej.reps && `Reps ${ej.reps}`,
+      ej.intensityValue && `${ej.intensityType} ${ej.intensityValue}`,
+      ej.rest && `Descanso ${ej.rest}`,
+      ej.tech,
+    ].filter(Boolean);
+    return `
     <article data-ejercicio="${esc(ej.id)}" class="bg-cyberCard rounded-xl border p-3 space-y-2 ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${esc(color)}"` : ''}>
       <div class="flex items-start gap-2">
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(etiqueta)}</span>` : ''}
@@ -297,15 +309,15 @@ function dibujarEjercicio(ej, etiqueta) {
       ${dibujarSeries(ej)}
     </article>
   `;
-}
+  }
 
-function dibujarSeries(ej) {
-  const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
-  const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => {
-    const n = i + 1;
-    const serie = serieDe(vista.registro, ej.id, n);
-    const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
-    return `
+  function dibujarSeries(ej) {
+    const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
+    const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => {
+      const n = i + 1;
+      const serie = serieDe(vista.registro, ej.id, n);
+      const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
+      return `
       <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
         <span class="text-center text-xs font-bold text-gray-500">${n}</span>
         <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}" aria-label="Kg de la serie ${n}">
@@ -313,166 +325,182 @@ function dibujarSeries(ej) {
         <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
         <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>
       </div>`;
-  }).join('');
-  return `
+    }).join('');
+    return `
     <div class="space-y-2">
       <div class="grid ${COLUMNAS} gap-1.5 text-center text-[10px] font-bold uppercase text-gray-500"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span><span>No</span></div>
       ${filas}
     </div>
   `;
-}
-
-// ---------------------------------------------------------------------------
-// Registro de series
-// ---------------------------------------------------------------------------
-
-/** Actualiza el texto y la barra de progreso del día mostrado, sin redibujar nada más. */
-function actualizarProgreso() {
-  const { content, plan, w, d, registro } = vista;
-  const dia = plan.weeks[w].days[d];
-  const texto = content.querySelector('[data-progreso]');
-  if (!dia || !texto) return;
-  const { hechas, omitidas, total } = progresoDelDia(dia, registro);
-  texto.textContent = textoProgreso(hechas, omitidas, total);
-  const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
-  const barraVerde = content.querySelector('[data-progreso-barra]');
-  if (barraVerde) barraVerde.style.width = `${verde}%`;
-  const barraRoja = content.querySelector('[data-progreso-omitidas]');
-  if (barraRoja) barraRoja.style.width = `${rojo}%`;
-}
-
-/** Pinta los botones de hecha / no la hice de una serie según el registro (sin redibujar el resto). */
-function pintarEstadoDeSerie(ejercicioId, numero) {
-  const fila = [...vista.content.querySelectorAll('[data-serie]')].find(
-    (f) => f.dataset.serie === `${ejercicioId}-${numero}`,
-  );
-  if (!fila) return;
-  const { done, skipped } = serieDe(vista.registro, ejercicioId, numero);
-  const check = fila.querySelector('[data-click="alumnoCheck"]');
-  const omitir = fila.querySelector('[data-click="alumnoOmitir"]');
-  check.setAttribute('aria-pressed', String(done));
-  check.className = `${claseCheck(done)} disabled:opacity-60`;
-  omitir.setAttribute('aria-pressed', String(skipped));
-  omitir.className = `${claseOmitir(skipped)} disabled:opacity-60`;
-}
-
-const diaActual = () => vista.plan.weeks[vista.w].days[vista.d];
-const diaTerminado = () => Boolean(sesionDe(vista.sesiones, diaActual()?.id));
-
-async function anotarSerie(ejercicioId, numero, cambios) {
-  if (!vista || vista.soloLectura || diaTerminado()) return;
-  vista.registro = actualizarSerie(vista.registro, ejercicioId, numero, cambios);
-  pintarEstadoDeSerie(ejercicioId, numero);
-  actualizarProgreso();
-  try {
-    await repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro);
-  } catch (error) {
-    console.error('No se pudo guardar el registro', error);
-    toast('No se pudo guardar: ' + error.message, false);
   }
-}
 
-/** Hecha / "no la hice": tocar el estado activo lo vuelve a pendiente. */
-function alternarEstado(boton, campo) {
-  const { e, n } = boton.dataset;
-  const activa = serieDe(vista.registro, e, Number(n))[campo];
-  return anotarSerie(e, Number(n), { [campo]: !activa });
-}
+  // ---------------------------------------------------------------------------
+  // Registro de series
+  // ---------------------------------------------------------------------------
 
-/** Guarda las sesiones (y el registro si cambió); si no se puede, avisa en lugar de perder el dato. */
-async function guardarSesionYRegistro({ conRegistro }) {
-  try {
-    await Promise.all([
-      conRegistro ? repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro) : null,
-      repo.guardarSesionesDelCiclo(vista.cicloId, vista.sesiones),
-    ]);
-  } catch (error) {
-    console.error('No se pudo guardar la sesion', error);
-    toast('No se pudo guardar: ' + error.message, false);
+  /** Actualiza el texto y la barra de progreso del día mostrado, sin redibujar nada más. */
+  function actualizarProgreso() {
+    const { content, plan, w, d, registro } = vista;
+    const dia = plan.weeks[w].days[d];
+    const texto = content.querySelector('[data-progreso]');
+    if (!dia || !texto) return;
+    const { hechas, omitidas, total } = progresoDelDia(dia, registro);
+    texto.textContent = textoProgreso(hechas, omitidas, total);
+    const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
+    const barraVerde = content.querySelector('[data-progreso-barra]');
+    if (barraVerde) barraVerde.style.width = `${verde}%`;
+    const barraRoja = content.querySelector('[data-progreso-omitidas]');
+    if (barraRoja) barraRoja.style.width = `${rojo}%`;
   }
-}
 
-/** La fecha elegida para cerrar el día, o null (avisando) si falta o es futura. */
-function fechaElegida() {
-  const fecha = vista.content.querySelector('[data-fecha-sesion]')?.value ?? '';
-  if (!fecha) return void window.alert('Elegí la fecha de la sesión.');
-  if (fecha > vista.hoy) return void window.alert('La fecha de la sesión no puede ser futura.');
-  return fecha;
-}
+  /** Pinta los botones de hecha / no la hice de una serie según el registro (sin redibujar el resto). */
+  function pintarEstadoDeSerie(ejercicioId, numero) {
+    const fila = [...vista.content.querySelectorAll('[data-serie]')].find(
+      (f) => f.dataset.serie === `${ejercicioId}-${numero}`,
+    );
+    if (!fila) return;
+    const { done, skipped } = serieDe(vista.registro, ejercicioId, numero);
+    const check = fila.querySelector('[data-click="alumnoCheck"]');
+    const omitir = fila.querySelector('[data-click="alumnoOmitir"]');
+    check.setAttribute('aria-pressed', String(done));
+    check.className = `${claseCheck(done)} disabled:opacity-60`;
+    omitir.setAttribute('aria-pressed', String(skipped));
+    omitir.className = `${claseOmitir(skipped)} disabled:opacity-60`;
+  }
 
-/** Termina el día con la fecha elegida; las series sin marcar pasan a omitidas (con confirmación). */
-async function terminarDia() {
-  if (!vista || vista.soloLectura) return;
-  const dia = diaActual();
-  const fecha = fechaElegida();
-  if (!fecha) return;
+  const diaActual = () => vista.plan.weeks[vista.w].days[vista.d];
+  const diaTerminado = () => Boolean(sesionDe(vista.sesiones, diaActual()?.id));
 
-  const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
-  const pendientes = total - hechas - omitidas;
-  if (pendientes > 0) {
+  async function anotarSerie(ejercicioId, numero, cambios) {
+    if (vista.soloLectura || diaTerminado()) return;
+    vista.registro = actualizarSerie(vista.registro, ejercicioId, numero, cambios);
+    pintarEstadoDeSerie(ejercicioId, numero);
+    actualizarProgreso();
+    try {
+      await repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro);
+    } catch (error) {
+      console.error('No se pudo guardar el registro', error);
+      toast('No se pudo guardar: ' + error.message, false);
+    }
+  }
+
+  /** Hecha / "no la hice": tocar el estado activo lo vuelve a pendiente. */
+  function alternarEstado(boton, campo) {
+    const { e, n } = boton.dataset;
+    const activa = serieDe(vista.registro, e, Number(n))[campo];
+    return anotarSerie(e, Number(n), { [campo]: !activa });
+  }
+
+  /** Guarda las sesiones (y el registro si cambió); si no se puede, avisa en lugar de perder el dato. */
+  async function guardarSesionYRegistro({ conRegistro }) {
+    try {
+      await Promise.all([
+        conRegistro ? repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro) : null,
+        repo.guardarSesionesDelCiclo(vista.cicloId, vista.sesiones),
+      ]);
+    } catch (error) {
+      console.error('No se pudo guardar la sesion', error);
+      toast('No se pudo guardar: ' + error.message, false);
+    }
+  }
+
+  /** La fecha elegida para cerrar el día, o null (avisando) si falta o es futura. */
+  function fechaElegida() {
+    const fecha = vista.content.querySelector('[data-fecha-sesion]')?.value ?? '';
+    if (!fecha) return void window.alert('Elegí la fecha de la sesión.');
+    if (fecha > vista.hoy) return void window.alert('La fecha de la sesión no puede ser futura.');
+    return fecha;
+  }
+
+  /** Termina el día con la fecha elegida; las series sin marcar pasan a omitidas (con confirmación). */
+  async function terminarDia() {
+    if (vista.soloLectura) return;
+    const dia = diaActual();
+    const fecha = fechaElegida();
+    if (!fecha) return;
+
+    const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
+    const pendientes = total - hechas - omitidas;
+    if (pendientes > 0) {
+      const ok = await window.confirm(
+        `Quedan ${pendientes} ${pendientes === 1 ? 'serie' : 'series'} sin marcar. Si terminás la sesión se marcan como omitidas. ¿Terminar igual?`,
+      );
+      if (!ok) return;
+    }
+    try {
+      vista.sesiones = terminarSesion(vista.sesiones, dia.id, { fecha, terminadaEn: new Date().toISOString() });
+    } catch {
+      return window.alert('La fecha de la sesión no es válida.');
+    }
+    vista.registro = pasarPendientesAOmitidas(dia, vista.registro);
+    dibujar();
+    await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
+  }
+
+  /** Marca el día como no entrenado en la fecha elegida: todas sus series pasan a omitidas. */
+  async function noEntrenarDia() {
+    if (vista.soloLectura) return;
+    const dia = diaActual();
+    const fecha = fechaElegida();
+    if (!fecha) return;
+
+    const { total } = progresoDelDia(dia, vista.registro);
     const ok = await window.confirm(
-      `Quedan ${pendientes} ${pendientes === 1 ? 'serie' : 'series'} sin marcar. Si terminás la sesión se marcan como omitidas. ¿Terminar igual?`,
+      `Vas a marcar este día como no entrenado: ${total === 1 ? 'la serie pasa' : `las ${total} series pasan`} a omitidas. ¿Seguro?`,
     );
     if (!ok) return;
+    vista.sesiones = terminarSesion(vista.sesiones, dia.id, {
+      fecha,
+      terminadaEn: new Date().toISOString(),
+      estado: 'omitida',
+    });
+    vista.registro = omitirTodasLasSeries(dia, vista.registro);
+    dibujar();
+    await guardarSesionYRegistro({ conRegistro: true });
   }
-  try {
-    vista.sesiones = terminarSesion(vista.sesiones, dia.id, { fecha, terminadaEn: new Date().toISOString() });
-  } catch {
-    return window.alert('La fecha de la sesión no es válida.');
+
+  /** Vuelve a abrir un día terminado para seguir anotando (lo omitido automáticamente sigue omitido). */
+  async function reabrirDia() {
+    if (vista.soloLectura) return;
+    vista.sesiones = reabrirSesion(vista.sesiones, diaActual().id);
+    dibujar();
+    await guardarSesionYRegistro({ conRegistro: false });
   }
-  vista.registro = pasarPendientesAOmitidas(dia, vista.registro);
-  dibujar();
-  await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
+
+  return {
+    dibujar,
+    volver: () => vista.alVolver?.(),
+    semana: (el) => {
+      vista.w = Number(el.dataset.w);
+      vista.d = 0;
+      dibujar();
+    },
+    dia: (el) => {
+      vista.d = Number(el.dataset.d);
+      dibujar();
+    },
+    serie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
+    check: (el) => alternarEstado(el, 'done'),
+    omitir: (el) => alternarEstado(el, 'skipped'),
+    terminar: terminarDia,
+    noEntrene: noEntrenarDia,
+    reabrir: reabrirDia,
+    pdf: (el) => (vista.plan ? mostrarPdf(el.dataset.tipo, vista.plan, vista.alumno) : undefined),
+  };
 }
 
-/** Marca el día como no entrenado en la fecha elegida: todas sus series pasan a omitidas. */
-async function noEntrenarDia() {
-  if (!vista || vista.soloLectura) return;
-  const dia = diaActual();
-  const fecha = fechaElegida();
-  if (!fecha) return;
-
-  const { total } = progresoDelDia(dia, vista.registro);
-  const ok = await window.confirm(
-    `Vas a marcar este día como no entrenado: ${total === 1 ? 'la serie pasa' : `las ${total} series pasan`} a omitidas. ¿Seguro?`,
-  );
-  if (!ok) return;
-  vista.sesiones = terminarSesion(vista.sesiones, dia.id, {
-    fecha,
-    terminadaEn: new Date().toISOString(),
-    estado: 'omitida',
-  });
-  vista.registro = omitirTodasLasSeries(dia, vista.registro);
-  dibujar();
-  await guardarSesionYRegistro({ conRegistro: true });
-}
-
-/** Vuelve a abrir un día terminado para seguir anotando (lo omitido automáticamente sigue omitido). */
-async function reabrirDia() {
-  if (!vista || vista.soloLectura) return;
-  vista.sesiones = reabrirSesion(vista.sesiones, diaActual().id);
-  dibujar();
-  await guardarSesionYRegistro({ conRegistro: false });
-}
+/** La instancia a la que pertenece el elemento tocado. */
+const instanciaDe = (el) => instancias.get(el.closest('[data-plan-alumno]'));
 
 registrarAcciones({
-  alumnoVolver: () => vista?.alVolver?.(),
-  alumnoSemana: (el) => {
-    if (!vista) return;
-    vista.w = Number(el.dataset.w);
-    vista.d = 0;
-    dibujar();
-  },
-  alumnoDia: (el) => {
-    if (!vista) return;
-    vista.d = Number(el.dataset.d);
-    dibujar();
-  },
-  alumnoSerie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
-  alumnoCheck: (el) => (vista ? alternarEstado(el, 'done') : undefined),
-  alumnoOmitir: (el) => (vista ? alternarEstado(el, 'skipped') : undefined),
-  alumnoTerminar: () => terminarDia(),
-  alumnoNoEntrene: () => noEntrenarDia(),
-  alumnoReabrir: () => reabrirDia(),
-  alumnoPdf: (el) => (vista?.plan ? mostrarPdf(el.dataset.tipo, vista.plan, vista.alumno) : undefined),
+  alumnoVolver: (el) => instanciaDe(el)?.volver(),
+  alumnoSemana: (el) => instanciaDe(el)?.semana(el),
+  alumnoDia: (el) => instanciaDe(el)?.dia(el),
+  alumnoSerie: (el) => instanciaDe(el)?.serie(el),
+  alumnoCheck: (el) => instanciaDe(el)?.check(el),
+  alumnoOmitir: (el) => instanciaDe(el)?.omitir(el),
+  alumnoTerminar: (el) => instanciaDe(el)?.terminar(),
+  alumnoNoEntrene: (el) => instanciaDe(el)?.noEntrene(),
+  alumnoReabrir: (el) => instanciaDe(el)?.reabrir(),
+  alumnoPdf: (el) => instanciaDe(el)?.pdf(el),
 });
