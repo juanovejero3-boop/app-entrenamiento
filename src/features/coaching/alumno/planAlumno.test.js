@@ -409,3 +409,265 @@ describe('vista del alumno: botón Volver', () => {
     expect($$('[data-change="alumnoSerie"]').some((i) => i.disabled)).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Terminar sesión
+// ---------------------------------------------------------------------------
+
+/** Responde el modal de confirmación de la app (Confirmar / Cancelar) y devuelve su texto. */
+async function responderConfirmacion(acepta) {
+  const modal = document.getElementById('app-modal-overlay-aux');
+  const texto = modal.textContent;
+  modal.querySelector(`[data-click="resolverModal"][data-valor="${acepta}"]`).click();
+  await esperar();
+  return texto;
+}
+const textoDelAviso = () => document.getElementById('app-modal-overlay-aux')?.textContent ?? '';
+
+/** El primer día con un solo ejercicio de 1 serie (para terminarlo sin series pendientes). */
+function planDeUnaSerie() {
+  const plan = planCompleto();
+  plan.weeks[0].days[0].blocks[0].exercises = [{ ...plan.weeks[0].days[0].blocks[0].exercises[0], sets: '1' }];
+  return plan;
+}
+const fechaDeSesion = () => $('[data-fecha-sesion]');
+const terminar = async () => {
+  $('[data-click="alumnoTerminar"]').click();
+  await esperar();
+};
+const barra = () => ({
+  hechas: $('[data-progreso-barra]').style.width,
+  omitidas: $('[data-progreso-omitidas]').style.width,
+});
+
+describe('vista del alumno: terminar sesión', () => {
+  beforeEach(() => guardarPlan());
+
+  it('cada día con ejercicios tiene un botón "Terminar sesión" y una fecha que arranca en hoy', async () => {
+    await abrir();
+    expect($('[data-click="alumnoTerminar"]').textContent).toContain('Terminar sesión');
+    expect(fechaDeSesion().value).toBe(SEMANA_1);
+    expect(fechaDeSesion().max).toBe(SEMANA_1); // no deja elegir una fecha futura
+  });
+
+  it('un día sin ejercicios no tiene botón para terminar', async () => {
+    await abrir();
+    $('[data-click="alumnoDia"][data-d="1"]').click();
+    expect($('[data-click="alumnoTerminar"]')).toBeNull();
+  });
+
+  it('sin series pendientes termina directo: guarda el día con su fecha y lo muestra terminado', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+
+    await terminar();
+
+    expect(document.getElementById('app-modal-overlay-aux')).toBeNull(); // no pidió confirmación
+    const sesion = (await repo.cargarSesiones(ALUMNO.id)).d1;
+    expect(sesion.fecha).toBe(SEMANA_1);
+    expect(sesion.terminadaEn).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    expect($('[data-sesion-terminada]').textContent).toContain('20/10/2026');
+    expect($('[data-click="alumnoTerminar"]')).toBeNull();
+  });
+
+  it('con series sin marcar pide confirmación; si se cancela no cambia nada', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+
+    await terminar();
+    const pregunta = await responderConfirmacion(false);
+
+    expect(pregunta).toContain('Quedan 10 series sin marcar');
+    expect(pregunta).toContain('omitidas');
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect($('[data-progreso]').textContent).toBe('1 / 11 series');
+  });
+
+  it('si se confirma, las pendientes pasan a omitidas y la sesión queda terminada', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+
+    await terminar();
+    await responderConfirmacion(true);
+
+    const registro = await repo.cargarRegistro(ALUMNO.id);
+    expect(registro.e1[1]).toMatchObject({ done: true, skipped: false }); // lo hecho sigue hecho
+    expect(registro.e1[2]).toMatchObject({ done: false, skipped: true });
+    expect(registro.e3[3]).toMatchObject({ skipped: true });
+    expect($('[data-progreso]').textContent).toBe('1 / 11 series · 10 omitidas');
+    expect((await repo.cargarSesiones(ALUMNO.id)).d1.fecha).toBe(SEMANA_1);
+  });
+
+  it('la fecha se puede cambiar a un día anterior', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+
+    fechaDeSesion().value = '2026-10-18';
+    await terminar();
+
+    expect((await repo.cargarSesiones(ALUMNO.id)).d1.fecha).toBe('2026-10-18');
+    expect($('[data-sesion-terminada]').textContent).toContain('18/10/2026');
+  });
+
+  it('no deja terminar con una fecha futura ni sin fecha', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+
+    fechaDeSesion().value = '2026-10-21'; // mañana
+    await terminar();
+    expect(textoDelAviso()).toContain('no puede ser futura');
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    document.querySelector('#app-modal-overlay-aux [data-click="cerrarModalAux"]').click();
+
+    fechaDeSesion().value = '';
+    await terminar();
+    expect(textoDelAviso()).toContain('Elegí la fecha');
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+  });
+
+  it('un día terminado queda bloqueado: no se puede anotar ni marcar series', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+
+    expect($$('[data-change="alumnoSerie"]').every((i) => i.disabled)).toBe(true);
+    expect($$('[data-click="alumnoCheck"], [data-click="alumnoOmitir"]').every((b) => b.disabled)).toBe(true);
+
+    campo('e1', 1, 'kg').disabled = false; // aunque le saquen el disabled desde las herramientas del navegador
+    escribir(campo('e1', 1, 'kg'), '99');
+    await esperar();
+    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].kg).toBe('');
+  });
+
+  it('"Reabrir sesión" quita la sesión y deja volver a anotar', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+
+    $('[data-click="alumnoReabrir"]').click();
+    await esperar();
+
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect($('[data-sesion-terminada]')).toBeNull();
+    expect($('[data-click="alumnoTerminar"]')).not.toBeNull();
+    expect($$('[data-change="alumnoSerie"]').some((i) => i.disabled)).toBe(false);
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true'); // lo anotado se conserva
+  });
+
+  it('el día terminado se marca en su chip y la semana cuenta los días hechos', async () => {
+    const plan = planDeUnaSerie();
+    plan.weeks[0].days[1].blocks = [
+      { id: 'b9', type: 'fuerza', exercises: [{ id: 'e9', name: 'Peso muerto', sets: '1' }] },
+    ];
+    await guardarPlan(plan);
+    await abrir();
+    expect($('[data-click="alumnoDia"][data-d="0"]').dataset.hecho).toBeUndefined();
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).not.toContain('días');
+
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+
+    expect($('[data-click="alumnoDia"][data-d="0"]').dataset.hecho).toBe('true');
+    expect($('[data-click="alumnoDia"][data-d="1"]').dataset.hecho).toBeUndefined();
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).toContain('1/2 días');
+  });
+
+  it('la sesión terminada sigue ahí al volver a abrir la vista', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+
+    await abrir();
+
+    expect($('[data-sesion-terminada]').textContent).toContain('20/10/2026');
+  });
+
+  it('si no se puede guardar la sesión avisa en lugar de perderla en silencio', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    vi.spyOn(repo, 'guardarSesiones').mockRejectedValueOnce(new Error('Quota exceeded'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await terminar();
+    await esperar();
+
+    expect(document.body.textContent).toContain('No se pudo guardar');
+  });
+});
+
+describe('vista del alumno: barra de progreso con omitidas en rojo', () => {
+  beforeEach(() => guardarPlan());
+
+  it('las hechas llenan la barra en verde y las omitidas en rojo, a continuación', async () => {
+    await abrir();
+    expect(barra()).toEqual({ hechas: '0%', omitidas: '0%' });
+
+    check('e1', 1).click();
+    await esperar();
+    $('[data-click="alumnoOmitir"][data-e="e1"][data-n="2"]').click();
+    await esperar();
+
+    expect(barra()).toEqual({ hechas: '9%', omitidas: '9%' }); // 1 de 11 cada una
+  });
+
+  it('al terminar la sesión con pendientes, la barra queda completa (verde + rojo)', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+    await responderConfirmacion(true);
+
+    expect(barra()).toEqual({ hechas: '9%', omitidas: '91%' });
+  });
+
+  it('las dos partes nunca pasan del 100 % por el redondeo', async () => {
+    const plan = planCompleto();
+    plan.weeks[0].days[0].blocks[0].exercises = [{ ...plan.weeks[0].days[0].blocks[0].exercises[0], sets: '8' }];
+    await guardarPlan(plan);
+    await abrir();
+    for (const n of [1, 2, 3]) check('e1', n).click(); // 3 de 8 = 37,5 -> 38 %
+    for (const n of [4, 5, 6, 7, 8]) $(`[data-click="alumnoOmitir"][data-e="e1"][data-n="${n}"]`).click(); // 62,5 -> 63 %
+    await esperar();
+
+    const { hechas, omitidas } = barra();
+    expect(parseInt(hechas) + parseInt(omitidas)).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('modo lectura del coach: sesiones', () => {
+  beforeEach(() => guardarPlan());
+
+  it('ve que el alumno terminó el día y cuándo, sin botones para cambiarlo', async () => {
+    await repo.guardarSesiones(ALUMNO.id, { d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z' } });
+    await abrir({ soloLectura: true });
+
+    expect($('[data-sesion-terminada]').textContent).toContain('19/10/2026');
+    expect($('[data-click="alumnoReabrir"]')).toBeNull();
+    expect($('[data-click="alumnoTerminar"]')).toBeNull();
+    expect($('[data-fecha-sesion]')).toBeNull();
+    expect($('[data-click="alumnoDia"][data-d="0"]').dataset.hecho).toBe('true');
+  });
+
+  it('si el día no se terminó lo dice, sin botón para terminarlo', async () => {
+    await abrir({ soloLectura: true });
+    expect($('[data-sin-terminar]').textContent).toContain('Sesión sin terminar');
+    expect($('[data-click="alumnoTerminar"]')).toBeNull();
+  });
+});
