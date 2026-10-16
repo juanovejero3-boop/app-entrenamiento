@@ -1,8 +1,10 @@
 // Punto de entrada único para guardar y cargar planes. Las pantallas importan `repo`
 // desde acá y no saben dónde viven los datos.
 //
-// Hoy: localStorage del navegador del entrenador (mientras aprueba la integración).
-// Después: una implementación con Supabase con las mismas funciones; el cambio es esta línea.
-import { crearRepoLocal } from './local.js';
+// Los planes, las series y las sesiones viven en Supabase (ver la migración
+// 20261016000000_training_tables.sql); los permisos los resuelve RLS en la base.
+// El repo local (local.js) sigue existiendo para los tests y como referencia de la interfaz.
+import { supaClient } from '../../../lib/supabase.js';
+import { crearRepoSupabase } from './supabase.js';
 
-export const repo = crearRepoLocal();
+export const repo = crearRepoSupabase(supaClient);

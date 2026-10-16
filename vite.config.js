@@ -12,6 +12,8 @@ export default defineConfig({
     // DOM simulado (document, eventos, localStorage) para los tests que lo necesitan
     environment: 'happy-dom',
     include: ['src/**/*.test.js'],
+    // Cambia el repo de Supabase por el local en los tests de pantallas
+    setupFiles: ['./src/test-setup.js'],
     // Restaura console.* y otros mocks entre tests
     restoreMocks: true,
   },
