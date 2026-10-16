@@ -87,6 +87,62 @@ describe('planes del alumno: ciclo activo y anteriores', () => {
   });
 });
 
+describe('planes del alumno: el ciclo actual plegado', () => {
+  const abierto = () => $('[data-plan-activo]').hidden === false;
+
+  it('el alumno ve el ciclo actual plegado, solo con su nombre, y se abre al tocarlo', async () => {
+    await repo.crearCiclo(ALUMNO.id, plan('Mi ciclo'), 'activo');
+    await abrir();
+
+    expect($('[data-ciclo-actual-nombre]').textContent).toBe('Mi ciclo');
+    expect(content.textContent).toContain('Ciclo actual');
+    expect(abierto()).toBe(false);
+    const boton = $('[data-ciclo-actual] [data-click="historialAlternar"]');
+    expect(boton.getAttribute('aria-expanded')).toBe('false');
+
+    boton.click();
+    await esperar();
+    expect(abierto()).toBe(true);
+    expect(boton.getAttribute('aria-expanded')).toBe('true');
+    expect($('[data-plan-activo] [data-click="alumnoSemana"]')).not.toBeNull(); // ya estaba cargado
+
+    boton.click();
+    await esperar();
+    expect(abierto()).toBe(false);
+  });
+
+  it('abrirlo no lo vuelve a cargar y se puede anotar normalmente', async () => {
+    const activo = await repo.crearCiclo(ALUMNO.id, plan('Mi ciclo'), 'activo');
+    await abrir();
+    const cargas = vi.spyOn(repo, 'cargarRegistroDelCiclo');
+    $('[data-ciclo-actual] [data-click="historialAlternar"]').click();
+    await esperar();
+
+    $('[data-plan-activo] [data-click="alumnoCheck"][data-e="e1"][data-n="1"]').click();
+    await esperar();
+
+    expect(cargas).not.toHaveBeenCalled();
+    expect((await repo.cargarRegistroDelCiclo(activo.id)).e1[1].done).toBe(true);
+  });
+
+  it('el coach (modo lectura o con Volver) lo ve abierto, con su aviso', async () => {
+    await repo.crearCiclo(ALUMNO.id, plan('Mi ciclo'), 'activo');
+    await abrir({ soloLectura: true, alVolver: vi.fn() });
+    expect($('[data-ciclo-actual]')).toBeNull();
+    expect($('[data-plan-activo]').textContent).toContain('Modo lectura');
+
+    await abrir({ alVolver: vi.fn() }); // su propio plan: se puede completar, también abierto
+    expect($('[data-ciclo-actual]')).toBeNull();
+  });
+
+  it('un ciclo activo sin semanas no se pliega: muestra el aviso de siempre', async () => {
+    await repo.crearCiclo(ALUMNO.id, { ...plan('Vacío'), weeks: [] }, 'activo');
+    await abrir();
+    expect($('[data-ciclo-actual]')).toBeNull();
+    expect(content.textContent).toContain('todavía no cargó tu plan');
+  });
+});
+
 describe('planes del alumno: abrir un ciclo anterior', () => {
   it('al tocar el nombre se despliega ese ciclo en solo lectura, con lo que se anotó en él', async () => {
     const viejo = await repo.crearCiclo(ALUMNO.id, plan('Viejo'), 'finalizado');

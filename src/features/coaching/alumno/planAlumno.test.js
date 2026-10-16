@@ -142,6 +142,22 @@ describe('vista del alumno: el plan', () => {
   });
 });
 
+describe('vista del alumno: legibilidad', () => {
+  beforeEach(() => guardarPlan());
+
+  it('las insignias de cada ejercicio (reps, intensidad, descanso) se leen grandes y con buen contraste', async () => {
+    await abrir();
+    const insignias = $$('[data-ejercicio="e1"] [data-insignia]');
+    expect(insignias.map((i) => i.textContent)).toEqual(
+      expect.arrayContaining(['Reps 8-10', 'RIR 2', 'Descanso 2 min']),
+    );
+    for (const i of insignias) {
+      expect(i.className).toContain('text-sm');
+      expect(i.className).toContain('text-gray-100');
+    }
+  });
+});
+
 describe('vista del alumno: registro de series', () => {
   beforeEach(() => guardarPlan());
 

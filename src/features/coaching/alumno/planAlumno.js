@@ -121,7 +121,7 @@ function crearVista(vista) {
   const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
   const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
   const claseInput =
-    'w-full bg-black border border-gray-700 rounded-lg py-2 text-center text-sm text-white outline-none focus:border-neonRed disabled:opacity-60';
+    'w-full bg-black border border-gray-600 rounded-lg py-2 text-center text-base text-white placeholder:text-gray-300 outline-none focus:border-neonRed disabled:opacity-60';
 
   function dibujar() {
     const { content, plan, soloLectura } = vista;
@@ -310,7 +310,7 @@ function crearVista(vista) {
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(etiqueta)}</span>` : ''}
         <div class="flex-1 min-w-0">
           <h4 class="font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</h4>
-          <div class="flex flex-wrap gap-1 mt-1">${insignias.map((t) => `<span class="text-[10px] px-1.5 py-0.5 rounded bg-black border border-gray-700 text-gray-300">${esc(t)}</span>`).join('')}</div>
+          <div class="flex flex-wrap gap-1 mt-1">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</div>
         </div>
         ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
       </div>
@@ -337,7 +337,7 @@ function crearVista(vista) {
     }).join('');
     return `
     <div class="space-y-2">
-      <div class="grid ${COLUMNAS} gap-1.5 text-center text-[10px] font-bold uppercase text-gray-500"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span><span>No</span></div>
+      <div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span><span>No</span></div>
       ${filas}
     </div>
   `;
