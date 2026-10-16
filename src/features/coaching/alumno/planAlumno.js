@@ -12,7 +12,14 @@ import { etiquetasSuperserie, fechasDeSemana, rangoDelPlan, semanaActual } from 
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
-import { actualizarSerie, cantidadDeSeries, pasarPendientesAOmitidas, progresoDelDia, serieDe } from './registro.js';
+import {
+  actualizarSerie,
+  cantidadDeSeries,
+  omitirTodasLasSeries,
+  pasarPendientesAOmitidas,
+  progresoDelDia,
+  serieDe,
+} from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
 
 /**
@@ -158,7 +165,7 @@ function dibujarPlan() {
         .map((s, i) => {
           const fechas = plan.startDate ? fechasDeSemana(plan.startDate, i) : '';
           const { hechos, total } = diasTerminados(s, vista.sesiones);
-          const detalle = [fechas, hechos ? `${hechos}/${total} días` : ''].filter(Boolean).join(' · ');
+          const detalle = [fechas, total ? `${hechos}/${total} días` : ''].filter(Boolean).join(' · ');
           return `<button data-click="alumnoSemana" data-w="${i}" ${i === w ? 'aria-current="true"' : ''} class="${claseChip(i === w)}">${esc(s.name)}${detalle ? `<span class="block text-[9px] font-normal normal-case opacity-80">${esc(detalle)}</span>` : ''}</button>`;
         })
         .join('')}
@@ -411,17 +418,16 @@ async function terminarDia() {
   await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
 }
 
-/** Marca el día como no entrenado en la fecha elegida: todas las series sin marcar pasan a omitidas. */
+/** Marca el día como no entrenado en la fecha elegida: todas sus series pasan a omitidas. */
 async function noEntrenarDia() {
   if (!vista || vista.soloLectura) return;
   const dia = diaActual();
   const fecha = fechaElegida();
   if (!fecha) return;
 
-  const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
-  const pendientes = total - hechas - omitidas;
+  const { total } = progresoDelDia(dia, vista.registro);
   const ok = await window.confirm(
-    `Vas a marcar este día como no entrenado: ${pendientes === 1 ? 'la serie sin marcar pasa' : `las ${pendientes} series sin marcar pasan`} a omitidas (${total} series en total). ¿Seguro?`,
+    `Vas a marcar este día como no entrenado: ${total === 1 ? 'la serie pasa' : `las ${total} series pasan`} a omitidas. ¿Seguro?`,
   );
   if (!ok) return;
   vista.sesiones = terminarSesion(vista.sesiones, dia.id, {
@@ -429,9 +435,9 @@ async function noEntrenarDia() {
     terminadaEn: new Date().toISOString(),
     estado: 'omitida',
   });
-  vista.registro = pasarPendientesAOmitidas(dia, vista.registro);
+  vista.registro = omitirTodasLasSeries(dia, vista.registro);
   dibujar();
-  await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
+  await guardarSesionYRegistro({ conRegistro: true });
 }
 
 /** Vuelve a abrir un día terminado para seguir anotando (lo omitido automáticamente sigue omitido). */

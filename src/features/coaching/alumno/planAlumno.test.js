@@ -582,7 +582,7 @@ describe('vista del alumno: terminar sesión', () => {
 
     expect($('[data-click="alumnoDia"][data-d="0"]').dataset.hecho).toBe('true');
     expect($('[data-click="alumnoDia"][data-d="1"]').dataset.hecho).toBeUndefined();
-    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).toContain('1/2 días');
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).toContain('1/1 días'); // sobre los días marcados, no sobre los pendientes
   });
 
   it('la sesión terminada sigue ahí al volver a abrir la vista', async () => {
@@ -717,6 +717,19 @@ describe('vista del alumno: día no entrenado', () => {
     expect($('[data-dia-no-entrenado]').textContent).toContain('18/10/2026');
   });
 
+  it('aunque haya series hechas, al no entrenar el día todas pasan a omitidas', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    await noEntrene();
+    const pregunta = await responderConfirmacion(true);
+
+    expect(pregunta).toContain('11 series');
+    const registro = await repo.cargarRegistro(ALUMNO.id);
+    expect(registro.e1[1]).toMatchObject({ done: false, skipped: true });
+    expect($('[data-progreso]').textContent).toBe('0 / 11 series · 11 omitidas');
+  });
+
   it('no deja marcar el día con una fecha futura ni sin fecha', async () => {
     await abrir();
     fechaDeSesion().value = '2026-10-21';
@@ -757,7 +770,7 @@ describe('vista del alumno: día no entrenado', () => {
     expect($('[data-click="alumnoDia"][data-d="0"]').dataset.noEntrenado).toBeUndefined();
   });
 
-  it('el contador de la semana solo cuenta los días entrenados', async () => {
+  it('el contador de la semana cuenta los entrenados sobre los marcados (entrenados y no entrenados)', async () => {
     const plan = planDeUnaSerie();
     plan.weeks[0].days[1].blocks = [
       { id: 'b9', type: 'fuerza', exercises: [{ id: 'e9', name: 'Peso muerto', sets: '1' }] },
@@ -766,7 +779,7 @@ describe('vista del alumno: día no entrenado', () => {
     await abrir();
     await noEntrene();
     await responderConfirmacion(true);
-    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).not.toContain('días');
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).toContain('0/1 días');
 
     $('[data-click="alumnoDia"][data-d="1"]').click();
     check('e9', 1).click();

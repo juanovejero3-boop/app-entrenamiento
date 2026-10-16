@@ -41,13 +41,16 @@ export function reabrirSesion(sesiones, diaId) {
   return resto;
 }
 
-/** Días de la semana entrenados (no cuentan los no entrenados) sobre los que tienen ejercicios (los demás no se pueden terminar). */
+/**
+ * Días de la semana entrenados sobre los marcados (entrenados o no entrenados), no sobre los pendientes:
+ * 3 días entrenados dan 3/3 y, si se marca también uno no entrenado, 3/4.
+ */
 export function diasTerminados(semana, sesiones) {
-  const conEjercicios = semana.days.filter((dia) => dia.blocks.some((b) => b.exercises.length));
-  return {
-    hechos: conEjercicios.filter((dia) => sesionDe(sesiones, dia.id)?.estado === 'hecha').length,
-    total: conEjercicios.length,
-  };
+  const marcados = semana.days
+    .filter((dia) => dia.blocks.some((b) => b.exercises.length))
+    .map((dia) => sesionDe(sesiones, dia.id))
+    .filter(Boolean);
+  return { hechos: marcados.filter((sesion) => sesion.estado === 'hecha').length, total: marcados.length };
 }
 
 const esObjeto = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);

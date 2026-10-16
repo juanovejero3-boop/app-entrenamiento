@@ -3,6 +3,7 @@ import {
   actualizarSerie,
   cantidadDeSeries,
   normalizarRegistro,
+  omitirTodasLasSeries,
   pasarPendientesAOmitidas,
   progresoDelDia,
   serieDe,
@@ -139,6 +140,31 @@ describe('normalizarRegistro', () => {
 
   it.each([[null], ['texto'], [[]], [undefined]])('un dato que no es un objeto (%j) da un registro vacío', (dato) => {
     expect(normalizarRegistro(dato)).toEqual({});
+  });
+});
+
+describe('omitirTodasLasSeries', () => {
+  it('marca todas las series del día como omitidas, también las que estaban hechas', () => {
+    const d = dia(ej('a', '3'), ej('b', '2-3'));
+    let r = actualizarSerie({}, 'a', 1, { done: true });
+    r = actualizarSerie(r, 'b', 2, { skipped: true });
+
+    const nuevo = omitirTodasLasSeries(d, r);
+
+    expect(progresoDelDia(d, nuevo)).toEqual({ hechas: 0, omitidas: 6, total: 6 });
+    expect(serieDe(nuevo, 'a', 1)).toMatchObject({ done: false, skipped: true });
+  });
+
+  it('conserva los kg y las reps que ya se habían anotado y no toca el registro original', () => {
+    const d = dia(ej('a', '1'));
+    const original = actualizarSerie({}, 'a', 1, { kg: '80', reps: '3', done: true });
+    expect(serieDe(omitirTodasLasSeries(d, original), 'a', 1)).toEqual({
+      kg: '80',
+      reps: '3',
+      done: false,
+      skipped: true,
+    });
+    expect(serieDe(original, 'a', 1).done).toBe(true);
   });
 });
 

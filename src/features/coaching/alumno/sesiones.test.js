@@ -82,20 +82,26 @@ describe('diasTerminados', () => {
     ],
   };
 
-  it('cuenta los días terminados sobre los días que tienen ejercicios', () => {
-    const s = terminarSesion({}, 'a', { fecha: '2026-10-16', terminadaEn: TERMINADA });
-    expect(diasTerminados(semana, s)).toEqual({ hechos: 1, total: 2 });
+  it('cuenta los días entrenados sobre los días marcados, no sobre los pendientes', () => {
+    let s = terminarSesion({}, 'a', { fecha: '2026-10-16', terminadaEn: TERMINADA });
+    expect(diasTerminados(semana, s)).toEqual({ hechos: 1, total: 1 });
+    s = terminarSesion(s, 'b', { fecha: '2026-10-17', terminadaEn: TERMINADA });
+    expect(diasTerminados(semana, s)).toEqual({ hechos: 2, total: 2 });
   });
 
   it('una sesión de un día que ya no existe no cuenta', () => {
     const s = terminarSesion({}, 'borrado', { fecha: '2026-10-16', terminadaEn: TERMINADA });
-    expect(diasTerminados(semana, s)).toEqual({ hechos: 0, total: 2 });
+    expect(diasTerminados(semana, s)).toEqual({ hechos: 0, total: 0 });
   });
 
-  it('un día no entrenado no cuenta como hecho', () => {
+  it('un día no entrenado suma al total pero no a los hechos', () => {
     let s = terminarSesion({}, 'a', { fecha: '2026-10-16', terminadaEn: TERMINADA });
     s = terminarSesion(s, 'b', { fecha: '2026-10-17', terminadaEn: TERMINADA, estado: 'omitida' });
     expect(diasTerminados(semana, s)).toEqual({ hechos: 1, total: 2 });
+  });
+
+  it('sin ningún día marcado es 0/0', () => {
+    expect(diasTerminados(semana, {})).toEqual({ hechos: 0, total: 0 });
   });
 
   it('una semana sin días no tiene nada para terminar', () => {
