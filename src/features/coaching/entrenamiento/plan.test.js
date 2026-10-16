@@ -26,6 +26,7 @@ import {
   propagarDia,
   propagarEjercicio,
   rangoDelPlan,
+  semanaActual,
 } from './plan.js';
 
 /** Todos los ids del plan (semanas, días, bloques y ejercicios). */
@@ -673,5 +674,36 @@ describe('rangoDelPlan', () => {
   it('sin fecha de inicio o sin semanas no hay rango', () => {
     expect(rangoDelPlan(conSemanas('', 4))).toBeNull();
     expect(rangoDelPlan(conSemanas('2026-10-19', 0))).toBeNull();
+  });
+});
+
+describe('semanaActual', () => {
+  const plan = (startDate, n = 4) => ({ startDate, weeks: Array.from({ length: n }, () => ({ days: [] })) });
+
+  it.each([
+    ['2026-10-19', 0], // primer día
+    ['2026-10-25', 0], // último día de la semana 1
+    ['2026-10-26', 1], // primer día de la semana 2
+    ['2026-11-09', 3],
+    ['2026-11-15', 3], // último día del ciclo
+  ])('el %s cae en la semana de índice %i', (hoy, esperado) => {
+    expect(semanaActual(plan('2026-10-19'), hoy)).toBe(esperado);
+  });
+
+  it('antes de que empiece el ciclo muestra la primera semana', () => {
+    expect(semanaActual(plan('2026-10-19'), '2026-10-01')).toBe(0);
+  });
+
+  it('después de que terminó muestra la última semana', () => {
+    expect(semanaActual(plan('2026-10-19'), '2027-03-01')).toBe(3);
+  });
+
+  it('cruza el cambio de año', () => {
+    expect(semanaActual(plan('2026-12-28'), '2027-01-05')).toBe(1);
+  });
+
+  it('sin fecha de inicio o sin semanas devuelve 0', () => {
+    expect(semanaActual(plan(''), '2026-10-20')).toBe(0);
+    expect(semanaActual(plan('2026-10-19', 0), '2026-10-20')).toBe(0);
   });
 });

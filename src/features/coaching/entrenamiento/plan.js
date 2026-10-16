@@ -439,3 +439,17 @@ export function rangoDelPlan(plan) {
     `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   return { inicio: fmt(inicio), fin: fmt(fin) };
 }
+
+/**
+ * Índice de la semana del ciclo que corresponde a `hoy` (AAAA-MM-DD): la primera si el ciclo
+ * todavía no empezó, la última si ya terminó, y 0 si el plan no tiene fecha de inicio o semanas.
+ */
+export function semanaActual(plan, hoy) {
+  const inicio = (plan.startDate || '').split('-');
+  const actual = hoy.split('-');
+  if (inicio.length !== 3 || !plan.weeks.length) return 0;
+  // Se compara por día calendario (en UTC) para que el horario de verano no corra un día
+  const dia = ([a, m, d]) => Date.UTC(Number(a), Number(m) - 1, Number(d)) / 86_400_000;
+  const semana = Math.floor((dia(actual) - dia(inicio)) / 7);
+  return Math.min(plan.weeks.length - 1, Math.max(0, semana));
+}
