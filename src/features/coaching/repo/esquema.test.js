@@ -194,6 +194,19 @@ describe('esquema de entrenamiento: permisos (RLS)', () => {
     expect(editado.affectedRows).toBe(1);
   });
 
+  it('el admin puede borrar un ciclo de cualquier estado, con lo que el alumno anotó en él', async () => {
+    for (const estado of ['finalizado', 'activo']) {
+      const id = await ciclo(ANA, estado);
+      await sesion(id, ANA);
+      await serie(id, ANA);
+      const borrado = await como(COACH, 'delete from public.training_cycles where id = $1', [id]);
+      expect(borrado.affectedRows).toBe(1);
+    }
+    for (const tabla of ['training_cycles', 'training_sessions', 'training_set_logs']) {
+      expect((await db.query(`select 1 from public.${tabla}`)).rows).toHaveLength(0);
+    }
+  });
+
   it('el alumno no puede crear, editar ni borrar ciclos', async () => {
     const id = await ciclo(ANA);
     await expect(

@@ -141,10 +141,10 @@ function dibujarCiclo(ciclo) {
     boton('cicloEditar', claseNeutro, '<i class="fa-solid fa-pen mr-1"></i>Editar'),
     boton('cicloVer', claseNeutro, '<i class="fa-solid fa-eye mr-1"></i>Ver'),
     estado === 'borrador' && boton('cicloMostrar', claseVerde, '<i class="fa-solid fa-eye mr-1"></i>Mostrar al alumno'),
-    estado === 'borrador' && boton('cicloEliminar', clasePeligro, '<i class="fa-solid fa-trash mr-1"></i>Eliminar'),
     estado === 'activo' && boton('cicloOcultar', claseNeutro, '<i class="fa-solid fa-eye-slash mr-1"></i>Ocultar'),
     estado === 'activo' &&
       boton('cicloFinalizar', clasePeligro, '<i class="fa-solid fa-flag-checkered mr-1"></i>Finalizar'),
+    boton('cicloEliminar', clasePeligro, '<i class="fa-solid fa-trash mr-1"></i>Eliminar'),
   ].filter(Boolean);
   return `
     <div data-ciclo="${id}" class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
@@ -240,7 +240,13 @@ async function finalizar(id) {
 }
 
 async function eliminar(id) {
-  const ok = await window.confirm(`¿Eliminar el borrador «${cicloDe(id).plan.macroName}»? No se puede deshacer.`);
+  const { plan, estado } = cicloDe(id);
+  // Un borrador nunca lo vio el alumno; en los demás se borra también lo que anotó
+  const ok = await window.confirm(
+    estado === 'borrador'
+      ? `¿Eliminar el borrador «${plan.macroName}»? No se puede deshacer.`
+      : `¿Eliminar «${plan.macroName}»? Se borra también todo lo que el alumno anotó en él (series y sesiones). No se puede deshacer.`,
+  );
   if (ok) await conAviso(() => repo.eliminarCiclo(id));
 }
 

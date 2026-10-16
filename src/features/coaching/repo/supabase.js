@@ -140,13 +140,11 @@ export function crearRepoSupabase(cliente) {
       });
     },
 
-    /** Borra un ciclo que sigue en borrador (nunca uno que el alumno pudo haber usado). */
+    /** Borra el ciclo y, con él, todo lo que el alumno anotó (series y sesiones). No se puede deshacer. */
     async eliminarCiclo(cicloId) {
       exigir(cicloId, 'cicloId');
-      const filas = datos(
-        await cliente.from('training_cycles').delete().eq('id', cicloId).eq('status', 'borrador').select('id'),
-      );
-      if (!filas.length) throw new Error('Solo se puede eliminar un ciclo en borrador');
+      const filas = datos(await cliente.from('training_cycles').delete().eq('id', cicloId).select('id'));
+      if (!filas.length) throw new Error('No se pudo eliminar el ciclo (no existe o no tenés permiso)');
       alumnoDelCiclo.delete(cicloId);
       registros.delete(cicloId);
       sesiones.delete(cicloId);

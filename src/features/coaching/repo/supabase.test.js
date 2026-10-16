@@ -100,12 +100,25 @@ describe('repo de Supabase: ciclos', () => {
     expect(await repo.listarCiclos(ANA)).toEqual([]);
   });
 
-  it('no elimina un ciclo activo ni uno finalizado (el alumno puede haber anotado en él)', async () => {
+  it('elimina un ciclo en cualquier estado, con todo lo que el alumno anotó en él', async () => {
+    const viejo = await repo.crearCiclo(ANA, planDe('Viejo'), 'finalizado');
     const activo = await repo.crearCiclo(ANA, planDe('Activo'), 'activo');
-    const finalizado = await repo.crearCiclo(ANA, planDe('Viejo'), 'finalizado');
-    await expect(repo.eliminarCiclo(activo.id)).rejects.toThrow('borrador');
-    await expect(repo.eliminarCiclo(finalizado.id)).rejects.toThrow('borrador');
-    expect(await repo.listarCiclos(ANA)).toHaveLength(2);
+    for (const { id } of [viejo, activo]) {
+      await repo.guardarRegistroDelCiclo(id, { e1: { 1: serieHecha } });
+      await repo.guardarSesionesDelCiclo(id, { d1: diaHecho });
+    }
+
+    await repo.eliminarCiclo(viejo.id);
+
+    expect((await repo.listarCiclos(ANA)).map((c) => c.id)).toEqual([activo.id]);
+    expect(filasDe('training_set_logs').map((f) => f.cycle_id)).toEqual([activo.id]);
+    expect(filasDe('training_sessions').map((f) => f.cycle_id)).toEqual([activo.id]);
+    await repo.eliminarCiclo(activo.id);
+    expect(await repo.listarCiclos(ANA)).toEqual([]);
+  });
+
+  it('avisa si no se pudo eliminar (no existe o no hay permiso)', async () => {
+    await expect(repo.eliminarCiclo('inexistente')).rejects.toThrow('No se pudo eliminar');
   });
 
   it('exige el alumno y el ciclo', async () => {

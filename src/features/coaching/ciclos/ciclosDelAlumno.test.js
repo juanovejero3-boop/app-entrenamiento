@@ -82,8 +82,8 @@ describe('ciclos del alumno: lista', () => {
 
     const acciones = (id) => $$(`[data-ciclo="${id}"] [data-click]`).map((x) => x.dataset.click);
     expect(acciones(b.id)).toEqual(['cicloEditar', 'cicloVer', 'cicloMostrar', 'cicloEliminar']);
-    expect(acciones(a.id)).toEqual(['cicloEditar', 'cicloVer', 'cicloOcultar', 'cicloFinalizar']);
-    expect(acciones(f.id)).toEqual(['cicloEditar', 'cicloVer']);
+    expect(acciones(a.id)).toEqual(['cicloEditar', 'cicloVer', 'cicloOcultar', 'cicloFinalizar', 'cicloEliminar']);
+    expect(acciones(f.id)).toEqual(['cicloEditar', 'cicloVer', 'cicloEliminar']);
   });
 
   it('el nombre del ciclo se muestra como texto, sin interpretar HTML', async () => {
@@ -275,6 +275,35 @@ describe('ciclos del alumno: mostrar, ocultar y finalizar', () => {
     await responderConfirmacion(true);
     expect(await estados()).toEqual([]);
     expect(tarjeta(b.id)).toBeNull();
+  });
+
+  it.each(['activo', 'finalizado'])(
+    'eliminar un ciclo %s advierte que se borra lo que anotó el alumno y se puede cancelar',
+    async (estado) => {
+      const c = await repo.crearCiclo(ALUMNO.id, plan('Ciclo'), estado);
+      await repo.guardarRegistroDelCiclo(c.id, { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } });
+      await abrir();
+
+      await click(boton('cicloEliminar', c.id));
+      const pregunta = await responderConfirmacion(false);
+      expect(pregunta).toContain('lo que el alumno anotó');
+      expect(pregunta).toContain('No se puede deshacer');
+      expect(await estados()).toEqual([['Ciclo', estado]]);
+      expect(await repo.cargarRegistroDelCiclo(c.id)).not.toEqual({});
+
+      await click(boton('cicloEliminar', c.id));
+      await responderConfirmacion(true);
+      expect(await estados()).toEqual([]);
+      expect(tarjeta(c.id)).toBeNull();
+      expect(await repo.cargarRegistroDelCiclo(c.id)).toEqual({});
+    },
+  );
+
+  it('el aviso de un borrador no habla de lo que anotó el alumno (no pudo anotar nada)', async () => {
+    const b = await repo.crearCiclo(ALUMNO.id, plan('B'));
+    await abrir();
+    await click(boton('cicloEliminar', b.id));
+    expect(await responderConfirmacion(false)).not.toContain('lo que el alumno anotó');
   });
 
   it('si Supabase falla en una acción, avisa y deja la lista como estaba', async () => {
