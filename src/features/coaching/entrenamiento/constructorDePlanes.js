@@ -4,13 +4,9 @@
 // (para no perder el foco al pasar de un campo a otro): solo actualizan el mapa de semanas.
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
-import { mostrarProcesando, ocultarProcesando, toast } from '../../../lib/ui.js';
-import { docEntrenamiento } from '../pdf/entrenamiento.js';
-import { generarPdfBlob } from '../pdf/generar.js';
-import { docLineamientos } from '../pdf/lineamientos.js';
+import { hoyISO } from '../../../lib/fecha.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
-import { nombreArchivo } from '../pdf/nombre.js';
-import { abrirVistaPrevia } from '../pdf/vistaPrevia.js';
+import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
 import {
@@ -42,11 +38,6 @@ import {
 
 /** @type {{ content: HTMLElement, alumno: { id: string, name?: string, email?: string }, plan: import('./plan.js').PlanEntrenamiento | null, alVolver: () => void } | null} */
 let actual = null;
-
-const hoy = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 /**
  * Abre el constructor para un alumno dentro de `content`.
@@ -389,7 +380,7 @@ async function generar() {
     );
     if (!ok) return;
   }
-  const base = actual.plan ?? crearPlan({ fechaInicio: hoy() });
+  const base = actual.plan ?? crearPlan({ fechaInicio: hoyISO() });
   await aplicar(generarEstructura(base, semanas, dias));
 }
 
@@ -397,27 +388,6 @@ function cambiarCampoPlan(el) {
   const nuevo = structuredClone(actual.plan);
   nuevo[el.dataset.campo] = el.value;
   return aplicar(nuevo, { redibujar: false });
-}
-
-/** Genera uno de los PDF del plan ('lineamientos' o 'entrenamiento') y lo muestra en la vista previa. */
-async function generarPdf(tipo) {
-  const { plan, alumno } = actual;
-  const armar = tipo === 'lineamientos' ? docLineamientos : docEntrenamiento;
-  const fecha = hoy();
-  mostrarProcesando('Generando PDF...');
-  try {
-    const blob = await generarPdfBlob(armar(plan, alumno, { fecha }));
-    abrirVistaPrevia({
-      blob,
-      nombreArchivo: nombreArchivo(tipo, alumno, fecha),
-      titulo: tipo === 'lineamientos' ? 'PDF de lineamientos' : 'PDF del entrenamiento',
-    });
-  } catch (error) {
-    console.error('No se pudo generar el PDF', error);
-    toast('No se pudo generar el PDF', false);
-  } finally {
-    ocultarProcesando();
-  }
 }
 
 async function eliminarSemanaConfirmando(w) {
@@ -455,8 +425,8 @@ registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
   planGenerar: () => generar(),
   planCampo: (el) => cambiarCampoPlan(el),
-  pdfLineamientos: () => generarPdf('lineamientos'),
-  pdfEntrenamiento: () => generarPdf('entrenamiento'),
+  pdfLineamientos: () => mostrarPdf('lineamientos', actual.plan, actual.alumno),
+  pdfEntrenamiento: () => mostrarPdf('entrenamiento', actual.plan, actual.alumno),
   reporteCampo: (el) => aplicar(actualizarReporte(actual.plan, { [el.dataset.campo]: el.value }), { redibujar: false }),
   prioridadAgregar: () => aplicar(agregarPrioridad(actual.plan)),
   prioridadCampo: (el) =>
