@@ -10,6 +10,8 @@ import { generarPdfBlob } from '../pdf/generar.js';
 vi.mock('../pdf/generar.js', () => ({
   generarPdfBlob: vi.fn(async () => new Blob(['%PDF-1.7'], { type: 'application/pdf' })),
 }));
+// Las páginas de la vista previa las dibuja pdf.js con canvas, que el DOM simulado no tiene
+vi.mock('../pdf/paginasPdf.js', () => ({ dibujarPaginasPdf: vi.fn(async () => {}) }));
 
 const ALUMNO = { id: 'alumno-1', name: 'Ana Pérez', email: 'ana@ejemplo.com' };
 const repo = crearRepoLocal();
