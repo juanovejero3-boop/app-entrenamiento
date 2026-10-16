@@ -427,3 +427,15 @@ export function etiquetasSuperserie(bloque) {
     return `${e.group}${vistos[e.group]}`;
   });
 }
+
+/** Fechas de inicio y fin del macrociclo (dd/mm/aaaa), o null si no tiene fecha de inicio o semanas. */
+export function rangoDelPlan(plan) {
+  const partes = (plan.startDate || '').split('-');
+  if (partes.length !== 3 || !plan.weeks.length) return null;
+  const inicio = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]));
+  const fin = new Date(inicio);
+  fin.setDate(fin.getDate() + plan.weeks.length * 7 - 1);
+  const fmt = (d) =>
+    `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  return { inicio: fmt(inicio), fin: fmt(fin) };
+}

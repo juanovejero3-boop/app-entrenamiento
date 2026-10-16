@@ -25,6 +25,7 @@ import {
   normalizarPlan,
   propagarDia,
   propagarEjercicio,
+  rangoDelPlan,
 } from './plan.js';
 
 /** Todos los ids del plan (semanas, días, bloques y ejercicios). */
@@ -655,5 +656,22 @@ describe('normalizarPlan: objetivos y lineamientos', () => {
     expect(plan.report.priorities[0]).toMatchObject({ target: 'Press banca', progression: '' });
     expect(plan.report.priorities[0].id).toBeTruthy();
     expect(plan.report.priorities[1]).toEqual({ id: 'p9', target: 'Dorsal', progression: 'RIR 3 → 1' });
+  });
+});
+
+describe('rangoDelPlan', () => {
+  const conSemanas = (startDate, n) => ({ startDate, weeks: Array.from({ length: n }, () => ({ days: [] })) });
+
+  it('va del día de inicio al último día de la última semana', () => {
+    expect(rangoDelPlan(conSemanas('2026-10-19', 4))).toEqual({ inicio: '19/10/2026', fin: '15/11/2026' });
+  });
+
+  it('cruza de año', () => {
+    expect(rangoDelPlan(conSemanas('2026-12-21', 2))).toEqual({ inicio: '21/12/2026', fin: '03/01/2027' });
+  });
+
+  it('sin fecha de inicio o sin semanas no hay rango', () => {
+    expect(rangoDelPlan(conSemanas('', 4))).toBeNull();
+    expect(rangoDelPlan(conSemanas('2026-10-19', 0))).toBeNull();
   });
 });
