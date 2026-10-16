@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { actualizarSerie, cantidadDeSeries, normalizarRegistro, progresoDelDia, serieDe } from './registro.js';
+import {
+  actualizarSerie,
+  cantidadDeSeries,
+  normalizarRegistro,
+  pasarPendientesAOmitidas,
+  progresoDelDia,
+  serieDe,
+} from './registro.js';
 
 const ej = (id, sets) => ({ id, name: id, sets });
 const dia = (...ejercicios) => ({
@@ -132,5 +139,47 @@ describe('normalizarRegistro', () => {
 
   it.each([[null], ['texto'], [[]], [undefined]])('un dato que no es un objeto (%j) da un registro vacío', (dato) => {
     expect(normalizarRegistro(dato)).toEqual({});
+  });
+});
+
+describe('pasarPendientesAOmitidas', () => {
+  it('marca como omitidas las series que no estaban hechas ni omitidas, en todo el día', () => {
+    const d = dia(ej('a', '3'), ej('b', '2'));
+    let r = actualizarSerie({}, 'a', 1, { done: true });
+    r = actualizarSerie(r, 'b', 2, { skipped: true });
+
+    const nuevo = pasarPendientesAOmitidas(d, r);
+
+    expect(progresoDelDia(d, nuevo)).toEqual({ hechas: 1, omitidas: 4, total: 5 });
+    expect(serieDe(nuevo, 'a', 1).done).toBe(true); // lo hecho sigue hecho
+    expect(serieDe(nuevo, 'a', 2).skipped).toBe(true);
+    expect(serieDe(nuevo, 'b', 1).skipped).toBe(true);
+  });
+
+  it('no borra lo que ya estaba anotado en una serie pendiente', () => {
+    const d = dia(ej('a', '1'));
+    const r = actualizarSerie({}, 'a', 1, { kg: '80', reps: '3' });
+    expect(serieDe(pasarPendientesAOmitidas(d, r), 'a', 1)).toEqual({
+      kg: '80',
+      reps: '3',
+      done: false,
+      skipped: true,
+    });
+  });
+
+  it('con un rango de series (3-4) llega hasta la última fila', () => {
+    const d = dia(ej('a', '3-4'));
+    let r = actualizarSerie({}, 'a', 1, { done: true });
+    r = actualizarSerie(r, 'a', 2, { done: true });
+    r = actualizarSerie(r, 'a', 3, { done: true });
+    expect(progresoDelDia(d, pasarPendientesAOmitidas(d, r))).toEqual({ hechas: 3, omitidas: 1, total: 4 });
+  });
+
+  it('no toca ejercicios de otros días ni el registro original', () => {
+    const d = dia(ej('a', '1'));
+    const original = actualizarSerie({}, 'otro', 1, { kg: '5' });
+    const nuevo = pasarPendientesAOmitidas(d, original);
+    expect(serieDe(nuevo, 'otro', 1)).toEqual({ kg: '5', reps: '', done: false, skipped: false });
+    expect(serieDe(original, 'a', 1).skipped).toBe(false);
   });
 });

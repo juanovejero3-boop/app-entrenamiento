@@ -79,3 +79,17 @@ export function normalizarRegistro(dato) {
   }
   return limpio;
 }
+
+/** Pasa a omitidas todas las series del día que no están hechas ni omitidas (al terminar la sesión). */
+export function pasarPendientesAOmitidas(dia, registro) {
+  let nuevo = registro;
+  for (const bloque of dia.blocks) {
+    for (const ejercicio of bloque.exercises) {
+      for (let n = 1; n <= cantidadDeSeries(ejercicio); n++) {
+        const serie = serieDe(nuevo, ejercicio.id, n);
+        if (!serie.done && !serie.skipped) nuevo = actualizarSerie(nuevo, ejercicio.id, n, { skipped: true });
+      }
+    }
+  }
+  return nuevo;
+}

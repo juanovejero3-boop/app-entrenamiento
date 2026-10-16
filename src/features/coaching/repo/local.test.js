@@ -152,3 +152,56 @@ describe('repositorio local: registro del alumno', () => {
     await expect(repo.guardarRegistro(null, registro)).rejects.toThrow('alumnoId');
   });
 });
+
+describe('repositorio local: sesiones del alumno', () => {
+  const sesiones = { 'dia-1': { fecha: '2026-10-16', terminadaEn: '2026-10-16T21:30:00.000Z' } };
+
+  it('lo que se guarda se vuelve a cargar igual', async () => {
+    const repo = crearRepoLocal();
+    await repo.guardarSesiones('alumno-1', sesiones);
+    expect(await repo.cargarSesiones('alumno-1')).toEqual(sesiones);
+  });
+
+  it('un alumno sin sesiones devuelve un objeto vacío', async () => {
+    expect(await crearRepoLocal().cargarSesiones('sin-sesiones')).toEqual({});
+  });
+
+  it('cada alumno tiene sus sesiones, aparte del plan y del registro', async () => {
+    const repo = crearRepoLocal();
+    await repo.guardarSesiones('alumno-1', sesiones);
+    await repo.guardarSesiones('alumno-2', { 'dia-9': { fecha: '2026-10-20', terminadaEn: '' } });
+    await repo.guardarRegistro('alumno-1', { e1: { 1: { kg: '5', reps: '5', done: true, skipped: false } } });
+
+    expect(Object.keys(await repo.cargarSesiones('alumno-1'))).toEqual(['dia-1']);
+    expect(Object.keys(await repo.cargarSesiones('alumno-2'))).toEqual(['dia-9']);
+    expect(Object.keys(await repo.cargarRegistro('alumno-1'))).toEqual(['e1']);
+  });
+
+  it('persiste bajo una clave versionada por alumno', async () => {
+    await crearRepoLocal().guardarSesiones('alumno-1', sesiones);
+    expect(JSON.parse(localStorage.getItem('pp:v1:sesiones:alumno-1'))).toEqual(sesiones);
+  });
+
+  it('al cargar normaliza: descarta las sesiones con fecha inválida', async () => {
+    localStorage.setItem(
+      'pp:v1:sesiones:alumno-1',
+      JSON.stringify({ ok: { fecha: '2026-10-16' }, mal: { fecha: 'ayer' }, x: 'basura' }),
+    );
+    expect(await crearRepoLocal().cargarSesiones('alumno-1')).toEqual({ ok: { fecha: '2026-10-16', terminadaEn: '' } });
+  });
+
+  it('si lo guardado está corrupto devuelve vacío, avisa por consola y no lo borra', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    localStorage.setItem('pp:v1:sesiones:alumno-1', '{no es json');
+
+    expect(await crearRepoLocal().cargarSesiones('alumno-1')).toEqual({});
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('alumno-1'), expect.anything());
+    expect(localStorage.getItem('pp:v1:sesiones:alumno-1')).toBe('{no es json');
+  });
+
+  it('exige un id de alumno', async () => {
+    const repo = crearRepoLocal();
+    await expect(repo.cargarSesiones('')).rejects.toThrow('alumnoId');
+    await expect(repo.guardarSesiones(null, sesiones)).rejects.toThrow('alumnoId');
+  });
+});

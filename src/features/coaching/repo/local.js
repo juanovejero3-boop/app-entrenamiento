@@ -2,11 +2,13 @@
 // Es la implementación provisoria hasta que el entrenador apruebe la integración y los
 // planes pasen a Supabase; la interfaz es asíncrona para que ese cambio no afecte a quien la usa.
 import { normalizarRegistro } from '../alumno/registro.js';
+import { normalizarSesiones } from '../alumno/sesiones.js';
 import { normalizarPlan } from '../entrenamiento/plan.js';
 
 const PREFIJO = 'pp:v1';
 const claveEntrenamiento = (alumnoId) => `${PREFIJO}:entrenamiento:${alumnoId}`;
 const claveRegistro = (alumnoId) => `${PREFIJO}:registro:${alumnoId}`;
+const claveSesiones = (alumnoId) => `${PREFIJO}:sesiones:${alumnoId}`;
 
 function exigirAlumno(alumnoId) {
   if (!alumnoId) throw new Error('Falta el alumnoId');
@@ -59,6 +61,25 @@ export function crearRepoLocal(storage = localStorage) {
     async guardarRegistro(alumnoId, registro) {
       exigirAlumno(alumnoId);
       storage.setItem(claveRegistro(alumnoId), JSON.stringify(registro));
+    },
+
+    /** Los días que el alumno terminó, con su fecha, indexados por id de día. Vacío si no hay ninguno. */
+    async cargarSesiones(alumnoId) {
+      exigirAlumno(alumnoId);
+      const crudo = storage.getItem(claveSesiones(alumnoId));
+      if (crudo === null) return {};
+      try {
+        return normalizarSesiones(JSON.parse(crudo));
+      } catch (error) {
+        // No se borra: queda en localStorage para poder recuperarlo a mano
+        console.error(`Sesiones ilegibles para el alumno ${alumnoId}`, error);
+        return {};
+      }
+    },
+
+    async guardarSesiones(alumnoId, sesiones) {
+      exigirAlumno(alumnoId);
+      storage.setItem(claveSesiones(alumnoId), JSON.stringify(sesiones));
     },
   };
 }
