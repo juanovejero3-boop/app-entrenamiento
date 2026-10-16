@@ -1,13 +1,25 @@
-// Repositorio de planes en Supabase: misma interfaz que el repo local.
-// El "plan del alumno" es su ciclo activo (training_cycles, status 'activo'); el registro de series y
-// las sesiones cuelgan de ese ciclo. Los permisos los resuelve RLS en la base (ver la migración
-// 20261016000000_training_tables.sql); acá no se confía en nada del cliente.
+// Repositorio de entrenamiento en Supabase.
+// Un alumno tiene N ciclos (training_cycles); el registro de series y las sesiones cuelgan de cada
+// ciclo. Los permisos los resuelve RLS en la base (ver la migración 20261016000000_training_tables.sql):
+// el alumno solo ve sus ciclos activos y finalizados y anota solo en el activo; acá no se confía en
+// nada del cliente.
 import { normalizarRegistro } from '../alumno/registro.js';
 import { normalizarSesiones } from '../alumno/sesiones.js';
 import { normalizarPlan } from '../entrenamiento/plan.js';
 
-function exigirAlumno(alumnoId) {
-  if (!alumnoId) throw new Error('Falta el alumnoId');
+/** @typedef {'borrador' | 'activo' | 'finalizado'} EstadoCiclo */
+/**
+ * @typedef {{
+ *   id: string, alumnoId: string, estado: EstadoCiclo,
+ *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento,
+ *   finalizadoEn: string | null, creadoEn: string
+ * }} Ciclo
+ */
+
+const COLUMNAS_CICLO = 'id, student_id, status, plan, finished_at, created_at';
+
+function exigir(valor, nombre) {
+  if (!valor) throw new Error(`Falta el ${nombre}`);
 }
 
 /** Devuelve `data` o lanza el error de Supabase como un Error normal. */
@@ -32,75 +44,122 @@ function aplanarRegistro(registro) {
   return plano;
 }
 
+/** @returns {Ciclo} */
+function aCiclo(fila) {
+  return {
+    id: fila.id,
+    alumnoId: fila.student_id,
+    estado: fila.status,
+    plan: normalizarPlan(fila.plan),
+    finalizadoEn: fila.finished_at ?? null,
+    creadoEn: fila.created_at,
+  };
+}
+
 /**
  * @param {{ from: (tabla: string) => any }} cliente  el cliente de supabase-js
  */
 export function crearRepoSupabase(cliente) {
-  /** id del ciclo activo por alumno (solo se guardan los que existen). */
-  const ciclos = new Map();
+  /** A qué alumno pertenece cada ciclo (hace falta para escribir sus series y sesiones). */
+  const alumnoDelCiclo = new Map();
   /** Lo último que se sabe que está en la base, para mandar solo lo que cambió. */
   const registros = new Map();
   const sesiones = new Map();
 
-  async function buscarCicloActivo(alumnoId) {
-    const fila = datos(
-      await cliente
-        .from('training_cycles')
-        .select('id, plan')
-        .eq('student_id', alumnoId)
-        .eq('status', 'activo')
-        .maybeSingle(),
-    );
-    if (fila) ciclos.set(alumnoId, fila.id);
-    else ciclos.delete(alumnoId);
-    return fila;
+  async function alumnoDe(cicloId) {
+    exigir(cicloId, 'cicloId');
+    if (!alumnoDelCiclo.has(cicloId)) {
+      const fila = datos(await cliente.from('training_cycles').select('student_id').eq('id', cicloId).maybeSingle());
+      if (!fila) throw new Error('El ciclo no existe o no tenés permiso para verlo');
+      alumnoDelCiclo.set(cicloId, fila.student_id);
+    }
+    return alumnoDelCiclo.get(cicloId);
   }
 
-  async function cicloId(alumnoId) {
-    return ciclos.get(alumnoId) ?? (await buscarCicloActivo(alumnoId))?.id ?? null;
-  }
-
-  async function cicloIdObligatorio(alumnoId) {
-    const id = await cicloId(alumnoId);
-    if (!id) throw new Error('El alumno no tiene un plan activo donde guardar');
-    return id;
+  /** Actualiza el ciclo; si la base no tocó ninguna fila (sin permiso o ciclo inexistente) lo avisa. */
+  async function actualizarCiclo(cicloId, cambios) {
+    exigir(cicloId, 'cicloId');
+    const filas = datos(await cliente.from('training_cycles').update(cambios).eq('id', cicloId).select('id'));
+    if (!filas.length) throw new Error('No se pudo actualizar el ciclo (no existe o no tenés permiso)');
   }
 
   return {
-    /** @returns {Promise<import('../entrenamiento/plan.js').PlanEntrenamiento | null>} */
-    async cargarPlanEntrenamiento(alumnoId) {
-      exigirAlumno(alumnoId);
-      const fila = await buscarCicloActivo(alumnoId);
-      return fila ? normalizarPlan(fila.plan) : null;
-    },
+    // -----------------------------------------------------------------------
+    // Ciclos
+    // -----------------------------------------------------------------------
 
-    /** Guarda (o reemplaza) el plan del ciclo activo; si el alumno no tiene uno, lo crea. */
-    async guardarPlanEntrenamiento(alumnoId, plan) {
-      exigirAlumno(alumnoId);
-      const id = await cicloId(alumnoId);
-      if (id) {
-        datos(await cliente.from('training_cycles').update({ plan }).eq('id', id));
-        return;
-      }
-      const creado = datos(
+    /**
+     * Los ciclos del alumno, del más viejo al más nuevo. El admin ve todos; el alumno, solo los
+     * activos y finalizados (lo decide la base).
+     * @returns {Promise<Ciclo[]>}
+     */
+    async listarCiclos(alumnoId) {
+      exigir(alumnoId, 'alumnoId');
+      const filas = datos(
         await cliente
           .from('training_cycles')
-          .insert({ student_id: alumnoId, status: 'activo', plan })
-          .select('id')
-          .single(),
+          .select(COLUMNAS_CICLO)
+          .eq('student_id', alumnoId)
+          .order('created_at', { ascending: true }),
       );
-      ciclos.set(alumnoId, creado.id);
+      for (const f of filas) alumnoDelCiclo.set(f.id, f.student_id);
+      return filas.map(aCiclo);
     },
 
-    /** Lo que anotó el alumno al entrenar (kg, reps y estado por serie). Vacío si no hay nada. */
-    async cargarRegistro(alumnoId) {
-      exigirAlumno(alumnoId);
-      const id = await cicloId(alumnoId);
-      if (!id) {
-        registros.delete(alumnoId);
-        return {};
-      }
-      const filas = datos(await cliente.from('training_set_logs').select('*').eq('cycle_id', id));
+    /**
+     * Crea un ciclo para el alumno. Nace en borrador (el alumno no lo ve) salvo que se pida otro estado.
+     * @returns {Promise<Ciclo>}
+     */
+    async crearCiclo(alumnoId, plan, estado = 'borrador') {
+      exigir(alumnoId, 'alumnoId');
+      const fila = datos(
+        await cliente
+          .from('training_cycles')
+          .insert({ student_id: alumnoId, status: estado, plan })
+          .select(COLUMNAS_CICLO)
+          .single(),
+      );
+      alumnoDelCiclo.set(fila.id, alumnoId);
+      return aCiclo(fila);
+    },
+
+    /** Reemplaza el plan del ciclo. */
+    async guardarPlanDelCiclo(cicloId, plan) {
+      await actualizarCiclo(cicloId, { plan });
+    },
+
+    /**
+     * Cambia el estado del ciclo: 'activo' lo muestra al alumno, 'borrador' lo oculta y 'finalizado'
+     * lo cierra (guarda cuándo). La base permite un solo ciclo activo por alumno: hay que
+     * finalizar u ocultar el otro antes.
+     */
+    async cambiarEstadoDelCiclo(cicloId, estado) {
+      await actualizarCiclo(cicloId, {
+        status: estado,
+        finished_at: estado === 'finalizado' ? new Date().toISOString() : null,
+      });
+    },
+
+    /** Borra un ciclo que sigue en borrador (nunca uno que el alumno pudo haber usado). */
+    async eliminarCiclo(cicloId) {
+      exigir(cicloId, 'cicloId');
+      const filas = datos(
+        await cliente.from('training_cycles').delete().eq('id', cicloId).eq('status', 'borrador').select('id'),
+      );
+      if (!filas.length) throw new Error('Solo se puede eliminar un ciclo en borrador');
+      alumnoDelCiclo.delete(cicloId);
+      registros.delete(cicloId);
+      sesiones.delete(cicloId);
+    },
+
+    // -----------------------------------------------------------------------
+    // Lo que anota el alumno en un ciclo
+    // -----------------------------------------------------------------------
+
+    /** Kg, reps y estado por serie. Vacío si no anotó nada. */
+    async cargarRegistroDelCiclo(cicloId) {
+      exigir(cicloId, 'cicloId');
+      const filas = datos(await cliente.from('training_set_logs').select('*').eq('cycle_id', cicloId));
       const crudo = {};
       for (const f of filas) {
         crudo[f.exercise_id] = {
@@ -109,14 +168,14 @@ export function crearRepoSupabase(cliente) {
         };
       }
       const registro = normalizarRegistro(crudo);
-      registros.set(alumnoId, structuredClone(registro));
+      registros.set(cicloId, structuredClone(registro));
       return registro;
     },
 
-    async guardarRegistro(alumnoId, registro) {
-      exigirAlumno(alumnoId);
-      const id = await cicloIdObligatorio(alumnoId);
-      const antes = aplanarRegistro(registros.get(alumnoId) ?? {});
+    /** Guarda el registro mandando solo las series que cambiaron desde la última carga o guardado. */
+    async guardarRegistroDelCiclo(cicloId, registro) {
+      const alumnoId = await alumnoDe(cicloId);
+      const antes = aplanarRegistro(registros.get(cicloId) ?? {});
       const despues = aplanarRegistro(registro);
       const { cambiadas, borradas } = diferencias(antes, despues);
 
@@ -125,7 +184,7 @@ export function crearRepoSupabase(cliente) {
         const filas = cambiadas.map((k) => {
           const { ejercicio, n, kg, reps, done, skipped } = despues[k];
           return {
-            cycle_id: id,
+            cycle_id: cicloId,
             student_id: alumnoId,
             exercise_id: ejercicio,
             set_n: n,
@@ -144,39 +203,33 @@ export function crearRepoSupabase(cliente) {
           await cliente
             .from('training_set_logs')
             .delete()
-            .eq('cycle_id', id)
+            .eq('cycle_id', cicloId)
             .eq('exercise_id', ejercicio)
             .eq('set_n', n),
         );
       }
-      registros.set(alumnoId, structuredClone(registro));
+      registros.set(cicloId, structuredClone(registro));
     },
 
-    /** Los días que el alumno terminó (o no entrenó), indexados por id de día. Vacío si no hay ninguno. */
-    async cargarSesiones(alumnoId) {
-      exigirAlumno(alumnoId);
-      const id = await cicloId(alumnoId);
-      if (!id) {
-        sesiones.delete(alumnoId);
-        return {};
-      }
-      const filas = datos(await cliente.from('training_sessions').select('*').eq('cycle_id', id));
+    /** Los días terminados (o no entrenados), indexados por id de día. Vacío si no hay ninguno. */
+    async cargarSesionesDelCiclo(cicloId) {
+      exigir(cicloId, 'cicloId');
+      const filas = datos(await cliente.from('training_sessions').select('*').eq('cycle_id', cicloId));
       const crudo = {};
       for (const f of filas) crudo[f.day_id] = { fecha: f.fecha, terminadaEn: f.terminada_en, estado: f.estado };
       const lista = normalizarSesiones(crudo);
-      sesiones.set(alumnoId, structuredClone(lista));
+      sesiones.set(cicloId, structuredClone(lista));
       return lista;
     },
 
-    async guardarSesiones(alumnoId, lista) {
-      exigirAlumno(alumnoId);
-      const id = await cicloIdObligatorio(alumnoId);
-      const antes = sesiones.get(alumnoId) ?? {};
+    async guardarSesionesDelCiclo(cicloId, lista) {
+      const alumnoId = await alumnoDe(cicloId);
+      const antes = sesiones.get(cicloId) ?? {};
       const { cambiadas, borradas } = diferencias(antes, lista);
 
       if (cambiadas.length) {
         const filas = cambiadas.map((dia) => ({
-          cycle_id: id,
+          cycle_id: cicloId,
           student_id: alumnoId,
           day_id: dia,
           fecha: lista[dia].fecha,
@@ -186,9 +239,9 @@ export function crearRepoSupabase(cliente) {
         datos(await cliente.from('training_sessions').upsert(filas, { onConflict: 'cycle_id,day_id' }));
       }
       if (borradas.length) {
-        datos(await cliente.from('training_sessions').delete().eq('cycle_id', id).in('day_id', borradas));
+        datos(await cliente.from('training_sessions').delete().eq('cycle_id', cicloId).in('day_id', borradas));
       }
-      sesiones.set(alumnoId, structuredClone(lista));
+      sesiones.set(cicloId, structuredClone(lista));
     },
   };
 }

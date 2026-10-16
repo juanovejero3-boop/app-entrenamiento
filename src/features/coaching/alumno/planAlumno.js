@@ -1,12 +1,13 @@
 // Vista del plan de entrenamiento para el alumno: semanas, días, ejercicios y un registro de
 // kg / reps / check por serie. El coach la usa en modo lectura ("Ver como alumno"): es la misma
 // pantalla, pero sin poder anotar.
-// Los datos salen del repositorio (hoy localStorage del navegador); cada anotación se guarda al
+// Los datos salen del repositorio (Supabase); cada anotación se guarda al
 // instante y no redibuja la pantalla, para no perder el foco al pasar de un campo a otro.
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { hoyISO } from '../../../lib/fecha.js';
 import { toast } from '../../../lib/ui.js';
+import { cicloActivo } from '../ciclos/ciclos.js';
 import { GRUPOS_SUPERSERIE, TIPOS_BLOQUE } from '../entrenamiento/catalogos.js';
 import { etiquetasSuperserie, fechasDeSemana, rangoDelPlan, semanaActual } from '../entrenamiento/plan.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
@@ -24,7 +25,7 @@ import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesio
 
 /**
  * @type {{
- *   content: HTMLElement, alumno: { id: string, name?: string, email?: string },
+ *   content: HTMLElement, alumno: { id: string, name?: string, email?: string }, cicloId: string | null,
  *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento | null,
  *   registro: import('./registro.js').Registro, sesiones: import('./sesiones.js').Sesiones, hoy: string,
  *   soloLectura: boolean, alVolver: (() => void) | null,
@@ -53,22 +54,28 @@ async function cargarVideos() {
  * Muestra el plan del alumno dentro de `content`.
  * @param {HTMLElement} content
  * @param {{ id: string, name?: string, email?: string }} alumno
- * @param {{ soloLectura?: boolean, alVolver?: (() => void) | null, hoy?: string }} [opciones]
+ * @param {{ cicloId?: string, soloLectura?: boolean, alVolver?: (() => void) | null, hoy?: string }} [opciones]
+ *   cicloId: qué ciclo mostrar (por defecto, el activo del alumno).
  *   soloLectura: modo del coach, sin poder anotar. alVolver: agrega un botón "Volver".
  *   hoy: AAAA-MM-DD, para elegir la semana inicial (por defecto, la de hoy).
  * @returns {Promise<boolean>} si el alumno tiene un plan para mostrar
  */
-export async function abrirPlanAlumno(content, alumno, { soloLectura = false, alVolver = null, hoy = hoyISO() } = {}) {
-  const [cargado, registro, sesiones] = await Promise.all([
-    repo.cargarPlanEntrenamiento(alumno.id),
-    repo.cargarRegistro(alumno.id),
-    repo.cargarSesiones(alumno.id),
-  ]);
-  const plan = cargado?.weeks.length ? cargado : null;
+export async function abrirPlanAlumno(
+  content,
+  alumno,
+  { cicloId = null, soloLectura = false, alVolver = null, hoy = hoyISO() } = {},
+) {
+  const ciclos = await repo.listarCiclos(alumno.id);
+  const ciclo = cicloId ? (ciclos.find((c) => c.id === cicloId) ?? null) : cicloActivo(ciclos);
+  const [registro, sesiones] = ciclo
+    ? await Promise.all([repo.cargarRegistroDelCiclo(ciclo.id), repo.cargarSesionesDelCiclo(ciclo.id)])
+    : [{}, {}];
+  const plan = ciclo?.plan.weeks.length ? ciclo.plan : null;
   const videos = plan ? await cargarVideos() : new Map();
   vista = {
     content,
     alumno,
+    cicloId: ciclo?.id ?? null,
     plan,
     registro,
     sesiones,
@@ -358,7 +365,7 @@ async function anotarSerie(ejercicioId, numero, cambios) {
   pintarEstadoDeSerie(ejercicioId, numero);
   actualizarProgreso();
   try {
-    await repo.guardarRegistro(vista.alumno.id, vista.registro);
+    await repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro);
   } catch (error) {
     console.error('No se pudo guardar el registro', error);
     toast('No se pudo guardar: ' + error.message, false);
@@ -376,8 +383,8 @@ function alternarEstado(boton, campo) {
 async function guardarSesionYRegistro({ conRegistro }) {
   try {
     await Promise.all([
-      conRegistro ? repo.guardarRegistro(vista.alumno.id, vista.registro) : null,
-      repo.guardarSesiones(vista.alumno.id, vista.sesiones),
+      conRegistro ? repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro) : null,
+      repo.guardarSesionesDelCiclo(vista.cicloId, vista.sesiones),
     ]);
   } catch (error) {
     console.error('No se pudo guardar la sesion', error);

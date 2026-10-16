@@ -1,5 +1,5 @@
 // Cliente de Supabase falso para los tests: tablas en memoria y solo lo que usa el repo
-// (select/insert/update/upsert/delete con eq, in, limit, single y maybeSingle).
+// (select/insert/update/upsert/delete con eq, in, order, limit, single y maybeSingle).
 // Aplica los valores por defecto y las claves únicas que importan; los permisos (RLS) y las
 // restricciones se prueban contra Postgres de verdad en esquema.test.js.
 
@@ -14,6 +14,7 @@ export function crearClienteFalso() {
   const tablas = { training_cycles: [], training_sessions: [], training_set_logs: [] };
   const llamadas = [];
   let falla = null;
+  let reloj = 0; // created_at crece con cada fila nueva, así el orden por fecha es el de creación
 
   class Consulta {
     constructor(tabla) {
@@ -54,6 +55,10 @@ export function crearClienteFalso() {
       this.filtros.push((fila) => valores.includes(fila[columna]));
       return this;
     }
+    order(columna, { ascending = true } = {}) {
+      this.orden = { columna, ascending };
+      return this;
+    }
     limit(n) {
       this.limite = n;
       return this;
@@ -84,9 +89,22 @@ export function crearClienteFalso() {
       const filas = tablas[this.tabla];
       let resultado = [];
       if (this.op === 'select') {
-        resultado = filas.filter((f) => this.coincide(f)).slice(0, this.limite);
+        resultado = filas.filter((f) => this.coincide(f));
+        if (this.orden) {
+          const { columna, ascending } = this.orden;
+          resultado.sort(
+            (a, b) => (a[columna] < b[columna] ? -1 : a[columna] > b[columna] ? 1 : 0) * (ascending ? 1 : -1),
+          );
+        }
+        resultado = resultado.slice(0, this.limite);
       } else if (this.op === 'insert') {
-        resultado = this.filas.map((f) => ({ id: crypto.randomUUID(), status: 'activo', ...f }));
+        resultado = this.filas.map((f) => ({
+          id: crypto.randomUUID(),
+          status: 'activo',
+          finished_at: null,
+          created_at: new Date(Date.UTC(2026, 0, 1) + ++reloj * 1000).toISOString(),
+          ...f,
+        }));
         filas.push(...resultado);
       } else if (this.op === 'update') {
         resultado = filas.filter((f) => this.coincide(f));
@@ -101,6 +119,7 @@ export function crearClienteFalso() {
       } else if (this.op === 'delete') {
         const borrar = filas.filter((f) => this.coincide(f));
         tablas[this.tabla] = filas.filter((f) => !borrar.includes(f));
+        resultado = borrar;
         if (this.tabla === 'training_cycles') {
           // borrado en cascada
           const ids = borrar.map((f) => f.id);
@@ -124,6 +143,12 @@ export function crearClienteFalso() {
     // ayudas para los tests
     tablas,
     llamadas,
+    /** Vacía las tablas y el registro de llamadas (entre test y test). */
+    reiniciar() {
+      for (const tabla of Object.keys(tablas)) tablas[tabla] = [];
+      llamadas.length = 0;
+      falla = null;
+    },
     /** La próxima consulta devuelve este error. */
     fallarLaProxima(mensaje) {
       falla = mensaje;

@@ -1,10 +1,9 @@
 // Constructor de planes de entrenamiento (vista admin).
-// Se abre desde la ficha del alumno en Planilla. Cada cambio se guarda al instante en el
-// repositorio (hoy localStorage). Las ediciones de texto no redibujan la pantalla entera
+// Se abre desde la lista de ciclos del alumno. Cada cambio se guarda al instante en el
+// repositorio (Supabase). Las ediciones de texto no redibujan la pantalla entera
 // (para no perder el foco al pasar de un campo a otro): solo actualizan el mapa de semanas.
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
-import { hoyISO } from '../../../lib/fecha.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
@@ -22,7 +21,6 @@ import {
   agregarPrioridad,
   agregarSemana,
   contarSeries,
-  crearPlan,
   duplicarSemana,
   eliminarBloque,
   eliminarDia,
@@ -36,19 +34,21 @@ import {
   propagarEjercicio,
 } from './plan.js';
 
-/** @type {{ content: HTMLElement, alumno: { id: string, name?: string, email?: string }, plan: import('./plan.js').PlanEntrenamiento | null, alVolver: () => void } | null} */
+/** @type {{ content: HTMLElement, alumno: { id: string, name?: string, email?: string }, ciclo: import('../repo/supabase.js').Ciclo | null, plan: import('./plan.js').PlanEntrenamiento | null, alVolver: () => void } | null} */
 let actual = null;
 
 /**
- * Abre el constructor para un alumno dentro de `content`.
+ * Abre el constructor para un ciclo de un alumno dentro de `content`.
  * @param {HTMLElement} content
  * @param {{ id: string, name?: string, email?: string }} alumno
- * @param {{ alVolver: () => void }} opciones  qué hacer al tocar "Volver"
+ * @param {{ cicloId: string, alVolver: () => void }} opciones  qué ciclo editar y qué hacer al tocar "Volver"
  */
-export async function abrirConstructorDePlanes(content, alumno, { alVolver }) {
-  actual = { content, alumno, plan: null, alVolver };
+export async function abrirConstructorDePlanes(content, alumno, { cicloId, alVolver }) {
+  actual = { content, alumno, ciclo: null, plan: null, alVolver };
   prepararCatalogoEjercicios(); // no se espera: el autocompletado aparece cuando termina de cargar
-  actual.plan = await repo.cargarPlanEntrenamiento(alumno.id);
+  const ciclos = await repo.listarCiclos(alumno.id);
+  actual.ciclo = ciclos.find((c) => c.id === cicloId) ?? null;
+  actual.plan = actual.ciclo?.plan ?? null;
   dibujar();
 }
 
@@ -78,8 +78,8 @@ async function aplicar(nuevoPlan, { redibujar = true } = {}) {
   if (redibujar) dibujar();
   else actualizarResumenes();
   try {
-    await repo.guardarPlanEntrenamiento(actual.alumno.id, nuevoPlan);
-    marcarEstado('Guardado (local)', true);
+    await repo.guardarPlanDelCiclo(actual.ciclo.id, nuevoPlan);
+    marcarEstado('Guardado', true);
   } catch (error) {
     console.error('No se pudo guardar el plan', error);
     marcarEstado('No se pudo guardar: ' + error.message, false);
@@ -114,10 +114,11 @@ function dibujar() {
           <h2 class="text-lg font-black text-white uppercase tracking-wide truncate">Plan de entrenamiento</h2>
           <p class="text-xs text-gray-400 truncate">${esc(nombreDelAlumno(alumno))}</p>
         </div>
-        <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado (local)' : ''}</span>
+        <span data-estado-guardado class="text-[10px] uppercase tracking-wider text-gray-500">${plan ? 'Guardado' : ''}</span>
       </div>
-      ${plan ? dibujarBotonesPdf() + dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarSinPlan()}
-      ${dibujarGenerador(plan)}
+      ${plan ? dibujarAvisoDeEstado(actual.ciclo.estado) + dibujarBotonesPdf() + dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarCicloNoEncontrado()}
+      ${plan && !plan.weeks.length ? dibujarCicloVacio() : ''}
+      ${plan ? dibujarGenerador(plan) : ''}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
@@ -136,13 +137,33 @@ function dibujarBotonesPdf() {
   `;
 }
 
-function dibujarSinPlan() {
+function dibujarCicloNoEncontrado() {
   return `
     <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 text-center text-sm text-gray-400">
       <i class="fa-solid fa-dumbbell text-2xl text-neonRed mb-2 block"></i>
-      Este alumno todavía no tiene un plan en la app. Generá la estructura para empezar.
+      No se encontró ese ciclo. Volvé y elegí otro.
     </div>
   `;
+}
+
+function dibujarCicloVacio() {
+  return `
+    <div data-ciclo-vacio class="bg-cyberCard p-5 rounded-xl border border-gray-800 text-center text-sm text-gray-400">
+      <i class="fa-solid fa-dumbbell text-2xl text-neonRed mb-2 block"></i>
+      Este ciclo todavía no tiene semanas. Generá la estructura para empezar.
+    </div>
+  `;
+}
+
+const AVISO_DE_ESTADO = {
+  borrador: ['border-gray-700 text-gray-300', 'Borrador: el alumno no lo ve hasta que lo muestres.'],
+  activo: ['border-emerald-800 text-emerald-200', 'Activo: el alumno ve lo que cambies (al recargar la página).'],
+  finalizado: ['border-amber-800 text-amber-200', 'Finalizado: lo que cambies queda en el historial que ve el alumno.'],
+};
+
+function dibujarAvisoDeEstado(estado) {
+  const [clase, texto] = AVISO_DE_ESTADO[estado];
+  return `<p data-aviso-estado class="border rounded-xl px-3 py-2 text-xs ${clase}">${texto}</p>`;
 }
 
 function dibujarCabecera(plan) {
@@ -376,12 +397,11 @@ async function generar() {
   }
   if (actual.plan?.weeks.length) {
     const ok = await window.confirm(
-      'Este alumno ya tiene semanas armadas. Si generás una estructura nueva se reemplazan. ¿Continuar?',
+      'Este ciclo ya tiene semanas armadas. Si generás una estructura nueva se reemplazan. ¿Continuar?',
     );
     if (!ok) return;
   }
-  const base = actual.plan ?? crearPlan({ fechaInicio: hoyISO() });
-  await aplicar(generarEstructura(base, semanas, dias));
+  await aplicar(generarEstructura(actual.plan, semanas, dias));
 }
 
 function cambiarCampoPlan(el) {

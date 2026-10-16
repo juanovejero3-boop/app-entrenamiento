@@ -2,11 +2,15 @@
 // buscador de alumnos con pestañas para ver la planilla de cada uno.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr } from '../../lib/dom.js';
+import { hoyISO } from '../../lib/fecha.js';
 import { renderUserHeader } from '../../shell.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
 import { abrirPlanAlumno } from '../coaching/alumno/planAlumno.js';
+import { cicloActivo } from '../coaching/ciclos/ciclos.js';
 import { abrirConstructorDePlanes } from '../coaching/entrenamiento/constructorDePlanes.js';
+import { crearPlan } from '../coaching/entrenamiento/plan.js';
+import { repo } from '../coaching/repo/index.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
@@ -348,10 +352,14 @@ registrarAcciones({
   adminPlanillaActivar: (el) => adminPlanillaActivar(el.dataset.id),
   adminPlanillaCerrarPestana: (el) => adminPlanillaCerrarPestana(el.dataset.id),
   adminPlanillaMostrarBuscador: () => adminPlanillaMostrarBuscador(),
-  planillaAbrirConstructorDePlanes: (el) => {
+  planillaAbrirConstructorDePlanes: async (el) => {
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
+    // Provisorio hasta la lista de ciclos: edita el ciclo activo y, si no hay, crea uno
+    const ciclos = await repo.listarCiclos(u.id);
+    const ciclo = cicloActivo(ciclos) ?? (await repo.crearCiclo(u.id, crearPlan({ fechaInicio: hoyISO() }), 'activo'));
     abrirConstructorDePlanes(document.getElementById('app-content'), u, {
+      cicloId: ciclo.id,
       alVolver: () => adminPlanillaActivar(u.id),
     });
   },

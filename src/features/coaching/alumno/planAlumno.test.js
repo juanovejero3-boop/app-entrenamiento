@@ -3,6 +3,7 @@ import '../../../lib/ui.js'; // modales propios (alert/confirm) que usa mostrarP
 import { generarPdfBlob } from '../pdf/generar.js';
 import { ALUMNO, planCompleto } from '../pdf/test-utils.js';
 import { repo } from '../repo/index.js';
+import { sembrarPlan, registroDe, sesionesDe, guardarRegistroDe, guardarSesionesDe } from '../repo/test-utils.js';
 import { abrirPlanAlumno } from './planAlumno.js';
 
 // Solo se reemplaza el motor de PDF y el dibujo de las páginas (pdfmake y pdf.js necesitan el
@@ -19,7 +20,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   document.body.innerHTML = '';
-  localStorage.clear();
   vi.mocked(generarPdfBlob).mockClear();
 });
 
@@ -30,7 +30,7 @@ const SEMANA_1 = '2026-10-20'; // el plan de prueba arranca el lunes 19/10/2026
 const SEMANA_2 = '2026-10-27';
 
 async function guardarPlan(plan = planCompleto()) {
-  await repo.guardarPlanEntrenamiento(ALUMNO.id, plan);
+  await sembrarPlan(ALUMNO.id, plan);
 }
 const abrir = (opciones = {}) => abrirPlanAlumno(content, ALUMNO, { hoy: SEMANA_1, ...opciones });
 
@@ -162,7 +162,7 @@ describe('vista del alumno: registro de series', () => {
     escribir(campo('e1', 1, 'reps'), '9');
     await esperar();
 
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1]).toEqual({ kg: '80', reps: '9', done: false, skipped: false });
+    expect((await registroDe(ALUMNO.id)).e1[1]).toEqual({ kg: '80', reps: '9', done: false, skipped: false });
 
     await abrir();
     expect(campo('e1', 1, 'kg').value).toBe('80');
@@ -181,7 +181,7 @@ describe('vista del alumno: registro de series', () => {
     expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true');
     expect(check('e1', 2).getAttribute('aria-pressed')).toBe('false');
     expect($('[data-progreso]').textContent).toContain('2 / 11');
-    const registro = await repo.cargarRegistro(ALUMNO.id);
+    const registro = await registroDe(ALUMNO.id);
     expect(registro.e1[1].done).toBe(true);
     expect(registro.e2[3].done).toBe(true);
 
@@ -210,7 +210,7 @@ describe('vista del alumno: registro de series', () => {
 
   it('si no se puede guardar avisa en lugar de perder el dato en silencio', async () => {
     await abrir();
-    vi.spyOn(repo, 'guardarRegistro').mockRejectedValueOnce(new Error('Quota exceeded'));
+    vi.spyOn(repo, 'guardarRegistroDelCiclo').mockRejectedValueOnce(new Error('Quota exceeded'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     escribir(campo('e1', 1, 'kg'), '80');
@@ -236,7 +236,7 @@ describe('modo lectura del coach', () => {
   });
 
   it('muestra lo que el alumno ya anotó, sin poder cambiarlo', async () => {
-    await repo.guardarRegistro(ALUMNO.id, { e1: { 1: { kg: '82.5', reps: '8', done: true } } });
+    await guardarRegistroDe(ALUMNO.id, { e1: { 1: { kg: '82.5', reps: '8', done: true } } });
     await abrir({ soloLectura: true });
 
     expect(campo('e1', 1, 'kg').value).toBe('82.5');
@@ -248,7 +248,7 @@ describe('modo lectura del coach', () => {
     await abrir({ soloLectura: true });
     check('e1', 1).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await esperar();
-    expect(await repo.cargarRegistro(ALUMNO.id)).toEqual({});
+    expect(await registroDe(ALUMNO.id)).toEqual({});
   });
 
   it('aunque alguien le saque el disabled a un campo, en modo lectura no se guarda', async () => {
@@ -256,7 +256,7 @@ describe('modo lectura del coach', () => {
     campo('e1', 1, 'kg').disabled = false; // como desde las herramientas del navegador
     escribir(campo('e1', 1, 'kg'), '99');
     await esperar();
-    expect(await repo.cargarRegistro(ALUMNO.id)).toEqual({});
+    expect(await registroDe(ALUMNO.id)).toEqual({});
   });
 
   it('la vista del alumno logueado no tiene aviso de lectura ni botón Volver', async () => {
@@ -335,7 +335,7 @@ describe('vista del alumno: series con rango y series omitidas', () => {
 
     expect(omitir('e1', 4).getAttribute('aria-pressed')).toBe('true');
     expect(check('e1', 4).getAttribute('aria-pressed')).toBe('false');
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[4]).toMatchObject({ done: false, skipped: true });
+    expect((await registroDe(ALUMNO.id)).e1[4]).toMatchObject({ done: false, skipped: true });
     expect($('[data-progreso]').textContent).toContain('0 / 11 series · 1 omitida');
 
     omitir('e2', 4).click();
@@ -367,7 +367,7 @@ describe('vista del alumno: series con rango y series omitidas', () => {
     omitir('e1', 1).click();
     await esperar();
     expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('false');
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].skipped).toBe(false);
+    expect((await registroDe(ALUMNO.id)).e1[1].skipped).toBe(false);
     expect($('[data-progreso]').textContent).toBe('0 / 11 series');
   });
 
@@ -383,7 +383,7 @@ describe('vista del alumno: series con rango y series omitidas', () => {
   });
 
   it('en modo lectura se ve lo omitido pero no se puede cambiar', async () => {
-    await repo.guardarRegistro(ALUMNO.id, { e1: { 1: { kg: '', reps: '', done: false, skipped: true } } });
+    await guardarRegistroDe(ALUMNO.id, { e1: { 1: { kg: '', reps: '', done: false, skipped: true } } });
     await abrir({ soloLectura: true });
 
     expect(omitir('e1', 1).getAttribute('aria-pressed')).toBe('true');
@@ -392,7 +392,7 @@ describe('vista del alumno: series con rango y series omitidas', () => {
     omitir('e1', 1).disabled = false; // como desde las herramientas del navegador
     omitir('e1', 1).click();
     await esperar();
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].skipped).toBe(true); // sigue igual
+    expect((await registroDe(ALUMNO.id)).e1[1].skipped).toBe(true); // sigue igual
   });
 });
 
@@ -465,7 +465,7 @@ describe('vista del alumno: terminar sesión', () => {
     await terminar();
 
     expect(document.getElementById('app-modal-overlay-aux')).toBeNull(); // no pidió confirmación
-    const sesion = (await repo.cargarSesiones(ALUMNO.id)).d1;
+    const sesion = (await sesionesDe(ALUMNO.id)).d1;
     expect(sesion.fecha).toBe(SEMANA_1);
     expect(sesion.terminadaEn).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     expect($('[data-sesion-terminada]').textContent).toContain('20/10/2026');
@@ -482,7 +482,7 @@ describe('vista del alumno: terminar sesión', () => {
 
     expect(pregunta).toContain('Quedan 10 series sin marcar');
     expect(pregunta).toContain('omitidas');
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     expect($('[data-progreso]').textContent).toBe('1 / 11 series');
   });
 
@@ -494,12 +494,12 @@ describe('vista del alumno: terminar sesión', () => {
     await terminar();
     await responderConfirmacion(true);
 
-    const registro = await repo.cargarRegistro(ALUMNO.id);
+    const registro = await registroDe(ALUMNO.id);
     expect(registro.e1[1]).toMatchObject({ done: true, skipped: false }); // lo hecho sigue hecho
     expect(registro.e1[2]).toMatchObject({ done: false, skipped: true });
     expect(registro.e3[3]).toMatchObject({ skipped: true });
     expect($('[data-progreso]').textContent).toBe('1 / 11 series · 10 omitidas');
-    expect((await repo.cargarSesiones(ALUMNO.id)).d1.fecha).toBe(SEMANA_1);
+    expect((await sesionesDe(ALUMNO.id)).d1.fecha).toBe(SEMANA_1);
   });
 
   it('la fecha se puede cambiar a un día anterior', async () => {
@@ -511,7 +511,7 @@ describe('vista del alumno: terminar sesión', () => {
     fechaDeSesion().value = '2026-10-18';
     await terminar();
 
-    expect((await repo.cargarSesiones(ALUMNO.id)).d1.fecha).toBe('2026-10-18');
+    expect((await sesionesDe(ALUMNO.id)).d1.fecha).toBe('2026-10-18');
     expect($('[data-sesion-terminada]').textContent).toContain('18/10/2026');
   });
 
@@ -524,13 +524,13 @@ describe('vista del alumno: terminar sesión', () => {
     fechaDeSesion().value = '2026-10-21'; // mañana
     await terminar();
     expect(textoDelAviso()).toContain('no puede ser futura');
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     document.querySelector('#app-modal-overlay-aux [data-click="cerrarModalAux"]').click();
 
     fechaDeSesion().value = '';
     await terminar();
     expect(textoDelAviso()).toContain('Elegí la fecha');
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
   });
 
   it('un día terminado queda bloqueado: no se puede anotar ni marcar series', async () => {
@@ -546,7 +546,7 @@ describe('vista del alumno: terminar sesión', () => {
     campo('e1', 1, 'kg').disabled = false; // aunque le saquen el disabled desde las herramientas del navegador
     escribir(campo('e1', 1, 'kg'), '99');
     await esperar();
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].kg).toBe('');
+    expect((await registroDe(ALUMNO.id)).e1[1].kg).toBe('');
   });
 
   it('"Reabrir sesión" quita la sesión y deja volver a anotar', async () => {
@@ -559,7 +559,7 @@ describe('vista del alumno: terminar sesión', () => {
     $('[data-click="alumnoReabrir"]').click();
     await esperar();
 
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     expect($('[data-sesion-terminada]')).toBeNull();
     expect($('[data-click="alumnoTerminar"]')).not.toBeNull();
     expect($$('[data-change="alumnoSerie"]').some((i) => i.disabled)).toBe(false);
@@ -602,7 +602,7 @@ describe('vista del alumno: terminar sesión', () => {
     await abrir();
     check('e1', 1).click();
     await esperar();
-    vi.spyOn(repo, 'guardarSesiones').mockRejectedValueOnce(new Error('Quota exceeded'));
+    vi.spyOn(repo, 'guardarSesionesDelCiclo').mockRejectedValueOnce(new Error('Quota exceeded'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await terminar();
@@ -655,7 +655,7 @@ describe('modo lectura del coach: sesiones', () => {
   beforeEach(() => guardarPlan());
 
   it('ve que el alumno terminó el día y cuándo, sin botones para cambiarlo', async () => {
-    await repo.guardarSesiones(ALUMNO.id, { d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z' } });
+    await guardarSesionesDe(ALUMNO.id, { d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z' } });
     await abrir({ soloLectura: true });
 
     expect($('[data-sesion-terminada]').textContent).toContain('19/10/2026');
@@ -697,7 +697,7 @@ describe('vista del alumno: día no entrenado', () => {
 
     expect(pregunta).toContain('11 series');
     expect(pregunta).toContain('omitidas');
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     expect($('[data-progreso]').textContent).toBe('0 / 11 series');
   });
 
@@ -707,9 +707,9 @@ describe('vista del alumno: día no entrenado', () => {
     await noEntrene();
     await responderConfirmacion(true);
 
-    const sesion = (await repo.cargarSesiones(ALUMNO.id)).d1;
+    const sesion = (await sesionesDe(ALUMNO.id)).d1;
     expect(sesion).toMatchObject({ fecha: '2026-10-18', estado: 'omitida' });
-    const registro = await repo.cargarRegistro(ALUMNO.id);
+    const registro = await registroDe(ALUMNO.id);
     expect(registro.e1[1]).toMatchObject({ skipped: true, done: false });
     expect(registro.e3[3]).toMatchObject({ skipped: true });
     expect(barra()).toEqual({ hechas: '0%', omitidas: '100%' });
@@ -725,7 +725,7 @@ describe('vista del alumno: día no entrenado', () => {
     const pregunta = await responderConfirmacion(true);
 
     expect(pregunta).toContain('11 series');
-    const registro = await repo.cargarRegistro(ALUMNO.id);
+    const registro = await registroDe(ALUMNO.id);
     expect(registro.e1[1]).toMatchObject({ done: false, skipped: true });
     expect($('[data-progreso]').textContent).toBe('0 / 11 series · 11 omitidas');
   });
@@ -735,7 +735,7 @@ describe('vista del alumno: día no entrenado', () => {
     fechaDeSesion().value = '2026-10-21';
     await noEntrene();
     expect(textoDelAviso()).toContain('no puede ser futura');
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     document.querySelector('#app-modal-overlay-aux [data-click="cerrarModalAux"]').click();
 
     fechaDeSesion().value = '';
@@ -764,7 +764,7 @@ describe('vista del alumno: día no entrenado', () => {
     $('[data-click="alumnoReabrir"]').click();
     await esperar();
 
-    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect(await sesionesDe(ALUMNO.id)).toEqual({});
     expect($('[data-dia-no-entrenado]')).toBeNull();
     expect($('[data-click="alumnoNoEntrene"]')).not.toBeNull();
     expect($('[data-click="alumnoDia"][data-d="0"]').dataset.noEntrenado).toBeUndefined();
@@ -790,7 +790,7 @@ describe('vista del alumno: día no entrenado', () => {
   });
 
   it('el coach en modo lectura ve que no entrenó, sin botones', async () => {
-    await repo.guardarSesiones(ALUMNO.id, {
+    await guardarSesionesDe(ALUMNO.id, {
       d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z', estado: 'omitida' },
     });
     await abrir({ soloLectura: true });

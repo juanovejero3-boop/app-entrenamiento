@@ -18,100 +18,142 @@ const planDe = (nombre) => ({ ...crearPlan({ fechaInicio: '2026-10-19' }), macro
 const filasDe = (tabla) => cliente.tablas[tabla];
 const upserts = (tabla) => cliente.llamadas.filter((l) => l.tabla === tabla && l.op === 'upsert');
 const borrados = (tabla) => cliente.llamadas.filter((l) => l.tabla === tabla && l.op === 'delete');
+const serieHecha = { kg: '80', reps: '8', done: true, skipped: false };
+const diaHecho = { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' };
 
-describe('repo de Supabase: plan de entrenamiento (el ciclo activo del alumno)', () => {
-  it('sin ciclo no hay plan', async () => {
-    expect(await repo.cargarPlanEntrenamiento(ANA)).toBeNull();
+describe('repo de Supabase: ciclos', () => {
+  it('un alumno sin ciclos tiene una lista vacía', async () => {
+    expect(await repo.listarCiclos(ANA)).toEqual([]);
   });
 
-  it('lo que se guarda se vuelve a cargar, como ciclo activo del alumno', async () => {
-    await repo.guardarPlanEntrenamiento(ANA, planDe('Fuerza'));
+  it('crea el ciclo en borrador y lo devuelve con su plan, su alumno y sus fechas', async () => {
+    const ciclo = await repo.crearCiclo(ANA, planDe('Fuerza'));
 
-    expect((await repo.cargarPlanEntrenamiento(ANA)).macroName).toBe('Fuerza');
-    expect(filasDe('training_cycles')).toMatchObject([{ student_id: ANA, status: 'activo' }]);
+    expect(ciclo).toMatchObject({ alumnoId: ANA, estado: 'borrador', finalizadoEn: null });
+    expect(ciclo.id).toBeTruthy();
+    expect(ciclo.creadoEn).toBeTruthy();
+    expect(ciclo.plan.macroName).toBe('Fuerza');
+    expect(filasDe('training_cycles')).toMatchObject([{ student_id: ANA, status: 'borrador' }]);
   });
 
-  it('guardar de nuevo actualiza el mismo ciclo en vez de crear otro', async () => {
-    await repo.guardarPlanEntrenamiento(ANA, planDe('Fuerza'));
-    await repo.guardarPlanEntrenamiento(ANA, planDe('Hipertrofia'));
-
-    expect(filasDe('training_cycles')).toHaveLength(1);
-    expect((await repo.cargarPlanEntrenamiento(ANA)).macroName).toBe('Hipertrofia');
+  it('se puede crear directamente activo', async () => {
+    expect((await repo.crearCiclo(ANA, planDe('Fuerza'), 'activo')).estado).toBe('activo');
   });
 
-  it('cada alumno tiene su plan', async () => {
-    await repo.guardarPlanEntrenamiento(ANA, planDe('De Ana'));
-    await repo.guardarPlanEntrenamiento(LUIS, planDe('De Luis'));
+  it('lista los ciclos del alumno del más viejo al más nuevo, sin mezclar a otros alumnos', async () => {
+    await repo.crearCiclo(ANA, planDe('Primero'), 'finalizado');
+    await repo.crearCiclo(LUIS, planDe('De Luis'), 'activo');
+    await repo.crearCiclo(ANA, planDe('Segundo'), 'borrador');
 
-    expect((await repo.cargarPlanEntrenamiento(ANA)).macroName).toBe('De Ana');
-    expect((await repo.cargarPlanEntrenamiento(LUIS)).macroName).toBe('De Luis');
+    const ciclos = await repo.listarCiclos(ANA);
+    expect(ciclos.map((c) => c.plan.macroName)).toEqual(['Primero', 'Segundo']);
+    expect(ciclos.map((c) => c.estado)).toEqual(['finalizado', 'borrador']);
   });
 
-  it('solo toma el ciclo activo: ignora finalizados y borradores', async () => {
-    filasDe('training_cycles').push(
-      { id: 'c1', student_id: ANA, status: 'finalizado', plan: planDe('Viejo') },
-      { id: 'c2', student_id: ANA, status: 'borrador', plan: planDe('Borrador') },
-    );
-    expect(await repo.cargarPlanEntrenamiento(ANA)).toBeNull();
-
-    await repo.guardarPlanEntrenamiento(ANA, planDe('Nuevo'));
-    expect((await repo.cargarPlanEntrenamiento(ANA)).macroName).toBe('Nuevo');
-    expect(filasDe('training_cycles')).toHaveLength(3); // no pisó los otros
+  it('un plan guardado con campos faltantes se normaliza al listarlo', async () => {
+    filasDe('training_cycles').push({
+      id: 'c1',
+      student_id: ANA,
+      status: 'activo',
+      plan: { macroName: 'Viejo' },
+      finished_at: null,
+      created_at: '2026-01-01T00:00:00.000Z',
+    });
+    const [ciclo] = await repo.listarCiclos(ANA);
+    expect(ciclo.plan.weeks).toEqual([]);
+    expect(ciclo.plan.macroName).toBe('Viejo');
   });
 
-  it('un plan guardado con campos de más o faltantes se normaliza al cargarlo', async () => {
-    filasDe('training_cycles').push({ id: 'c1', student_id: ANA, status: 'activo', plan: { macroName: 'Viejo' } });
-    const plan = await repo.cargarPlanEntrenamiento(ANA);
-    expect(plan.macroName).toBe('Viejo');
-    expect(plan.weeks).toEqual([]);
+  it('guarda el plan de ese ciclo y no toca los demás', async () => {
+    const a = await repo.crearCiclo(ANA, planDe('A'), 'finalizado');
+    const b = await repo.crearCiclo(ANA, planDe('B'));
+    await repo.guardarPlanDelCiclo(b.id, planDe('B editado'));
+
+    const [primero, segundo] = await repo.listarCiclos(ANA);
+    expect([primero.id, primero.plan.macroName]).toEqual([a.id, 'A']);
+    expect(segundo.plan.macroName).toBe('B editado');
   });
 
-  it('exige el alumno', async () => {
-    await expect(repo.cargarPlanEntrenamiento('')).rejects.toThrow('alumnoId');
-    await expect(repo.guardarPlanEntrenamiento(null, planDe('x'))).rejects.toThrow('alumnoId');
+  it('avisa si no se pudo actualizar el ciclo (no existe o no hay permiso)', async () => {
+    await expect(repo.guardarPlanDelCiclo('inexistente', planDe('x'))).rejects.toThrow('No se pudo actualizar');
+    await expect(repo.cambiarEstadoDelCiclo('inexistente', 'activo')).rejects.toThrow('No se pudo actualizar');
+  });
+
+  it('mostrar, ocultar y finalizar: cambia el estado y guarda cuándo se finalizó', async () => {
+    const { id } = await repo.crearCiclo(ANA, planDe('Fuerza'));
+
+    await repo.cambiarEstadoDelCiclo(id, 'activo');
+    expect((await repo.listarCiclos(ANA))[0]).toMatchObject({ estado: 'activo', finalizadoEn: null });
+
+    await repo.cambiarEstadoDelCiclo(id, 'finalizado');
+    const [finalizado] = await repo.listarCiclos(ANA);
+    expect(finalizado.estado).toBe('finalizado');
+    expect(finalizado.finalizadoEn).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    await repo.cambiarEstadoDelCiclo(id, 'borrador');
+    expect((await repo.listarCiclos(ANA))[0]).toMatchObject({ estado: 'borrador', finalizadoEn: null });
+  });
+
+  it('elimina un ciclo en borrador', async () => {
+    const { id } = await repo.crearCiclo(ANA, planDe('Fuerza'));
+    await repo.eliminarCiclo(id);
+    expect(await repo.listarCiclos(ANA)).toEqual([]);
+  });
+
+  it('no elimina un ciclo activo ni uno finalizado (el alumno puede haber anotado en él)', async () => {
+    const activo = await repo.crearCiclo(ANA, planDe('Activo'), 'activo');
+    const finalizado = await repo.crearCiclo(ANA, planDe('Viejo'), 'finalizado');
+    await expect(repo.eliminarCiclo(activo.id)).rejects.toThrow('borrador');
+    await expect(repo.eliminarCiclo(finalizado.id)).rejects.toThrow('borrador');
+    expect(await repo.listarCiclos(ANA)).toHaveLength(2);
+  });
+
+  it('exige el alumno y el ciclo', async () => {
+    await expect(repo.listarCiclos('')).rejects.toThrow('alumnoId');
+    await expect(repo.crearCiclo(null, planDe('x'))).rejects.toThrow('alumnoId');
+    await expect(repo.guardarPlanDelCiclo('', planDe('x'))).rejects.toThrow('cicloId');
+    await expect(repo.cargarRegistroDelCiclo('')).rejects.toThrow('cicloId');
+    await expect(repo.guardarSesionesDelCiclo(null, {})).rejects.toThrow('cicloId');
   });
 
   it('si Supabase falla, lanza el error en lugar de perder el dato en silencio', async () => {
     cliente.fallarLaProxima('permission denied');
-    await expect(repo.cargarPlanEntrenamiento(ANA)).rejects.toThrow('permission denied');
+    await expect(repo.listarCiclos(ANA)).rejects.toThrow('permission denied');
     cliente.fallarLaProxima('sin conexión');
-    await expect(repo.guardarPlanEntrenamiento(ANA, planDe('x'))).rejects.toThrow('sin conexión');
+    await expect(repo.crearCiclo(ANA, planDe('x'))).rejects.toThrow('sin conexión');
   });
 });
 
-describe('repo de Supabase: registro de series', () => {
-  beforeEach(() => repo.guardarPlanEntrenamiento(ANA, planDe('Fuerza')));
+describe('repo de Supabase: registro de series de un ciclo', () => {
+  let ciclo;
+  beforeEach(async () => {
+    ciclo = await repo.crearCiclo(ANA, planDe('Fuerza'), 'activo');
+  });
 
-  it('sin nada anotado, el registro está vacío (también sin plan)', async () => {
-    expect(await repo.cargarRegistro(ANA)).toEqual({});
-    expect(await repo.cargarRegistro(LUIS)).toEqual({});
+  it('sin nada anotado, el registro está vacío', async () => {
+    expect(await repo.cargarRegistroDelCiclo(ciclo.id)).toEqual({});
   });
 
   it('lo que se guarda se vuelve a cargar igual', async () => {
     const registro = {
-      e1: {
-        1: { kg: '80', reps: '8', done: true, skipped: false },
-        2: { kg: '', reps: '', done: false, skipped: true },
-      },
+      e1: { 1: serieHecha, 2: { kg: '', reps: '', done: false, skipped: true } },
       e2: { 1: { kg: '20', reps: '12', done: false, skipped: false } },
     };
-    await repo.guardarRegistro(ANA, registro);
-    expect(await repo.cargarRegistro(ANA)).toEqual(registro);
+    await repo.guardarRegistroDelCiclo(ciclo.id, registro);
+    expect(await repo.cargarRegistroDelCiclo(ciclo.id)).toEqual(registro);
   });
 
   it('cada serie queda en una fila con su ciclo, su alumno y su número', async () => {
-    await repo.guardarRegistro(ANA, { e1: { 3: { kg: '80', reps: '8', done: true, skipped: false } } });
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 3: serieHecha } });
 
     expect(filasDe('training_set_logs')).toMatchObject([
-      { student_id: ANA, exercise_id: 'e1', set_n: 3, kg: '80', reps: '8', done: true, skipped: false },
+      { cycle_id: ciclo.id, student_id: ANA, exercise_id: 'e1', set_n: 3, kg: '80', reps: '8', done: true },
     ]);
-    expect(filasDe('training_set_logs')[0].cycle_id).toBe(filasDe('training_cycles')[0].id);
   });
 
   it('solo manda las series que cambiaron, no todo el registro', async () => {
-    const hecha = { kg: '80', reps: '8', done: true, skipped: false };
-    await repo.guardarRegistro(ANA, { e1: { 1: hecha } });
-    await repo.guardarRegistro(ANA, { e1: { 1: hecha, 2: hecha } });
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha, 2: serieHecha } });
 
     const [primero, segundo] = upserts('training_set_logs');
     expect(primero.filas).toHaveLength(1);
@@ -120,107 +162,117 @@ describe('repo de Supabase: registro de series', () => {
   });
 
   it('si no cambió nada no manda nada', async () => {
-    const registro = { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } };
-    await repo.guardarRegistro(ANA, registro);
-    await repo.guardarRegistro(ANA, registro);
+    const registro = { e1: { 1: serieHecha } };
+    await repo.guardarRegistroDelCiclo(ciclo.id, registro);
+    await repo.guardarRegistroDelCiclo(ciclo.id, registro);
     expect(upserts('training_set_logs')).toHaveLength(1);
   });
 
   it('después de cargar, guardar lo mismo tampoco manda nada', async () => {
-    const registro = { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } };
-    await repo.guardarRegistro(ANA, registro);
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
     const otraSesion = crearRepoSupabase(cliente);
-    const cargado = await otraSesion.cargarRegistro(ANA);
+    const cargado = await otraSesion.cargarRegistroDelCiclo(ciclo.id);
     const antes = upserts('training_set_logs').length;
 
-    await otraSesion.guardarRegistro(ANA, cargado);
+    await otraSesion.guardarRegistroDelCiclo(ciclo.id, cargado);
     expect(upserts('training_set_logs')).toHaveLength(antes);
   });
 
   it('una serie que ya no está en el registro se borra', async () => {
-    const serie = { kg: '', reps: '', done: true, skipped: false };
-    await repo.guardarRegistro(ANA, { e1: { 1: serie, 2: serie } });
-    await repo.guardarRegistro(ANA, { e1: { 1: serie } });
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha, 2: serieHecha } });
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
 
     expect(filasDe('training_set_logs').map((f) => f.set_n)).toEqual([1]);
     expect(borrados('training_set_logs')).toHaveLength(1);
   });
 
   it('si falla el guardado, el próximo intento vuelve a mandar el cambio', async () => {
-    const registro = { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } };
+    const registro = { e1: { 1: serieHecha } };
+    await repo.guardarRegistroDelCiclo(ciclo.id, registro); // ya conoce el ciclo y su alumno
     cliente.fallarLaProxima('sin conexión');
-    await expect(repo.guardarRegistro(ANA, registro)).rejects.toThrow('sin conexión');
-    expect(filasDe('training_set_logs')).toHaveLength(0);
-
-    await repo.guardarRegistro(ANA, registro);
+    const nuevo = { e1: { 1: serieHecha, 2: serieHecha } };
+    await expect(repo.guardarRegistroDelCiclo(ciclo.id, nuevo)).rejects.toThrow('sin conexión');
     expect(filasDe('training_set_logs')).toHaveLength(1);
+
+    await repo.guardarRegistroDelCiclo(ciclo.id, nuevo);
+    expect(filasDe('training_set_logs')).toHaveLength(2);
   });
 
-  it('sin plan activo no hay dónde guardar: avisa', async () => {
-    await expect(
-      repo.guardarRegistro(LUIS, { e1: { 1: { kg: '', reps: '', done: true, skipped: false } } }),
-    ).rejects.toThrow('plan');
+  it('un ciclo que no existe no tiene dónde guardar: avisa', async () => {
+    await expect(repo.guardarRegistroDelCiclo('inexistente', { e1: { 1: serieHecha } })).rejects.toThrow('ciclo');
   });
 
-  it('el registro de un alumno no se mezcla con el de otro', async () => {
-    await repo.guardarPlanEntrenamiento(LUIS, planDe('De Luis'));
-    await repo.guardarRegistro(ANA, { e1: { 1: { kg: '80', reps: '', done: true, skipped: false } } });
-    expect(await repo.cargarRegistro(LUIS)).toEqual({});
+  it('cada ciclo tiene su propio registro, aunque sea del mismo alumno', async () => {
+    const otro = await repo.crearCiclo(ANA, planDe('Otro'), 'finalizado');
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
+
+    expect(await repo.cargarRegistroDelCiclo(otro.id)).toEqual({});
+    await repo.guardarRegistroDelCiclo(otro.id, { e1: { 1: { ...serieHecha, kg: '100' } } });
+    expect((await repo.cargarRegistroDelCiclo(ciclo.id)).e1[1].kg).toBe('80');
+    expect((await repo.cargarRegistroDelCiclo(otro.id)).e1[1].kg).toBe('100');
   });
 });
 
-describe('repo de Supabase: sesiones', () => {
-  beforeEach(() => repo.guardarPlanEntrenamiento(ANA, planDe('Fuerza')));
+describe('repo de Supabase: sesiones de un ciclo', () => {
+  let ciclo;
+  beforeEach(async () => {
+    ciclo = await repo.crearCiclo(ANA, planDe('Fuerza'), 'activo');
+  });
 
-  it('sin días terminados las sesiones están vacías (también sin plan)', async () => {
-    expect(await repo.cargarSesiones(ANA)).toEqual({});
-    expect(await repo.cargarSesiones(LUIS)).toEqual({});
+  it('sin días terminados las sesiones están vacías', async () => {
+    expect(await repo.cargarSesionesDelCiclo(ciclo.id)).toEqual({});
   });
 
   it('lo que se guarda se vuelve a cargar igual, con su fecha y su estado', async () => {
-    const sesiones = {
-      d1: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' },
-      d2: { fecha: '2026-10-18', terminadaEn: TERMINADA, estado: 'omitida' },
-    };
-    await repo.guardarSesiones(ANA, sesiones);
-    expect(await repo.cargarSesiones(ANA)).toEqual(sesiones);
+    const sesiones = { d1: diaHecho, d2: { fecha: '2026-10-18', terminadaEn: TERMINADA, estado: 'omitida' } };
+    await repo.guardarSesionesDelCiclo(ciclo.id, sesiones);
+    expect(await repo.cargarSesionesDelCiclo(ciclo.id)).toEqual(sesiones);
   });
 
   it('cada día queda en una fila con su ciclo y su alumno', async () => {
-    await repo.guardarSesiones(ANA, { d1: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' } });
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho });
     expect(filasDe('training_sessions')).toMatchObject([
-      { student_id: ANA, day_id: 'd1', fecha: '2026-10-16', estado: 'hecha', terminada_en: TERMINADA },
+      {
+        cycle_id: ciclo.id,
+        student_id: ANA,
+        day_id: 'd1',
+        fecha: '2026-10-16',
+        estado: 'hecha',
+        terminada_en: TERMINADA,
+      },
     ]);
-    expect(filasDe('training_sessions')[0].cycle_id).toBe(filasDe('training_cycles')[0].id);
   });
 
   it('reabrir un día (sacarlo de las sesiones) borra su fila; solo manda lo que cambió', async () => {
-    const hecha = { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' };
-    await repo.guardarSesiones(ANA, { d1: hecha });
-    await repo.guardarSesiones(ANA, { d1: hecha, d2: hecha });
-    await repo.guardarSesiones(ANA, { d2: hecha });
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho });
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho, d2: diaHecho });
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d2: diaHecho });
 
     expect(filasDe('training_sessions').map((f) => f.day_id)).toEqual(['d2']);
     expect(upserts('training_sessions').map((u) => u.filas.length)).toEqual([1, 1]);
   });
 
   it('si falla el guardado, el próximo intento vuelve a mandar el cambio', async () => {
-    const sesiones = { d1: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' } };
+    await repo.guardarSesionesDelCiclo(ciclo.id, {}); // ya conoce el ciclo y su alumno
     cliente.fallarLaProxima('sin conexión');
-    await expect(repo.guardarSesiones(ANA, sesiones)).rejects.toThrow('sin conexión');
+    await expect(repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho })).rejects.toThrow('sin conexión');
 
-    await repo.guardarSesiones(ANA, sesiones);
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho });
     expect(filasDe('training_sessions')).toHaveLength(1);
   });
 
   it('una sesión sin el momento exacto se guarda igual', async () => {
-    await repo.guardarSesiones(ANA, { d1: { fecha: '2026-10-16', terminadaEn: '', estado: 'hecha' } });
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: { ...diaHecho, terminadaEn: '' } });
     expect(filasDe('training_sessions')[0].terminada_en).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it('sin plan activo avisa', async () => {
-    await expect(
-      repo.guardarSesiones(LUIS, { d1: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' } }),
-    ).rejects.toThrow('plan');
+  it('un ciclo que no existe no tiene dónde guardar: avisa', async () => {
+    await expect(repo.guardarSesionesDelCiclo('inexistente', { d1: diaHecho })).rejects.toThrow('ciclo');
+  });
+
+  it('cada ciclo tiene sus propias sesiones', async () => {
+    const otro = await repo.crearCiclo(ANA, planDe('Otro'), 'finalizado');
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho });
+    expect(await repo.cargarSesionesDelCiclo(otro.id)).toEqual({});
   });
 });

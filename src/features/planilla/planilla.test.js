@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
-import { repo } from '../coaching/repo/index.js';
+import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
 import { state } from '../../state.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
 
@@ -19,7 +19,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   document.body.innerHTML = '';
-  localStorage.clear();
   resetPlanillaPestanas();
   Object.assign(state, { currentUser: null, userProfile: null, adminAllUsers: [] });
 });
@@ -34,7 +33,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('si el entrenador le armó un plan, lo ve debajo de las tarjetas de siempre', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto());
 
     await renderTabEntrenamiento(content);
 
@@ -46,7 +45,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('el alumno anota sus series y quedan guardadas', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto());
     await renderTabEntrenamiento(content);
 
     const kg = $('[data-change="alumnoSerie"][data-e="e1"][data-n="1"][data-campo="kg"]');
@@ -54,7 +53,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
     kg.dispatchEvent(new Event('change', { bubbles: true }));
     await esperar();
 
-    expect((await repo.cargarRegistro(ALUMNO.id)).e1[1].kg).toBe('80');
+    expect((await registroDe(ALUMNO.id)).e1[1].kg).toBe('80');
   });
 
   it('si no tiene plan en la app, la pantalla queda como antes (sin sección nueva)', async () => {
@@ -66,7 +65,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('no mezcla el plan de otro alumno', async () => {
-    await repo.guardarPlanEntrenamiento('otro-alumno', planCompleto());
+    await sembrarPlan('otro-alumno', planCompleto());
     await renderTabEntrenamiento(content);
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
@@ -91,7 +90,7 @@ describe('Planilla del coach: ver como alumno', () => {
   });
 
   it('abre el plan de ese alumno en modo lectura, sin poder anotar', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto());
     await abrirFichaDelAlumno();
 
     $('[data-click="planillaVerComoAlumno"]').click();
@@ -103,7 +102,7 @@ describe('Planilla del coach: ver como alumno', () => {
   });
 
   it('"Volver" regresa a la ficha del alumno', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto());
     await abrirFichaDelAlumno();
     $('[data-click="planillaVerComoAlumno"]').click();
     await esperar();
@@ -131,7 +130,7 @@ describe('Planilla del coach: su propio plan', () => {
   });
 
   it('si tiene un plan asignado lo ve en su Planilla y puede completarlo', async () => {
-    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto());
 
     await renderTabEntrenamiento(content);
 
@@ -145,11 +144,11 @@ describe('Planilla del coach: su propio plan', () => {
     inputs[0].value = '100';
     inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
     await esperar();
-    expect(Object.values((await repo.cargarRegistro(COACH.id)).e1)[0].kg).toBe('100');
+    expect(Object.values((await registroDe(COACH.id)).e1)[0].kg).toBe('100');
   });
 
   it('el buscador de alumnos sigue estando', async () => {
-    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto());
     await renderTabEntrenamiento(content);
     expect($('#admin-planilla-search')).not.toBeNull();
   });
@@ -160,13 +159,13 @@ describe('Planilla del coach: su propio plan', () => {
   });
 
   it('el plan de un alumno no aparece como plan del coach', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto());
     await renderTabEntrenamiento(content);
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
   it('en su propia ficha, "Ver mi plan" abre el plan para completarlo (no en solo lectura)', async () => {
-    await repo.guardarPlanEntrenamiento(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto());
     await renderTabEntrenamiento(content);
     $(`[data-click="adminPlanillaSeleccionar"][data-id="${COACH.id}"]`).click();
 

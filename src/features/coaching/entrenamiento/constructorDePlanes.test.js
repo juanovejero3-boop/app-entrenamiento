@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirConstructorDePlanes } from './constructorDePlanes.js';
-import { crearRepoLocal } from '../repo/local.js';
+import { crearPlan } from './plan.js';
+import { repo } from '../repo/index.js';
+import { sembrarPlan, planActivoDe } from '../repo/test-utils.js';
 import '../../../lib/ui.js'; // modales propios: window.confirm real de la app
 import { textoDe } from '../pdf/test-utils.js';
 import { generarPdfBlob } from '../pdf/generar.js';
@@ -14,7 +16,6 @@ vi.mock('../pdf/generar.js', () => ({
 vi.mock('../pdf/paginasPdf.js', () => ({ dibujarPaginasPdf: vi.fn(async () => {}) }));
 
 const ALUMNO = { id: 'alumno-1', name: 'Ana Pérez', email: 'ana@ejemplo.com' };
-const repo = crearRepoLocal();
 
 let content;
 let alVolver;
@@ -27,14 +28,20 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
-  localStorage.clear();
   vi.mocked(generarPdfBlob).mockClear();
 });
 
 const $ = (selector) => content.querySelector(selector);
 const $$ = (selector) => [...content.querySelectorAll(selector)];
-const guardado = () => repo.cargarPlanEntrenamiento(ALUMNO.id);
-const abrir = () => abrirConstructorDePlanes(content, ALUMNO, { alVolver });
+const guardado = () => planActivoDe(ALUMNO.id);
+/** Abre el constructor sobre el ciclo activo del alumno (si no tiene, crea uno vacío). */
+async function abrir() {
+  const cicloId = await sembrarPlan(
+    ALUMNO.id,
+    (await planActivoDe(ALUMNO.id)) ?? crearPlan({ fechaInicio: '2026-10-19' }),
+  );
+  return abrirConstructorDePlanes(content, ALUMNO, { cicloId, alVolver });
+}
 
 /** Simula que el usuario escribe un valor y sale del campo (evento change). */
 function cambiar(el, valor) {
@@ -62,15 +69,15 @@ async function generar(semanas, dias) {
 }
 
 describe('constructor de planes: apertura', () => {
-  it('muestra el alumno y, si no tiene plan, invita a generar la estructura', async () => {
+  it('muestra el alumno y, si el ciclo está vacío, invita a generar la estructura', async () => {
     await abrir();
     expect(content.textContent).toContain('Ana Pérez');
-    expect(content.textContent).toContain('todavía no tiene un plan');
+    expect(content.textContent).toContain('todavía no tiene semanas');
     expect($('[data-click="planGenerar"]')).not.toBeNull();
   });
 
   it('carga el plan guardado del alumno al abrir', async () => {
-    await repo.guardarPlanEntrenamiento(ALUMNO.id, {
+    await sembrarPlan(ALUMNO.id, {
       macroName: 'Fuerza base',
       startDate: '2026-10-19',
       weeks: [{ name: 'Semana 1', days: [{ name: 'Lunes' }] }],
@@ -502,9 +509,40 @@ describe('constructor de planes: PDF', () => {
     expect(descargado).toMatch(/^entrenamiento-ana-perez-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
 
-  it('sin plan no hay botones de PDF', async () => {
-    await abrir();
-    expect($('[data-click="pdfLineamientos"]')).toBeNull();
+  it('un ciclo que no existe avisa y no ofrece nada para editar', async () => {
+    await abrirConstructorDePlanes(content, ALUMNO, { cicloId: 'inexistente', alVolver });
+    expect(content.textContent).toContain('No se encontró ese ciclo');
+    expect($('[data-click="planGenerar"]')).toBeNull();
     expect($('[data-click="pdfEntrenamiento"]')).toBeNull();
+  });
+});
+
+describe('constructor de planes: ciclos', () => {
+  const abrirCiclo = (cicloId) => abrirConstructorDePlanes(content, ALUMNO, { cicloId, alVolver });
+  const plan = (nombre) => ({ ...crearPlan({ fechaInicio: '2026-10-19' }), macroName: nombre });
+
+  it('edita el ciclo que se le indica y no toca los demás del alumno', async () => {
+    const anterior = await repo.crearCiclo(ALUMNO.id, plan('Anterior'), 'finalizado');
+    const nuevo = await repo.crearCiclo(ALUMNO.id, plan('Nuevo'), 'borrador');
+
+    await abrirCiclo(nuevo.id);
+    cambiar($('[data-campo="macroName"]'), 'Nuevo editado');
+    await esperar();
+
+    const nombres = (await repo.listarCiclos(ALUMNO.id)).map((c) => [c.id, c.plan.macroName]);
+    expect(nombres).toEqual([
+      [anterior.id, 'Anterior'],
+      [nuevo.id, 'Nuevo editado'],
+    ]);
+  });
+
+  it.each([
+    ['borrador', 'el alumno no lo ve hasta que lo muestres'],
+    ['activo', 'el alumno ve lo que cambies'],
+    ['finalizado', 'queda en el historial'],
+  ])('un ciclo %s lo avisa arriba: %s', async (estado, texto) => {
+    const { id } = await repo.crearCiclo(ALUMNO.id, plan('Ciclo'), estado);
+    await abrirCiclo(id);
+    expect($('[data-aviso-estado]').textContent).toContain(texto);
   });
 });
