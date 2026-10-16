@@ -6,7 +6,18 @@ const TERMINADA = '2026-10-16T21:30:00.000Z';
 describe('terminarSesion y sesionDe', () => {
   it('guarda la fecha y el momento en que se terminó el día', () => {
     const s = terminarSesion({}, 'dia-1', { fecha: '2026-10-16', terminadaEn: TERMINADA });
-    expect(sesionDe(s, 'dia-1')).toEqual({ fecha: '2026-10-16', terminadaEn: TERMINADA });
+    expect(sesionDe(s, 'dia-1')).toEqual({ fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' });
+  });
+
+  it('se puede marcar como no entrenado (estado omitida) y conserva la fecha', () => {
+    const s = terminarSesion({}, 'dia-1', { fecha: '2026-10-15', terminadaEn: TERMINADA, estado: 'omitida' });
+    expect(sesionDe(s, 'dia-1')).toEqual({ fecha: '2026-10-15', terminadaEn: TERMINADA, estado: 'omitida' });
+  });
+
+  it('rechaza un estado desconocido', () => {
+    expect(() => terminarSesion({}, 'd', { fecha: '2026-10-15', terminadaEn: TERMINADA, estado: 'quizas' })).toThrow(
+      RangeError,
+    );
   });
 
   it('un día sin terminar no tiene sesión', () => {
@@ -81,6 +92,12 @@ describe('diasTerminados', () => {
     expect(diasTerminados(semana, s)).toEqual({ hechos: 0, total: 2 });
   });
 
+  it('un día no entrenado no cuenta como hecho', () => {
+    let s = terminarSesion({}, 'a', { fecha: '2026-10-16', terminadaEn: TERMINADA });
+    s = terminarSesion(s, 'b', { fecha: '2026-10-17', terminadaEn: TERMINADA, estado: 'omitida' });
+    expect(diasTerminados(semana, s)).toEqual({ hechos: 1, total: 2 });
+  });
+
   it('una semana sin días no tiene nada para terminar', () => {
     expect(diasTerminados({ days: [] }, {})).toEqual({ hechos: 0, total: 0 });
   });
@@ -88,8 +105,17 @@ describe('diasTerminados', () => {
 
 describe('normalizarSesiones', () => {
   it('conserva las sesiones válidas', () => {
-    const s = { a: { fecha: '2026-10-16', terminadaEn: TERMINADA } };
+    const s = { a: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' } };
     expect(normalizarSesiones(s)).toEqual(s);
+  });
+
+  it('conserva el estado omitida y toma como hecha lo guardado sin estado o con un estado raro', () => {
+    const r = normalizarSesiones({
+      a: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'omitida' },
+      b: { fecha: '2026-10-16', terminadaEn: TERMINADA },
+      c: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'zzz' },
+    });
+    expect([r.a.estado, r.b.estado, r.c.estado]).toEqual(['omitida', 'hecha', 'hecha']);
   });
 
   it('descarta las que no tienen una fecha válida o no son objetos', () => {
@@ -100,11 +126,13 @@ describe('normalizarSesiones', () => {
         basura: 'x',
         nula: null,
       }),
-    ).toEqual({ ok: { fecha: '2026-10-16', terminadaEn: TERMINADA } });
+    ).toEqual({ ok: { fecha: '2026-10-16', terminadaEn: TERMINADA, estado: 'hecha' } });
   });
 
   it('completa el momento si falta', () => {
-    expect(normalizarSesiones({ a: { fecha: '2026-10-16' } })).toEqual({ a: { fecha: '2026-10-16', terminadaEn: '' } });
+    expect(normalizarSesiones({ a: { fecha: '2026-10-16' } })).toEqual({
+      a: { fecha: '2026-10-16', terminadaEn: '', estado: 'hecha' },
+    });
   });
 
   it.each([[null], ['texto'], [[]], [undefined]])('un dato que no es un objeto (%j) da vacío', (dato) => {

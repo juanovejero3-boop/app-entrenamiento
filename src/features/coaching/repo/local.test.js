@@ -154,7 +154,7 @@ describe('repositorio local: registro del alumno', () => {
 });
 
 describe('repositorio local: sesiones del alumno', () => {
-  const sesiones = { 'dia-1': { fecha: '2026-10-16', terminadaEn: '2026-10-16T21:30:00.000Z' } };
+  const sesiones = { 'dia-1': { fecha: '2026-10-16', terminadaEn: '2026-10-16T21:30:00.000Z', estado: 'hecha' } };
 
   it('lo que se guarda se vuelve a cargar igual', async () => {
     const repo = crearRepoLocal();
@@ -187,7 +187,9 @@ describe('repositorio local: sesiones del alumno', () => {
       'pp:v1:sesiones:alumno-1',
       JSON.stringify({ ok: { fecha: '2026-10-16' }, mal: { fecha: 'ayer' }, x: 'basura' }),
     );
-    expect(await crearRepoLocal().cargarSesiones('alumno-1')).toEqual({ ok: { fecha: '2026-10-16', terminadaEn: '' } });
+    expect(await crearRepoLocal().cargarSesiones('alumno-1')).toEqual({
+      ok: { fecha: '2026-10-16', terminadaEn: '', estado: 'hecha' },
+    });
   });
 
   it('si lo guardado está corrupto devuelve vacío, avisa por consola y no lo borra', async () => {

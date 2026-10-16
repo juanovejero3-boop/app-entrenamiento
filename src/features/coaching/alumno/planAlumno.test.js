@@ -671,3 +671,119 @@ describe('modo lectura del coach: sesiones', () => {
     expect($('[data-click="alumnoTerminar"]')).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Día no entrenado
+// ---------------------------------------------------------------------------
+
+const noEntrene = async () => {
+  $('[data-click="alumnoNoEntrene"]').click();
+  await esperar();
+};
+
+describe('vista del alumno: día no entrenado', () => {
+  beforeEach(() => guardarPlan());
+
+  it('al lado de "Terminar sesión" hay un botón "No entrené este día" que usa la misma fecha', async () => {
+    await abrir();
+    expect($('[data-click="alumnoNoEntrene"]').textContent).toContain('No entrené este día');
+    expect(fechaDeSesion().value).toBe(SEMANA_1);
+  });
+
+  it('pide confirmación; si se cancela no cambia nada', async () => {
+    await abrir();
+    await noEntrene();
+    const pregunta = await responderConfirmacion(false);
+
+    expect(pregunta).toContain('11 series');
+    expect(pregunta).toContain('omitidas');
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect($('[data-progreso]').textContent).toBe('0 / 11 series');
+  });
+
+  it('si se confirma guarda el día como no entrenado, con la fecha elegida, y omite todas las series', async () => {
+    await abrir();
+    fechaDeSesion().value = '2026-10-18';
+    await noEntrene();
+    await responderConfirmacion(true);
+
+    const sesion = (await repo.cargarSesiones(ALUMNO.id)).d1;
+    expect(sesion).toMatchObject({ fecha: '2026-10-18', estado: 'omitida' });
+    const registro = await repo.cargarRegistro(ALUMNO.id);
+    expect(registro.e1[1]).toMatchObject({ skipped: true, done: false });
+    expect(registro.e3[3]).toMatchObject({ skipped: true });
+    expect(barra()).toEqual({ hechas: '0%', omitidas: '100%' });
+    expect($('[data-sesion-terminada]')).toBeNull();
+    expect($('[data-dia-no-entrenado]').textContent).toContain('18/10/2026');
+  });
+
+  it('no deja marcar el día con una fecha futura ni sin fecha', async () => {
+    await abrir();
+    fechaDeSesion().value = '2026-10-21';
+    await noEntrene();
+    expect(textoDelAviso()).toContain('no puede ser futura');
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    document.querySelector('#app-modal-overlay-aux [data-click="cerrarModalAux"]').click();
+
+    fechaDeSesion().value = '';
+    await noEntrene();
+    expect(textoDelAviso()).toContain('Elegí la fecha');
+  });
+
+  it('el día queda bloqueado y su chip lleva una marca propia (no la de día hecho)', async () => {
+    await abrir();
+    await noEntrene();
+    await responderConfirmacion(true);
+
+    expect($$('[data-change="alumnoSerie"]').every((i) => i.disabled)).toBe(true);
+    expect($('[data-click="alumnoTerminar"]')).toBeNull();
+    expect($('[data-click="alumnoNoEntrene"]')).toBeNull();
+    const chip = $('[data-click="alumnoDia"][data-d="0"]');
+    expect(chip.dataset.hecho).toBeUndefined();
+    expect(chip.dataset.noEntrenado).toBe('true');
+  });
+
+  it('"Reabrir" lo deja otra vez sin terminar', async () => {
+    await abrir();
+    await noEntrene();
+    await responderConfirmacion(true);
+
+    $('[data-click="alumnoReabrir"]').click();
+    await esperar();
+
+    expect(await repo.cargarSesiones(ALUMNO.id)).toEqual({});
+    expect($('[data-dia-no-entrenado]')).toBeNull();
+    expect($('[data-click="alumnoNoEntrene"]')).not.toBeNull();
+    expect($('[data-click="alumnoDia"][data-d="0"]').dataset.noEntrenado).toBeUndefined();
+  });
+
+  it('el contador de la semana solo cuenta los días entrenados', async () => {
+    const plan = planDeUnaSerie();
+    plan.weeks[0].days[1].blocks = [
+      { id: 'b9', type: 'fuerza', exercises: [{ id: 'e9', name: 'Peso muerto', sets: '1' }] },
+    ];
+    await guardarPlan(plan);
+    await abrir();
+    await noEntrene();
+    await responderConfirmacion(true);
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).not.toContain('días');
+
+    $('[data-click="alumnoDia"][data-d="1"]').click();
+    check('e9', 1).click();
+    await esperar();
+    await terminar();
+
+    expect($('[data-click="alumnoSemana"][data-w="0"]').textContent).toContain('1/2 días');
+  });
+
+  it('el coach en modo lectura ve que no entrenó, sin botones', async () => {
+    await repo.guardarSesiones(ALUMNO.id, {
+      d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z', estado: 'omitida' },
+    });
+    await abrir({ soloLectura: true });
+
+    expect($('[data-dia-no-entrenado]').textContent).toContain('19/10/2026');
+    expect($('[data-click="alumnoReabrir"]')).toBeNull();
+    expect($('[data-click="alumnoNoEntrene"]')).toBeNull();
+  });
+});

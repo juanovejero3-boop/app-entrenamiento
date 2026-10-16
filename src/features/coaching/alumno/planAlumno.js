@@ -170,8 +170,15 @@ function dibujarPlan() {
         ? `<div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
             ${semana.days
               .map((dia, i) => {
-                const hecho = sesionDe(vista.sesiones, dia.id);
-                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${hecho ? 'data-hecho="true"' : ''} class="${claseChip(i === d)}">${esc(dia.name)}${hecho ? '<i class="fa-solid fa-check ml-1"></i>' : ''}</button>`;
+                const sesion = sesionDe(vista.sesiones, dia.id);
+                const marca = !sesion
+                  ? ''
+                  : sesion.estado === 'omitida'
+                    ? '<i class="fa-solid fa-xmark ml-1 text-red-400"></i>'
+                    : '<i class="fa-solid fa-check ml-1"></i>';
+                const estado =
+                  sesion?.estado === 'omitida' ? 'data-no-entrenado="true"' : sesion ? 'data-hecho="true"' : '';
+                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}">${esc(dia.name)}${marca}</button>`;
               })
               .join('')}
           </div>
@@ -214,9 +221,17 @@ function anchosDeBarra(hechas, omitidas, total) {
 const formatearFecha = (fecha) => fecha.split('-').reverse().join('/');
 
 function dibujarSesionTerminada(sesion) {
+  const noEntrenado = sesion.estado === 'omitida';
+  const marca = noEntrenado ? 'data-dia-no-entrenado' : 'data-sesion-terminada';
+  const colores = noEntrenado
+    ? 'bg-red-950/30 border-red-900 text-red-200'
+    : 'bg-emerald-950/30 border-emerald-800 text-emerald-200';
+  const titulo = noEntrenado
+    ? '<i class="fa-solid fa-circle-xmark mr-1"></i><b class="uppercase tracking-wide">Día no entrenado</b>'
+    : '<i class="fa-solid fa-circle-check mr-1"></i><b class="uppercase tracking-wide">Sesión terminada</b>';
   return `
-    <div data-sesion-terminada class="bg-emerald-950/30 border border-emerald-800 rounded-xl p-3 flex items-center justify-between gap-3 text-xs text-emerald-200">
-      <p><i class="fa-solid fa-circle-check mr-1"></i><b class="uppercase tracking-wide">Sesión terminada</b> el ${esc(formatearFecha(sesion.fecha))}</p>
+    <div ${marca} class="${colores} border rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+      <p>${titulo} el ${esc(formatearFecha(sesion.fecha))}</p>
       ${vista.soloLectura ? '' : `<button data-click="alumnoReabrir" class="${claseBotonChico}">Reabrir sesión</button>`}
     </div>
   `;
@@ -229,6 +244,7 @@ function dibujarCierreDeSesion() {
         <input type="date" data-fecha-sesion value="${esc(vista.hoy)}" max="${esc(vista.hoy)}" class="bg-black border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-neonRed">
       </label>
       <button data-click="alumnoTerminar" class="w-full py-3 neon-glow-button text-white font-black text-sm rounded-xl uppercase tracking-wider"><i class="fa-solid fa-flag-checkered mr-2"></i>Terminar sesión</button>
+      <button data-click="alumnoNoEntrene" class="w-full py-2.5 bg-black border border-gray-700 text-gray-300 font-bold text-xs rounded-xl uppercase tracking-wider"><i class="fa-solid fa-xmark mr-2"></i>No entrené este día</button>
     </div>
   `;
 }
@@ -362,13 +378,20 @@ async function guardarSesionYRegistro({ conRegistro }) {
   }
 }
 
+/** La fecha elegida para cerrar el día, o null (avisando) si falta o es futura. */
+function fechaElegida() {
+  const fecha = vista.content.querySelector('[data-fecha-sesion]')?.value ?? '';
+  if (!fecha) return void window.alert('Elegí la fecha de la sesión.');
+  if (fecha > vista.hoy) return void window.alert('La fecha de la sesión no puede ser futura.');
+  return fecha;
+}
+
 /** Termina el día con la fecha elegida; las series sin marcar pasan a omitidas (con confirmación). */
 async function terminarDia() {
   if (!vista || vista.soloLectura) return;
   const dia = diaActual();
-  const fecha = vista.content.querySelector('[data-fecha-sesion]')?.value ?? '';
-  if (!fecha) return window.alert('Elegí la fecha de la sesión.');
-  if (fecha > vista.hoy) return window.alert('La fecha de la sesión no puede ser futura.');
+  const fecha = fechaElegida();
+  if (!fecha) return;
 
   const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
   const pendientes = total - hechas - omitidas;
@@ -383,6 +406,29 @@ async function terminarDia() {
   } catch {
     return window.alert('La fecha de la sesión no es válida.');
   }
+  vista.registro = pasarPendientesAOmitidas(dia, vista.registro);
+  dibujar();
+  await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
+}
+
+/** Marca el día como no entrenado en la fecha elegida: todas las series sin marcar pasan a omitidas. */
+async function noEntrenarDia() {
+  if (!vista || vista.soloLectura) return;
+  const dia = diaActual();
+  const fecha = fechaElegida();
+  if (!fecha) return;
+
+  const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
+  const pendientes = total - hechas - omitidas;
+  const ok = await window.confirm(
+    `Vas a marcar este día como no entrenado: ${pendientes === 1 ? 'la serie sin marcar pasa' : `las ${pendientes} series sin marcar pasan`} a omitidas (${total} series en total). ¿Seguro?`,
+  );
+  if (!ok) return;
+  vista.sesiones = terminarSesion(vista.sesiones, dia.id, {
+    fecha,
+    terminadaEn: new Date().toISOString(),
+    estado: 'omitida',
+  });
   vista.registro = pasarPendientesAOmitidas(dia, vista.registro);
   dibujar();
   await guardarSesionYRegistro({ conRegistro: pendientes > 0 });
@@ -413,6 +459,7 @@ registrarAcciones({
   alumnoCheck: (el) => (vista ? alternarEstado(el, 'done') : undefined),
   alumnoOmitir: (el) => (vista ? alternarEstado(el, 'skipped') : undefined),
   alumnoTerminar: () => terminarDia(),
+  alumnoNoEntrene: () => noEntrenarDia(),
   alumnoReabrir: () => reabrirDia(),
   alumnoPdf: (el) => (vista?.plan ? mostrarPdf(el.dataset.tipo, vista.plan, vista.alumno) : undefined),
 });

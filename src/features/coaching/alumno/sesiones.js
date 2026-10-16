@@ -1,10 +1,12 @@
 // Sesiones: los días que el alumno terminó, con la fecha en que los entrenó.
 // Se guardan aparte del plan y del registro, indexadas por el id del día (único por plan):
-//   { [diaId]: { fecha: '2026-10-16', terminadaEn: '2026-10-16T21:30:00.000Z' } }
+//   { [diaId]: { fecha: '2026-10-16', terminadaEn: '2026-10-16T21:30:00.000Z', estado: 'hecha' } }
+// `estado` es 'hecha' (entrenó) u 'omitida' (el día no se entrenó; la fecha es la que el alumno indica).
 // Con la fecha se pueden armar después los reportes (adherencia, carga por fecha).
 // Las operaciones son puras e inmutables, igual que las del plan y las del registro.
 
-/** @typedef {{ fecha: string, terminadaEn: string }} Sesion */
+/** @typedef {'hecha' | 'omitida'} EstadoSesion */
+/** @typedef {{ fecha: string, terminadaEn: string, estado: EstadoSesion }} Sesion */
 /** @typedef {Record<string, Sesion>} Sesiones */
 
 /** AAAA-MM-DD de una fecha que existe en el calendario (rechaza 2026-02-30, 2026-13-01...). */
@@ -16,6 +18,8 @@ function esFechaValida(fecha) {
   return real.getUTCFullYear() === anio && real.getUTCMonth() === mes - 1 && real.getUTCDate() === dia;
 }
 
+const ESTADOS = ['hecha', 'omitida'];
+
 /** @returns {Sesion | null} la sesión de ese día, o null si no está terminado */
 export function sesionDe(sesiones, diaId) {
   return sesiones[diaId] ?? null;
@@ -23,11 +27,12 @@ export function sesionDe(sesiones, diaId) {
 
 /**
  * Marca el día como terminado en `fecha` (AAAA-MM-DD). `terminadaEn` es el momento exacto (ISO).
- * Terminar de nuevo un día reemplaza su sesión.
+ * `estado` 'omitida' marca un día que no se entrenó. Terminar de nuevo un día reemplaza su sesión.
  */
-export function terminarSesion(sesiones, diaId, { fecha, terminadaEn }) {
+export function terminarSesion(sesiones, diaId, { fecha, terminadaEn, estado = 'hecha' }) {
   if (!esFechaValida(fecha)) throw new RangeError(`Fecha inválida: ${fecha}`);
-  return { ...sesiones, [diaId]: { fecha, terminadaEn } };
+  if (!ESTADOS.includes(estado)) throw new RangeError(`Estado inválido: ${estado}`);
+  return { ...sesiones, [diaId]: { fecha, terminadaEn, estado } };
 }
 
 /** Quita la sesión del día (volver a editarlo). */
@@ -36,10 +41,13 @@ export function reabrirSesion(sesiones, diaId) {
   return resto;
 }
 
-/** Días de la semana terminados sobre los que tienen ejercicios (los demás no se pueden terminar). */
+/** Días de la semana entrenados (no cuentan los no entrenados) sobre los que tienen ejercicios (los demás no se pueden terminar). */
 export function diasTerminados(semana, sesiones) {
   const conEjercicios = semana.days.filter((dia) => dia.blocks.some((b) => b.exercises.length));
-  return { hechos: conEjercicios.filter((dia) => sesionDe(sesiones, dia.id)).length, total: conEjercicios.length };
+  return {
+    hechos: conEjercicios.filter((dia) => sesionDe(sesiones, dia.id)?.estado === 'hecha').length,
+    total: conEjercicios.length,
+  };
 }
 
 const esObjeto = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -54,6 +62,7 @@ export function normalizarSesiones(dato) {
     limpio[diaId] = {
       fecha: sesion.fecha,
       terminadaEn: typeof sesion.terminadaEn === 'string' ? sesion.terminadaEn : '',
+      estado: sesion.estado === 'omitida' ? 'omitida' : 'hecha',
     };
   }
   return limpio;
