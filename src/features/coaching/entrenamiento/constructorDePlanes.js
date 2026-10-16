@@ -107,7 +107,7 @@ function dibujar() {
   content.innerHTML = `
     <div class="space-y-4 pb-24">
       <div class="flex items-center gap-3">
-        <button data-click="constructorDePlanesVolver" class="text-gray-400 hover:text-neonRed" title="Volver a la planilla">
+        <button data-click="constructorDePlanesVolver" class="text-gray-400 hover:text-neonRed" title="Volver a los ciclos">
           <i class="fa-solid fa-arrow-left"></i>
         </button>
         <div class="flex-1 min-w-0">

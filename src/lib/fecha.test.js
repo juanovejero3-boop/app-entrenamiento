@@ -1,7 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { hoyISO } from './fecha.js';
+import { esFechaValida, hoyISO } from './fecha.js';
 
 afterEach(() => vi.useRealTimers());
+
+describe('esFechaValida', () => {
+  it.each([['2026-10-16'], ['2028-02-29'], ['2026-12-31']])('acepta %s', (fecha) => {
+    expect(esFechaValida(fecha)).toBe(true);
+  });
+
+  it.each([[''], ['16/10/2026'], ['2026-13-01'], ['2026-02-30'], ['2027-02-29'], [undefined], [null], [20261016]])(
+    'rechaza %j',
+    (fecha) => {
+      expect(esFechaValida(fecha)).toBe(false);
+    },
+  );
+});
 
 describe('hoyISO', () => {
   it('devuelve la fecha local con ceros a la izquierda', () => {

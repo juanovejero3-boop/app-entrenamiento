@@ -83,9 +83,9 @@ describe('Planilla del coach: ver como alumno', () => {
     $('[data-click="adminPlanillaSeleccionar"]').click();
   }
 
-  it('la ficha del alumno tiene "Ver como alumno" junto a "Armar / editar macrociclo"', async () => {
+  it('la ficha del alumno tiene "Ver como alumno" junto a "Ciclos de entrenamiento"', async () => {
     await abrirFichaDelAlumno();
-    expect($('[data-click="planillaAbrirConstructorDePlanes"]')).not.toBeNull();
+    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
     expect($('[data-click="planillaVerComoAlumno"]')).not.toBeNull();
   });
 
@@ -109,7 +109,7 @@ describe('Planilla del coach: ver como alumno', () => {
 
     $('[data-click="alumnoVolver"]').click();
 
-    expect($('[data-click="planillaAbrirConstructorDePlanes"]')).not.toBeNull();
+    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
     expect(content.textContent).not.toContain('Modo lectura');
   });
 
@@ -177,6 +177,6 @@ describe('Planilla del coach: su propio plan', () => {
     expect(content.textContent).not.toContain('Modo lectura');
     expect([...content.querySelectorAll('[data-change="alumnoSerie"]')].some((i) => i.disabled)).toBe(false);
     $('[data-click="alumnoVolver"]').click(); // y se puede volver a la ficha
-    expect($('[data-click="planillaAbrirConstructorDePlanes"]')).not.toBeNull();
+    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
   });
 });

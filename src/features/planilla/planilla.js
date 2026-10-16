@@ -2,15 +2,11 @@
 // buscador de alumnos con pestañas para ver la planilla de cada uno.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr } from '../../lib/dom.js';
-import { hoyISO } from '../../lib/fecha.js';
 import { renderUserHeader } from '../../shell.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
 import { abrirPlanAlumno } from '../coaching/alumno/planAlumno.js';
-import { cicloActivo } from '../coaching/ciclos/ciclos.js';
-import { abrirConstructorDePlanes } from '../coaching/entrenamiento/constructorDePlanes.js';
-import { crearPlan } from '../coaching/entrenamiento/plan.js';
-import { repo } from '../coaching/repo/index.js';
+import { abrirCiclosDelAlumno } from '../coaching/ciclos/ciclosDelAlumno.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
@@ -279,9 +275,9 @@ function renderAdminPlanillaAlumno(u) {
         <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
           <i class="fa-solid fa-layer-group mr-2"></i> Plan de entrenamiento (en la app)
         </h3>
-        <p class="text-[11px] text-gray-400">En prueba: se guarda solo en este navegador hasta aprobar la integración.</p>
-        <button data-click="planillaAbrirConstructorDePlanes" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
-          <i class="fa-solid fa-pen-ruler mr-2"></i> Armar / editar macrociclo
+        <p class="text-[11px] text-gray-400">Los ciclos del alumno: armá uno nuevo, mostralo cuando esté listo y consultá los anteriores.</p>
+        <button data-click="planillaAbrirCiclos" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
+          <i class="fa-solid fa-pen-ruler mr-2"></i> Ciclos de entrenamiento
         </button>
         <button data-click="planillaVerComoAlumno" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-gray-300 font-black text-sm py-3 rounded-2xl uppercase tracking-wider border border-gray-600 hover:border-neonRed hover:text-neonRed transition">
           <i class="fa-solid fa-eye mr-2"></i> ${u.id === state.userProfile?.id ? 'Ver mi plan (podés completarlo)' : 'Ver como alumno (solo lectura)'}
@@ -352,14 +348,10 @@ registrarAcciones({
   adminPlanillaActivar: (el) => adminPlanillaActivar(el.dataset.id),
   adminPlanillaCerrarPestana: (el) => adminPlanillaCerrarPestana(el.dataset.id),
   adminPlanillaMostrarBuscador: () => adminPlanillaMostrarBuscador(),
-  planillaAbrirConstructorDePlanes: async (el) => {
+  planillaAbrirCiclos: (el) => {
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
-    // Provisorio hasta la lista de ciclos: edita el ciclo activo y, si no hay, crea uno
-    const ciclos = await repo.listarCiclos(u.id);
-    const ciclo = cicloActivo(ciclos) ?? (await repo.crearCiclo(u.id, crearPlan({ fechaInicio: hoyISO() }), 'activo'));
-    abrirConstructorDePlanes(document.getElementById('app-content'), u, {
-      cicloId: ciclo.id,
+    abrirCiclosDelAlumno(document.getElementById('app-content'), u, {
       alVolver: () => adminPlanillaActivar(u.id),
     });
   },

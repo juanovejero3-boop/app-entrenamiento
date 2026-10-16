@@ -5,18 +5,11 @@
 // Con la fecha se pueden armar después los reportes (adherencia, carga por fecha).
 // Las operaciones son puras e inmutables, igual que las del plan y las del registro.
 
+import { esFechaValida } from '../../../lib/fecha.js';
+
 /** @typedef {'hecha' | 'omitida'} EstadoSesion */
 /** @typedef {{ fecha: string, terminadaEn: string, estado: EstadoSesion }} Sesion */
 /** @typedef {Record<string, Sesion>} Sesiones */
-
-/** AAAA-MM-DD de una fecha que existe en el calendario (rechaza 2026-02-30, 2026-13-01...). */
-function esFechaValida(fecha) {
-  const m = typeof fecha === 'string' && fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return false;
-  const [anio, mes, dia] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const real = new Date(Date.UTC(anio, mes - 1, dia));
-  return real.getUTCFullYear() === anio && real.getUTCMonth() === mes - 1 && real.getUTCDate() === dia;
-}
 
 const ESTADOS = ['hecha', 'omitida'];
 
