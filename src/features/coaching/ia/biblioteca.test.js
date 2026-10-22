@@ -58,6 +58,25 @@ describe('crearIndice', () => {
     );
   });
 
+  it('encuentra el ejercicio aunque falte el músculo del final (la IA suele omitirlo)', () => {
+    expect(indice.get(normalizarNombre('Remo con mancuerna'))).toBe('Remo con mancuerna - Dorsal');
+    expect(indice.get(normalizarNombre('sentadilla con barra alta'))).toBe(
+      'Sentadilla con barra alta - Cuádriceps, glúteo',
+    );
+  });
+
+  it('si dos ejercicios comparten el nombre sin músculo no adivina cuál es', () => {
+    const repetidos = crearIndice(['Press de banca - Pectoral', 'Press de banca - Tríceps', 'Remo - Dorsal']);
+    expect(repetidos.get(normalizarNombre('Press de banca'))).toBeUndefined();
+    expect(repetidos.get(normalizarNombre('Press de banca - Tríceps'))).toBe('Press de banca - Tríceps'); // el completo sí
+    expect(repetidos.get(normalizarNombre('Remo'))).toBe('Remo - Dorsal');
+  });
+
+  it('un nombre completo gana sobre uno recortado que casualmente coincide', () => {
+    const indiceMixto = crearIndice(['Remo - Dorsal', 'Remo - Dorsal - Trapecio']);
+    expect(indiceMixto.get(normalizarNombre('Remo - Dorsal'))).toBe('Remo - Dorsal');
+  });
+
   it('un nombre que no está no se encuentra', () => {
     expect(indice.get(normalizarNombre('Sentadilla búlgara'))).toBeUndefined();
   });

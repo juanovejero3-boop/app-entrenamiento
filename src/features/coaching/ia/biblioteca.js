@@ -42,9 +42,26 @@ export function bibliotecaDelCoach(catalogo) {
     });
 }
 
-/** Índice nombre normalizado -> nombre oficial, para encontrar un ejercicio aunque lo escriban distinto. */
+const SEPARADOR_MUSCULO = ' - ';
+
+/**
+ * Índice nombre normalizado -> nombre oficial, para encontrar un ejercicio aunque lo escriban distinto. También
+ * lo encuentra sin el músculo del final ("Remo con mancuerna" por "Remo con mancuerna - Dorsal"), que es
+ * lo que suele omitir la IA, siempre que no haya dos ejercicios que coincidan con ese nombre recortado.
+ */
 export function crearIndice(nombres) {
-  return new Map(nombres.map((nombre) => [normalizarNombre(nombre), nombre]));
+  const indice = new Map(nombres.map((nombre) => [normalizarNombre(nombre), nombre]));
+  const recortados = new Map();
+  for (const nombre of nombres) {
+    const corte = nombre.lastIndexOf(SEPARADOR_MUSCULO);
+    if (corte < 0) continue;
+    const clave = normalizarNombre(nombre.slice(0, corte));
+    recortados.set(clave, recortados.has(clave) ? null : nombre); // null: más de uno, no se adivina
+  }
+  for (const [clave, nombre] of recortados) {
+    if (nombre && !indice.has(clave)) indice.set(clave, nombre);
+  }
+  return indice;
 }
 
 let biblioteca = null;

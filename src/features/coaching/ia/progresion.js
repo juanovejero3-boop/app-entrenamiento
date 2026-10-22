@@ -51,7 +51,7 @@ export function completarSemanasVacias(plan) {
 /** Reglas extra cuando la IA puede completar días vacíos con ejercicios de la biblioteca. */
 const reglasDeDiasVacios = () =>
   `- Los días que no tienen ejercicios se pueden completar si la instrucción lo pide: poné en el campo "blocks" de ese día los bloques con sus ejercicios, sin ids. Cada bloque es un objeto con "type" (uno de: ${Object.keys(TIPOS_BLOQUE).join(', ')}) y "exercises"; cada ejercicio es un objeto con "name", "sets", "reps", "intensityType", "intensityValue" y "rest".
-- Elegí SOLO ejercicios de la BIBLIOTECA, con el nombre exacto de la lista. Máximo 6 bloques y 12 ejercicios por día.
+- Elegí SOLO ejercicios de la BIBLIOTECA y copiá el nombre exacto y completo de la lista, incluido lo que va después del guion (los músculos). Máximo 6 bloques y 12 ejercicios por día.
 - Si completás un día vacío, completalo con los mismos ejercicios en todas las semanas donde esté vacío y aplicá la progresión que pida la instrucción.
 `;
 

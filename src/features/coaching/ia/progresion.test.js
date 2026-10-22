@@ -356,6 +356,7 @@ describe('completar días vacíos con ejercicios de la biblioteca', () => {
       expect(prompt).toContain('Curl femoral tumbado - Isquios');
       expect(prompt).toContain('BIBLIOTECA');
       expect(prompt).toContain('nombre exacto');
+      expect(prompt).toContain('completo'); // incluido lo que va después del guion
       expect(prompt).toContain('hipertrofia'); // los tipos de bloque que existen
       expect(prompt).toContain('sin ids');
     });
@@ -431,6 +432,15 @@ describe('completar días vacíos con ejercicios de la biblioteca', () => {
       const { plan } = aplicarCambios(base, semanas, opciones);
       expect(plan.weeks[0].days[1].blocks).toHaveLength(1);
       expect(plan.weeks[0].days[1].blocks[0].id).not.toBe('bv');
+    });
+
+    it('si la IA omite el músculo del final del nombre igual lo reconoce y usa el nombre oficial', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [bloqueIA([{ name: 'Curl femoral tumbado' }])]);
+      const { plan, cambios } = aplicarCambios(base, semanas, opciones);
+
+      expect(plan.weeks[0].days[1].blocks[0].exercises[0].name).toBe('Curl femoral tumbado - Isquios');
+      expect(cambios.filter((c) => c.agregado).every((c) => !c.fueraDeBiblioteca)).toBe(true);
     });
 
     it('un ejercicio que no está en la biblioteca se agrega igual pero queda marcado', () => {
