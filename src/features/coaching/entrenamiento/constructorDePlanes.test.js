@@ -618,30 +618,11 @@ describe('constructor de planes: asistente de IA', () => {
       expect($('[data-ia-panel]')).toBeNull();
     });
 
-    it('con la estructura generada pero sin ejercicios aparece avisando qué falta, sin poder pedir', async () => {
+    it('con la estructura generada (aunque no tenga ejercicios todavía) aparece y se puede usar', async () => {
       await sembrarPlan(ALUMNO.id, generarEstructura(crearPlan({ fechaInicio: '2026-10-19' }), 3, 2));
       await abrir();
 
-      expect($('[data-ia-sin-ejercicios]').textContent).toContain('Cargá los ejercicios de la primera semana');
-      expect($('[data-ia-instruccion]').disabled).toBe(true);
-      expect($('[data-click="iaProponer"]').disabled).toBe(true);
-      $('[data-click="iaProponer"]').disabled = false; // aunque lo habiliten desde las herramientas del navegador
-      $('[data-click="iaProponer"]').click();
-      await esperar();
-      expect(llamarIA).not.toHaveBeenCalled();
-    });
-
-    it('se habilita apenas se agrega el primer ejercicio', async () => {
-      await sembrarPlan(ALUMNO.id, generarEstructura(crearPlan({ fechaInicio: '2026-10-19' }), 2, 1));
-      await abrir();
-      $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
-      await esperar();
-      expect($('[data-ia-sin-ejercicios]')).not.toBeNull();
-
-      $('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]').click();
-      await esperar();
-
-      expect($('[data-ia-sin-ejercicios]')).toBeNull();
+      expect($('[data-ia-panel]')).not.toBeNull();
       expect($('[data-ia-instruccion]').disabled).toBe(false);
       expect($('[data-click="iaProponer"]').disabled).toBe(false);
     });
@@ -741,13 +722,39 @@ describe('constructor de planes: asistente de IA', () => {
     expect(await rpeGuardado(1)).toBeUndefined();
   });
 
-  it('si la IA cambia la estructura del plan lo avisa y no ofrece aplicar nada', async () => {
-    vi.mocked(llamarIA).mockResolvedValue('[]');
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+  it('si la IA omite partes del plan, muestra la propuesta con avisos en vez de descartarla', async () => {
+    vi.mocked(llamarIA).mockImplementation(async (peticion) => {
+      const semanas = JSON.parse(peticion.slice(peticion.indexOf('SEMANAS:\n') + 9));
+      semanas[0].days[0].blocks[0].exercises[0].intensityValue = '9';
+      return JSON.stringify(semanas.slice(0, 2)); // falta la semana 3
+    });
     await abrir();
     await pedir();
 
-    expect($('[data-ia-error]').textContent).toContain('cambió la estructura');
+    expect($('[data-ia-error]')).toBeNull();
+    expect($('[data-ia-propuesta]')).not.toBeNull();
+    const avisos = $$('[data-ia-aviso]').map((a) => a.textContent);
+    expect(avisos).toHaveLength(1);
+    expect(avisos[0]).toContain('Semana 3');
+    expect($('[data-ia-avisos]').textContent).toContain('Ojo');
+
+    $('[data-click="iaAplicar"]').click(); // lo que sí se pudo aplicar, se aplica
+    await esperar();
+    expect(await rpeGuardado(0)).toBe('9');
+    expect((await planActivoDe(ALUMNO.id)).weeks[2].days[0].blocks[0].exercises[0].name).toBe('Press banca'); // la semana 3 quedó copiada
+  });
+
+  it('si la IA solo deja avisos (nada aplicable, ninguna semana para copiar) lo dice y no ofrece aplicar', async () => {
+    const plan = planParaIA();
+    for (const w of [1, 2]) {
+      plan.weeks[w].days[0].blocks = [{ id: `b${w}`, type: 'fuerza', exercises: [{ ...ejercicio, id: `e${w}` }] }];
+    }
+    await sembrarPlan(ALUMNO.id, plan);
+    vi.mocked(llamarIA).mockResolvedValue('[]');
+    await abrir();
+    await pedir();
+
+    expect($$('[data-ia-aviso]').length).toBeGreaterThan(0);
     expect($('[data-click="iaAplicar"]')).toBeNull();
   });
 
@@ -998,7 +1005,7 @@ describe('constructor de planes: asistente de IA completando días', () => {
     expect((await planActivoDe(ALUMNO.id)).weeks[0].days[1].blocks[0].exercises[0].name).toBe(OFICIAL);
   });
 
-  it('si no hay días vacíos no manda la biblioteca', async () => {
+  it('siempre le manda la biblioteca para que pueda agregar ejercicios, también en días que ya tienen', async () => {
     const plan = planConDiaVacio();
     for (const w of plan.weeks) {
       for (const [d, dia] of w.days.entries()) {
@@ -1010,7 +1017,29 @@ describe('constructor de planes: asistente de IA completando días', () => {
     await abrir();
     await pedir('No cambies nada');
 
-    expect(vi.mocked(llamarIA).mock.calls[0][0]).not.toContain('BIBLIOTECA');
+    expect(vi.mocked(llamarIA).mock.calls[0][0]).toContain('BIBLIOTECA');
+  });
+
+  it('agrega ejercicios a un día que ya tiene y los muestra antes de aplicar', async () => {
+    await sembrarPlan(ALUMNO.id, planConDiaVacio());
+    vi.mocked(llamarIA).mockImplementation(async (peticion) => {
+      const semanas = JSON.parse(peticion.slice(peticion.indexOf('SEMANAS:\n') + 9));
+      for (const s of semanas) {
+        const bloque = s.days[0].blocks[0];
+        if (bloque)
+          bloque.exercises.push({ name: OFICIAL, sets: '3', reps: '12', intensityType: 'RIR', intensityValue: '2' });
+      }
+      return JSON.stringify(semanas);
+    });
+    await abrir();
+    await pedir('Agregá un ejercicio de trapecio al día 1');
+
+    expect($$('[data-ia-agregado]')[0].textContent).toContain(OFICIAL);
+    $('[data-click="iaAplicar"]').click();
+    await esperar();
+
+    const plan = await planActivoDe(ALUMNO.id);
+    expect(plan.weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Press banca', OFICIAL]);
   });
 
   it('un nombre de ejercicio con HTML se muestra como texto', async () => {

@@ -7,7 +7,7 @@ import { escapeAttr as esc } from '../../../lib/dom.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { llamarIA } from '../ia/gemini.js';
 import { cargarBiblioteca } from '../ia/biblioteca.js';
-import { planTieneEjercicios, proponerProgresion } from '../ia/progresion.js';
+import { proponerProgresion } from '../ia/progresion.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
@@ -280,13 +280,11 @@ function dibujarAsistenteIA() {
 
 function contenidoIA() {
   const { instruccion, pensando, propuesta, error } = actual.ia;
-  const listo = planTieneEjercicios(actual.plan);
   return `
     <h3 class="text-xs font-black uppercase tracking-wider text-purple-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Asistente de progresión (IA)</h3>
-    <p class="text-[11px] text-gray-400">Armá la primera semana, escribí cómo querés que progrese el ciclo y la IA completa las demás semanas. Solo ajusta series, reps, intensidad y descanso, y antes de aplicar ves qué cambia.</p>
-    ${listo ? '' : '<p data-ia-sin-ejercicios class="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded-lg p-3">Cargá los ejercicios de la primera semana para poder usar el asistente.</p>'}
-    <textarea data-ia-instruccion data-input="iaInstruccion" ${listo ? '' : 'disabled'} rows="2" placeholder="Ej: sube 1 punto de RPE por semana y la semana 4 es de descarga" class="${claseInput} resize-none">${esc(instruccion)}</textarea>
-    <button data-click="iaProponer" ${pensando || !listo ? 'disabled' : ''} class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-lg uppercase tracking-wider disabled:opacity-60 transition">
+    <p class="text-[11px] text-gray-400">Armá la primera semana y escribí qué querés: que progrese el ciclo ("+2 reps por semana"), que agregue ejercicios o que complete días. La IA completa las demás semanas y antes de aplicar ves qué cambia.</p>
+    <textarea data-ia-instruccion data-input="iaInstruccion" rows="2" placeholder="Ej: sube 1 punto de RPE por semana y la semana 4 es de descarga" class="${claseInput} resize-none">${esc(instruccion)}</textarea>
+    <button data-click="iaProponer" ${pensando ? 'disabled' : ''} class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-lg uppercase tracking-wider disabled:opacity-60 transition">
       ${pensando ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Pensando...' : '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Proponer cambios'}
     </button>
     ${error ? `<p data-ia-error class="text-xs text-red-300 bg-red-950/30 border border-red-900 rounded-lg p-3">${esc(error)}</p>` : ''}
@@ -294,7 +292,7 @@ function contenidoIA() {
   `;
 }
 
-function dibujarPropuestaIA({ cambios, copiadas }) {
+function dibujarPropuestaIA({ cambios, copiadas, avisos }) {
   const semanas = actual.plan.weeks;
   const copiadasTexto = copiadas.length
     ? `<p class="text-xs text-gray-200">Se copia la primera semana cargada a: <b>${copiadas.map((i) => esc(semanas[i].name)).join(', ')}</b>.</p>`
@@ -325,6 +323,7 @@ function dibujarPropuestaIA({ cambios, copiadas }) {
       ${agregados.length ? `<p class="text-xs text-gray-200">Completa días vacíos con <b>${agregados.length}</b> ${agregados.length === 1 ? 'ejercicio' : 'ejercicios'}:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${listaAgregados}</ul>${restoAgregados > 0 ? `<p class="text-[11px] text-gray-500">y ${restoAgregados} más</p>` : ''}` : ''}
       ${valores.length ? `<p class="text-xs text-gray-200"><b>${valores.length}</b> ${valores.length === 1 ? 'cambio' : 'cambios'} de valores:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${lista}</ul>${resto > 0 ? `<p class="text-[11px] text-gray-500">y ${resto} más</p>` : ''}` : ''}
       ${hayAlgo ? '' : '<p class="text-xs text-gray-300">La IA no propone ningún cambio con esa instrucción.</p>'}
+      ${avisos.length ? `<div data-ia-avisos class="text-xs text-amber-200 bg-amber-950/30 border border-amber-900 rounded-lg p-3 space-y-1"><p class="font-bold uppercase tracking-wider">Ojo</p><ul class="list-disc pl-4 space-y-0.5">${avisos.map((a) => `<li data-ia-aviso>${esc(a)}</li>`).join('')}</ul></div>` : ''}
       <div class="flex gap-2">
         ${hayAlgo ? `<button data-click="iaAplicar" class="flex-1 py-2.5 neon-glow-button text-white font-black text-xs rounded-lg uppercase tracking-wider">Aplicar</button>` : ''}
         <button data-click="iaDescartar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed px-4">Descartar</button>
