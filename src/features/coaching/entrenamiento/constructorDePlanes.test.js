@@ -592,12 +592,17 @@ describe('constructor de planes: asistente de IA', () => {
   };
 
   const textoDelAviso = () => document.getElementById('app-modal-overlay-aux')?.textContent ?? '';
-  const pedir = async (instruccion = 'Sube 1 de RPE por semana') => {
+  const escribirYProponer = (instruccion) => {
     const campo = $('[data-ia-instruccion]');
     campo.value = instruccion;
     campo.dispatchEvent(new Event('input', { bubbles: true }));
     $('[data-click="iaProponer"]').click();
-    await esperar();
+  };
+  // La primera consulta carga la biblioteca de ejercicios (un archivo grande) antes de llamar a la IA:
+  // se espera a que haya una propuesta o un error
+  const pedir = async (instruccion = 'Sube 1 de RPE por semana') => {
+    escribirYProponer(instruccion);
+    await vi.waitFor(() => expect($('[data-ia-propuesta]') ?? $('[data-ia-error]')).not.toBeNull());
   };
   const rpeGuardado = async (w) =>
     (await planActivoDe(ALUMNO.id)).weeks[w].days[0].blocks[0]?.exercises[0]?.intensityValue;
@@ -657,7 +662,8 @@ describe('constructor de planes: asistente de IA', () => {
 
   it('sin instrucción avisa y no llama a la IA', async () => {
     await abrir();
-    await pedir('   ');
+    escribirYProponer('   ');
+    await esperar();
     expect(textoDelAviso()).toContain('Escribí qué querés que haga la IA');
     expect(llamarIA).not.toHaveBeenCalled();
   });
@@ -707,19 +713,20 @@ describe('constructor de planes: asistente de IA', () => {
     let responder;
     vi.mocked(llamarIA).mockImplementation(() => new Promise((r) => (responder = r)));
     await abrir();
-    await pedir();
+    escribirYProponer('Sube 1 de RPE por semana');
+    await vi.waitFor(() => expect($('[data-click="iaProponer"]').disabled).toBe(true));
 
     const boton = $('[data-click="iaProponer"]');
     expect(boton.disabled).toBe(true);
     expect(boton.textContent).toContain('Pensando');
     boton.disabled = false; // aunque lo habiliten desde las herramientas del navegador
     boton.click();
+    await vi.waitFor(() => expect(llamarIA).toHaveBeenCalled());
     await esperar();
     expect(llamarIA).toHaveBeenCalledTimes(1);
 
     responder(await iaQueSubeRPE(vi.mocked(llamarIA).mock.calls[0][0]));
-    await esperar();
-    expect($('[data-ia-propuesta]')).not.toBeNull();
+    await vi.waitFor(() => expect($('[data-ia-propuesta]')).not.toBeNull());
     expect($('[data-click="iaProponer"]').disabled).toBe(false);
   });
 
@@ -879,5 +886,140 @@ describe('constructor de planes: semanas como pestañas', () => {
     await elegirSemana(2);
     await abrir();
     expect(semanaAbierta()).toBe('0');
+  });
+});
+
+describe('constructor de planes: asistente de IA completando días', () => {
+  const OFICIAL = 'Encogimientos de hombros con mancuernas - Trapecio';
+  const ejercicio = {
+    id: 'e1',
+    name: 'Press banca',
+    sets: '4',
+    reps: '6',
+    intensityType: 'RPE',
+    intensityValue: '7',
+    tech: '',
+    rest: '90s',
+    notes: '',
+    group: '',
+  };
+
+  /** 2 semanas de 2 días: el Día 1 de la semana 1 tiene un ejercicio; el Día 2 está vacío. */
+  function planConDiaVacio() {
+    const plan = generarEstructura({ ...crearPlan({ fechaInicio: '2026-10-19' }), macroName: 'Fuerza' }, 2, 2);
+    plan.weeks[0].days[0].blocks = [{ id: 'b1', type: 'fuerza', exercises: [ejercicio] }];
+    return plan;
+  }
+
+  /** Una IA que completa el día vacío de cada semana con `nombre`. */
+  const iaQueCompleta = (nombre) => async (peticion) => {
+    const semanas = JSON.parse(peticion.slice(peticion.indexOf('SEMANAS:\n') + 9));
+    for (const semana of semanas) {
+      semana.days[1].blocks = [
+        {
+          type: 'hipertrofia',
+          exercises: [
+            { name: nombre, sets: '3', reps: '10-12', intensityType: 'RIR', intensityValue: '2', rest: '90s' },
+          ],
+        },
+      ];
+    }
+    return JSON.stringify(semanas);
+  };
+  const textoDelAviso = () => document.getElementById('app-modal-overlay-aux')?.textContent ?? '';
+  const pedir = async (instruccion) => {
+    const campo = $('[data-ia-instruccion]');
+    campo.value = instruccion;
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+    $('[data-click="iaProponer"]').click();
+    await vi.waitFor(() => expect($('[data-ia-propuesta]') ?? $('[data-ia-error]')).not.toBeNull());
+  };
+
+  beforeEach(async () => {
+    await sembrarPlan(ALUMNO.id, planConDiaVacio());
+  });
+
+  it('con días vacíos le da a la IA los ejercicios de la biblioteca', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta(OFICIAL));
+    await abrir();
+    await pedir('Completá el día 2 con trapecio');
+
+    const peticion = vi.mocked(llamarIA).mock.calls[0][0];
+    expect(peticion).toContain('BIBLIOTECA');
+    expect(peticion).toContain(OFICIAL);
+    expect(peticion).not.toContain('Cable Front Squat'); // solo la biblioteca del coach, no toda la base
+  });
+
+  it('muestra los ejercicios que agregaría antes de aplicar, y no guarda nada todavía', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta(OFICIAL));
+    await abrir();
+    await pedir('Completá el día 2 con trapecio');
+
+    const agregados = $$('[data-ia-agregado]');
+    expect(agregados).toHaveLength(2); // el día 2 de las dos semanas
+    expect(agregados[0].textContent).toContain(OFICIAL);
+    expect(agregados[0].textContent).toContain('Semana 1');
+    expect(agregados[0].textContent).toContain('Día 2');
+    expect(agregados[0].textContent).toContain('3 series');
+    expect($('[data-ia-propuesta]').textContent).toContain('2 ejercicios');
+    expect((await planActivoDe(ALUMNO.id)).weeks[0].days[1].blocks).toEqual([]);
+  });
+
+  it('al aplicar el día queda completo en todas las semanas', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta(OFICIAL));
+    await abrir();
+    await pedir('Completá el día 2 con trapecio');
+    $('[data-click="iaAplicar"]').click();
+    await esperar();
+
+    const plan = await planActivoDe(ALUMNO.id);
+    for (const semana of plan.weeks) {
+      expect(semana.days[1].blocks[0]).toMatchObject({ type: 'hipertrofia' });
+      expect(semana.days[1].blocks[0].exercises[0]).toMatchObject({ name: OFICIAL, sets: '3', reps: '10-12' });
+    }
+    expect($$('[data-ia-agregado]')).toHaveLength(0);
+  });
+
+  it('un ejercicio que no está en la biblioteca se avisa: no tiene video de demostración', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta('Sentadilla búlgara inventada'));
+    await abrir();
+    await pedir('Completá el día 2');
+
+    expect($('[data-ia-agregado]').textContent).toContain('no está en la biblioteca');
+  });
+
+  it('un nombre oficial escrito distinto se corrige al de la biblioteca (para que tenga su video)', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta(OFICIAL.toUpperCase()));
+    await abrir();
+    await pedir('Completá el día 2');
+    $('[data-click="iaAplicar"]').click();
+    await esperar();
+
+    expect((await planActivoDe(ALUMNO.id)).weeks[0].days[1].blocks[0].exercises[0].name).toBe(OFICIAL);
+  });
+
+  it('si no hay días vacíos no manda la biblioteca', async () => {
+    const plan = planConDiaVacio();
+    for (const w of plan.weeks) {
+      for (const [d, dia] of w.days.entries()) {
+        dia.blocks = [{ id: `b${w.id}${d}`, type: 'fuerza', exercises: [{ ...ejercicio, id: `e${w.id}${d}` }] }];
+      }
+    }
+    await sembrarPlan(ALUMNO.id, plan);
+    vi.mocked(llamarIA).mockImplementation(async (peticion) => peticion.slice(peticion.indexOf('SEMANAS:\n') + 9));
+    await abrir();
+    await pedir('No cambies nada');
+
+    expect(vi.mocked(llamarIA).mock.calls[0][0]).not.toContain('BIBLIOTECA');
+  });
+
+  it('un nombre de ejercicio con HTML se muestra como texto', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueCompleta('<img src=x onerror=alert(1)>'));
+    await abrir();
+    await pedir('Completá el día 2');
+
+    expect($('[data-ia-propuesta] img')).toBeNull();
+    expect($('[data-ia-agregado]').textContent).toContain('<img src=x onerror=alert(1)>');
+    expect(textoDelAviso()).toBe('');
   });
 });

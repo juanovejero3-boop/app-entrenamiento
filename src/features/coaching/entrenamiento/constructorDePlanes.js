@@ -6,6 +6,7 @@ import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { llamarIA } from '../ia/gemini.js';
+import { cargarBiblioteca } from '../ia/biblioteca.js';
 import { planTieneEjercicios, proponerProgresion } from '../ia/progresion.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
@@ -298,20 +299,31 @@ function dibujarPropuestaIA({ cambios, copiadas }) {
   const copiadasTexto = copiadas.length
     ? `<p class="text-xs text-gray-200">Se copia la primera semana cargada a: <b>${copiadas.map((i) => esc(semanas[i].name)).join(', ')}</b>.</p>`
     : '';
-  const visibles = cambios.slice(0, MAXIMO_CAMBIOS_VISIBLES);
+  const agregados = cambios.filter((c) => c.agregado);
+  const valores = cambios.filter((c) => !c.agregado);
+  const visibles = valores.slice(0, MAXIMO_CAMBIOS_VISIBLES);
   const lista = visibles
     .map(
       (c) =>
         `<li data-ia-cambio class="text-xs text-gray-300"><span class="text-gray-500">${esc(c.semana)} · ${esc(c.dia)} ·</span> ${esc(c.ejercicio)}: ${ETIQUETAS_CAMPO[c.campo]} <span class="text-gray-500 line-through">${esc(c.antes)}</span> → <b class="text-white">${esc(c.despues)}</b></li>`,
     )
     .join('');
-  const resto = cambios.length - visibles.length;
+  const resto = valores.length - visibles.length;
+  const visiblesAgregados = agregados.slice(0, MAXIMO_CAMBIOS_VISIBLES);
+  const listaAgregados = visiblesAgregados
+    .map(
+      (c) =>
+        `<li data-ia-agregado class="text-xs text-gray-300"><span class="text-emerald-400 font-bold">+</span> <b class="text-white">${esc(c.ejercicio)}</b> <span class="text-gray-400">${esc(c.despues)}</span> <span class="text-gray-500">· ${esc(c.semana)} · ${esc(c.dia)}</span>${c.fueraDeBiblioteca ? ' <span class="text-amber-300">(no está en la biblioteca, no tiene video)</span>' : ''}</li>`,
+    )
+    .join('');
+  const restoAgregados = agregados.length - visiblesAgregados.length;
   const hayAlgo = cambios.length > 0 || copiadas.length > 0;
   return `
     <div data-ia-propuesta class="space-y-2 border-t border-gray-700 pt-3">
       <p class="text-xs font-bold uppercase tracking-wider text-purple-300">Propuesta de la IA</p>
       ${copiadasTexto}
-      ${cambios.length ? `<p class="text-xs text-gray-200"><b>${cambios.length}</b> ${cambios.length === 1 ? 'cambio' : 'cambios'} de valores:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${lista}</ul>${resto > 0 ? `<p class="text-[11px] text-gray-500">y ${resto} más</p>` : ''}` : ''}
+      ${agregados.length ? `<p class="text-xs text-gray-200">Completa días vacíos con <b>${agregados.length}</b> ${agregados.length === 1 ? 'ejercicio' : 'ejercicios'}:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${listaAgregados}</ul>${restoAgregados > 0 ? `<p class="text-[11px] text-gray-500">y ${restoAgregados} más</p>` : ''}` : ''}
+      ${valores.length ? `<p class="text-xs text-gray-200"><b>${valores.length}</b> ${valores.length === 1 ? 'cambio' : 'cambios'} de valores:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${lista}</ul>${resto > 0 ? `<p class="text-[11px] text-gray-500">y ${resto} más</p>` : ''}` : ''}
       ${hayAlgo ? '' : '<p class="text-xs text-gray-300">La IA no propone ningún cambio con esa instrucción.</p>'}
       <div class="flex gap-2">
         ${hayAlgo ? `<button data-click="iaAplicar" class="flex-1 py-2.5 neon-glow-button text-white font-black text-xs rounded-lg uppercase tracking-wider">Aplicar</button>` : ''}
@@ -337,7 +349,9 @@ async function proponerConIA() {
   sesion.ia = { instruccion, pensando: true, propuesta: null, error: null };
   repintarIA();
   try {
-    sesion.ia.propuesta = { ...(await proponerProgresion(llamarIA, base, instruccion)), base };
+    // La biblioteca de ejercicios es lo que le permite a la IA completar días vacíos; si no carga, sigue sin ella
+    const biblioteca = await cargarBiblioteca().catch(() => []);
+    sesion.ia.propuesta = { ...(await proponerProgresion(llamarIA, base, instruccion, { biblioteca })), base };
   } catch (error) {
     console.error('La IA no pudo proponer cambios', error);
     sesion.ia.error = error.message;

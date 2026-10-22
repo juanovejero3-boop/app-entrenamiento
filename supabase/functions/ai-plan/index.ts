@@ -10,7 +10,7 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
 });
 
 const MODELO = "gemini-2.5-flash";
-const LARGO_MAXIMO = 100_000; // caracteres del pedido
+const LARGO_MAXIMO = 250_000; // caracteres del pedido (el plan y, a veces, la biblioteca de ejercicios)
 const TIEMPO_MAXIMO_MS = 55_000;
 
 const CORS_HEADERS = {

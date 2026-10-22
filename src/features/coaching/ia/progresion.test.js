@@ -4,6 +4,7 @@ import {
   aplicarCambios,
   armarPeticion,
   completarSemanasVacias,
+  hayDiasVacios,
   interpretarRespuesta,
   proponerProgresion,
 } from './progresion.js';
@@ -307,5 +308,266 @@ describe('proponerProgresion', () => {
   it('si falla la llamada a la IA, el error se propaga', async () => {
     const falla = async () => Promise.reject(new Error('sin conexión'));
     await expect(proponerProgresion(falla, planConPrimeraSemana(), 'x')).rejects.toThrow('sin conexión');
+  });
+});
+
+describe('completar días vacíos con ejercicios de la biblioteca', () => {
+  const BIBLIOTECA = [
+    'Sentadilla con barra alta - Cuádriceps, glúteo',
+    'Curl femoral tumbado - Isquios',
+    'Press de banca con barra - Pectoral, tríceps',
+  ];
+
+  /** 2 semanas de 2 días: el Día 1 tiene ejercicios y el Día 2 está vacío. */
+  function planConDiaVacio() {
+    const plan = generarEstructura({ ...crearPlan({ fechaInicio: '2026-10-19' }), macroName: 'Fuerza' }, 2, 2);
+    plan.weeks[0].days[0].blocks = [{ id: 'b1', type: 'fuerza', exercises: [ej('e1')] }];
+    plan.weeks[1].days[0].blocks = [{ id: 'b2', type: 'fuerza', exercises: [ej('e2')] }];
+    return plan;
+  }
+
+  /** Semanas del plan con `blocks` puestos en el día vacío (el 2.º) de cada semana. */
+  const conDiaCompletado = (plan, blocks) => {
+    const semanas = structuredClone(plan.weeks);
+    for (const semana of semanas) semana.days[1].blocks = structuredClone(blocks);
+    return semanas;
+  };
+  const bloqueIA = (exercises, type = 'fuerza') => ({ type, exercises });
+  const opciones = { permitirAgregar: true, biblioteca: BIBLIOTECA };
+
+  describe('hayDiasVacios', () => {
+    it('es cierto si algún día no tiene ejercicios (aunque tenga bloques vacíos)', () => {
+      expect(hayDiasVacios(planConDiaVacio())).toBe(true);
+      const conBloqueVacio = planConDiaVacio();
+      conBloqueVacio.weeks[0].days[1].blocks = [{ id: 'bv', type: 'fuerza', exercises: [] }];
+      expect(hayDiasVacios(conBloqueVacio)).toBe(true);
+    });
+
+    it('es falso si todos los días tienen ejercicios', () => {
+      const plan = planConDiaVacio();
+      for (const w of plan.weeks) w.days[1].blocks = [{ id: `x${w.id}`, type: 'fuerza', exercises: [ej(`y${w.id}`)] }];
+      expect(hayDiasVacios(plan)).toBe(false);
+    });
+  });
+
+  describe('armarPeticion', () => {
+    it('con biblioteca le da los nombres y le explica cómo completar un día vacío', () => {
+      const prompt = armarPeticion(planConDiaVacio(), 'Completá el día 2 con pierna', { biblioteca: BIBLIOTECA });
+      expect(prompt).toContain('Curl femoral tumbado - Isquios');
+      expect(prompt).toContain('BIBLIOTECA');
+      expect(prompt).toContain('nombre exacto');
+      expect(prompt).toContain('hipertrofia'); // los tipos de bloque que existen
+      expect(prompt).toContain('sin ids');
+    });
+
+    it('sin biblioteca no menciona nada de eso', () => {
+      const prompt = armarPeticion(planConDiaVacio(), 'Subí el RPE');
+      expect(prompt).not.toContain('BIBLIOTECA');
+      expect(prompt).not.toContain('sin ids');
+    });
+  });
+
+  describe('aplicarCambios', () => {
+    it('agrega al día vacío los bloques y ejercicios que propone la IA, con ids nuevos y los nombres oficiales', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [
+        bloqueIA([
+          {
+            name: 'sentadilla con barra alta - cuadriceps, gluteo',
+            sets: 4,
+            reps: '6-8',
+            intensityType: 'RPE',
+            intensityValue: '8',
+            rest: '2 min',
+          },
+          {
+            name: 'Curl femoral tumbado - Isquios',
+            sets: '3',
+            reps: '10-12',
+            intensityType: 'RIR',
+            intensityValue: '2',
+            rest: '90s',
+          },
+        ]),
+      ]);
+
+      const { plan, cambios } = aplicarCambios(base, semanas, opciones);
+
+      const dia = plan.weeks[1].days[1];
+      expect(dia.blocks).toHaveLength(1);
+      expect(dia.blocks[0].type).toBe('fuerza');
+      expect(dia.blocks[0].exercises.map((e) => e.name)).toEqual([
+        'Sentadilla con barra alta - Cuádriceps, glúteo',
+        'Curl femoral tumbado - Isquios',
+      ]);
+      expect(dia.blocks[0].exercises[0]).toMatchObject({
+        sets: '4',
+        reps: '6-8',
+        intensityType: 'RPE',
+        intensityValue: '8',
+        rest: '2 min',
+        tech: '',
+        notes: '',
+        group: '',
+      });
+      const ids = plan.weeks.flatMap((w) =>
+        w.days.flatMap((d) => [d.id, ...d.blocks.flatMap((b) => [b.id, ...b.exercises.map((e) => e.id)])]),
+      );
+      expect(new Set(ids).size).toBe(ids.length);
+      const agregados = cambios.filter((c) => c.agregado);
+      expect(agregados).toHaveLength(4); // 2 ejercicios en cada una de las 2 semanas
+      expect(agregados[0]).toMatchObject({
+        semana: 'Semana 1',
+        dia: 'Día 2',
+        ejercicio: 'Sentadilla con barra alta - Cuádriceps, glúteo',
+        fueraDeBiblioteca: false,
+      });
+    });
+
+    it('reemplaza los bloques vacíos que el día ya tenía en vez de dejarlos al lado', () => {
+      const base = planConDiaVacio();
+      base.weeks[0].days[1].blocks = [{ id: 'bv', type: 'fuerza', exercises: [] }];
+      const semanas = conDiaCompletado(base, [bloqueIA([{ name: 'Curl femoral tumbado - Isquios' }])]);
+      const { plan } = aplicarCambios(base, semanas, opciones);
+      expect(plan.weeks[0].days[1].blocks).toHaveLength(1);
+      expect(plan.weeks[0].days[1].blocks[0].id).not.toBe('bv');
+    });
+
+    it('un ejercicio que no está en la biblioteca se agrega igual pero queda marcado', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [bloqueIA([{ name: 'Sentadilla búlgara inventada' }])]);
+      const { plan, cambios } = aplicarCambios(base, semanas, opciones);
+
+      expect(plan.weeks[0].days[1].blocks[0].exercises[0].name).toBe('Sentadilla búlgara inventada');
+      expect(cambios.filter((c) => c.agregado).every((c) => c.fueraDeBiblioteca)).toBe(true);
+    });
+
+    it('los datos que faltan o no sirven toman valores vacíos y el tipo de bloque desconocido pasa a fuerza', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [
+        bloqueIA(
+          [{ name: 'Curl femoral tumbado - Isquios', sets: { x: 1 }, intensityType: 'XYZ', reps: 'x'.repeat(80) }],
+          'cualquier cosa',
+        ),
+      ]);
+      const { plan } = aplicarCambios(base, semanas, opciones);
+
+      const bloque = plan.weeks[0].days[1].blocks[0];
+      expect(bloque.type).toBe('fuerza');
+      expect(bloque.exercises[0]).toMatchObject({
+        sets: '',
+        reps: '',
+        intensityType: 'RIR',
+        intensityValue: '',
+        rest: '',
+      });
+    });
+
+    it('descarta los ejercicios sin nombre y los bloques que quedan sin ejercicios', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [
+        bloqueIA([{ name: '' }, { sets: '3' }, null, 'texto']),
+        bloqueIA([{ name: 'Curl femoral tumbado - Isquios' }], 'hipertrofia'),
+      ]);
+      const { plan } = aplicarCambios(base, semanas, opciones);
+
+      expect(plan.weeks[0].days[1].blocks).toHaveLength(1);
+      expect(plan.weeks[0].days[1].blocks[0].type).toBe('hipertrofia');
+    });
+
+    it('si la IA deja el día vacío (con o sin bloques) no hay cambios', () => {
+      const base = planConDiaVacio();
+      const { plan, cambios } = aplicarCambios(base, conDiaCompletado(base, []), opciones);
+      expect(plan).toEqual(base);
+      expect(cambios).toEqual([]);
+    });
+
+    it('sin permiso para agregar, sumar ejercicios a un día vacío cuenta como cambiar la estructura', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, [bloqueIA([{ name: 'Curl femoral tumbado - Isquios' }])]);
+      expect(() => aplicarCambios(base, semanas)).toThrow('cambió la estructura');
+    });
+
+    it('en un día que ya tiene ejercicios no se puede agregar nada', () => {
+      const base = planConDiaVacio();
+      const semanas = structuredClone(base.weeks);
+      semanas[0].days[0].blocks[0].exercises.push({ id: 'nuevo', name: 'Extra' });
+      expect(() => aplicarCambios(base, semanas, opciones)).toThrow('cambió la estructura');
+    });
+
+    it('rechaza un día con demasiados ejercicios o bloques', () => {
+      const base = planConDiaVacio();
+      const muchos = Array.from({ length: 13 }, (_, i) => ({ name: `Ejercicio ${i}` }));
+      expect(() => aplicarCambios(base, conDiaCompletado(base, [bloqueIA(muchos)]), opciones)).toThrow('demasiados');
+      const bloques = Array.from({ length: 7 }, () => bloqueIA([{ name: 'Uno' }]));
+      expect(() => aplicarCambios(base, conDiaCompletado(base, bloques), opciones)).toThrow('demasiados');
+    });
+
+    it('si los bloques del día no son una lista se rechaza', () => {
+      const base = planConDiaVacio();
+      const semanas = conDiaCompletado(base, []);
+      semanas[0].days[1].blocks = 'texto';
+      expect(() => aplicarCambios(base, semanas, opciones)).toThrow('cambió la estructura');
+    });
+
+    it('no modifica el plan original', () => {
+      const base = planConDiaVacio();
+      const copia = structuredClone(base);
+      aplicarCambios(base, conDiaCompletado(base, [bloqueIA([{ name: 'Curl femoral tumbado - Isquios' }])]), opciones);
+      expect(base).toEqual(copia);
+    });
+  });
+
+  describe('proponerProgresion', () => {
+    const iaQueCompletaElDia = vi.fn(async (peticion) => {
+      const semanas = JSON.parse(peticion.slice(peticion.indexOf('[{')));
+      for (const s of semanas) {
+        s.days[1].blocks = [
+          bloqueIA([
+            {
+              name: 'Curl femoral tumbado - Isquios',
+              sets: '3',
+              reps: '10-12',
+              intensityType: 'RIR',
+              intensityValue: '2',
+              rest: '90s',
+            },
+          ]),
+        ];
+      }
+      return JSON.stringify(semanas);
+    });
+
+    it('si hay días vacíos y biblioteca, la IA los completa y la propuesta lo cuenta', async () => {
+      iaQueCompletaElDia.mockClear();
+      const propuesta = await proponerProgresion(
+        iaQueCompletaElDia,
+        planConDiaVacio(),
+        'Completá el día 2 con pierna',
+        {
+          biblioteca: BIBLIOTECA,
+        },
+      );
+
+      expect(iaQueCompletaElDia.mock.calls[0][0]).toContain('Curl femoral tumbado - Isquios');
+      expect(propuesta.plan.weeks[0].days[1].blocks[0].exercises[0].name).toBe('Curl femoral tumbado - Isquios');
+      expect(propuesta.cambios.filter((c) => c.agregado)).toHaveLength(2);
+    });
+
+    it('si no hay días vacíos no le manda la biblioteca (el pedido es más corto) ni deja agregar ejercicios', async () => {
+      const llena = planConDiaVacio();
+      for (const w of llena.weeks) w.days[1].blocks = [{ id: `x${w.id}`, type: 'fuerza', exercises: [ej(`y${w.id}`)] }];
+      const llamarIA = vi.fn(async (peticion) => peticion.slice(peticion.indexOf('[{')));
+
+      await proponerProgresion(llamarIA, llena, 'No cambies nada', { biblioteca: BIBLIOTECA });
+
+      expect(llamarIA.mock.calls[0][0]).not.toContain('BIBLIOTECA');
+    });
+
+    it('con días vacíos pero sin biblioteca no intenta completarlos', async () => {
+      const llamarIA = vi.fn(async (peticion) => peticion.slice(peticion.indexOf('[{')));
+      await proponerProgresion(llamarIA, planConDiaVacio(), 'No cambies nada');
+      expect(llamarIA.mock.calls[0][0]).not.toContain('BIBLIOTECA');
+    });
   });
 });
