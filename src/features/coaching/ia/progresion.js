@@ -18,6 +18,9 @@ const ESTRUCTURA_CAMBIADA =
 
 const tieneEjercicios = (semana) => semana.days.some((d) => d.blocks.some((b) => b.exercises.length));
 
+/** Si alguna semana del plan ya tiene ejercicios (sin eso la IA no tiene nada que completar). */
+export const planTieneEjercicios = (plan) => plan.weeks.some(tieneEjercicios);
+
 /**
  * Copia la primera semana con ejercicios a todas las semanas siguientes que no tienen ninguno (con ids
  * nuevos), conservando el nombre, la fase y el volumen de cada una. Así la IA solo ajusta valores.
@@ -140,7 +143,7 @@ export function aplicarCambios(plan, semanasIA) {
  * @returns {Promise<{ plan: object, cambios: object[], copiadas: number[] }>}
  */
 export async function proponerProgresion(llamarIA, plan, instruccion) {
-  if (!plan.weeks.some(tieneEjercicios)) {
+  if (!planTieneEjercicios(plan)) {
     throw new Error('Cargá los ejercicios de la primera semana antes de pedirle a la IA que complete el ciclo.');
   }
   const { plan: completo, copiadas } = completarSemanasVacias(plan);

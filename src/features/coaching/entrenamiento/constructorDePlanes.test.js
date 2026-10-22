@@ -596,6 +596,49 @@ describe('constructor de planes: asistente de IA', () => {
     await sembrarPlan(ALUMNO.id, planParaIA());
   });
 
+  describe('cuándo aparece', () => {
+    it('un plan nuevo, sin semanas, no lo muestra', async () => {
+      await sembrarPlan(ALUMNO.id, crearPlan({ fechaInicio: '2026-10-19' }));
+      await abrir();
+      expect($('[data-ia-panel]')).toBeNull();
+    });
+
+    it('con la estructura generada pero sin ejercicios aparece avisando qué falta, sin poder pedir', async () => {
+      await sembrarPlan(ALUMNO.id, generarEstructura(crearPlan({ fechaInicio: '2026-10-19' }), 3, 2));
+      await abrir();
+
+      expect($('[data-ia-sin-ejercicios]').textContent).toContain('Cargá los ejercicios de la primera semana');
+      expect($('[data-ia-instruccion]').disabled).toBe(true);
+      expect($('[data-click="iaProponer"]').disabled).toBe(true);
+      $('[data-click="iaProponer"]').disabled = false; // aunque lo habiliten desde las herramientas del navegador
+      $('[data-click="iaProponer"]').click();
+      await esperar();
+      expect(llamarIA).not.toHaveBeenCalled();
+    });
+
+    it('se habilita apenas se agrega el primer ejercicio', async () => {
+      await sembrarPlan(ALUMNO.id, generarEstructura(crearPlan({ fechaInicio: '2026-10-19' }), 2, 1));
+      await abrir();
+      $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+      await esperar();
+      expect($('[data-ia-sin-ejercicios]')).not.toBeNull();
+
+      $('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]').click();
+      await esperar();
+
+      expect($('[data-ia-sin-ejercicios]')).toBeNull();
+      expect($('[data-ia-instruccion]').disabled).toBe(false);
+      expect($('[data-click="iaProponer"]').disabled).toBe(false);
+    });
+
+    it('al generar la estructura de un plan nuevo, aparece', async () => {
+      await sembrarPlan(ALUMNO.id, crearPlan({ fechaInicio: '2026-10-19' }));
+      await abrir();
+      await generar(3, 2);
+      expect($('[data-ia-panel]')).not.toBeNull();
+    });
+  });
+
   it('el constructor ofrece el asistente con una caja para escribir la instrucción', async () => {
     await abrir();
     expect($('[data-ia-instruccion]')).not.toBeNull();

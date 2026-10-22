@@ -6,7 +6,7 @@ import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { llamarIA } from '../ia/gemini.js';
-import { proponerProgresion } from '../ia/progresion.js';
+import { planTieneEjercicios, proponerProgresion } from '../ia/progresion.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
@@ -121,7 +121,7 @@ function dibujar() {
       ${plan ? dibujarAvisoDeEstado(actual.ciclo.estado) + dibujarBotonesPdf() + dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarCicloNoEncontrado()}
       ${plan && !plan.weeks.length ? dibujarCicloVacio() : ''}
       ${plan ? dibujarGenerador(plan) : ''}
-      ${plan ? dibujarAsistenteIA() : ''}
+      ${plan?.weeks.length ? dibujarAsistenteIA() : ''}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
@@ -271,11 +271,13 @@ function dibujarAsistenteIA() {
 
 function contenidoIA() {
   const { instruccion, pensando, propuesta, error } = actual.ia;
+  const listo = planTieneEjercicios(actual.plan);
   return `
     <h3 class="text-xs font-black uppercase tracking-wider text-purple-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Asistente de progresión (IA)</h3>
     <p class="text-[11px] text-gray-400">Armá la primera semana, escribí cómo querés que progrese el ciclo y la IA completa las demás semanas. Solo ajusta series, reps, intensidad y descanso, y antes de aplicar ves qué cambia.</p>
-    <textarea data-ia-instruccion data-input="iaInstruccion" rows="2" placeholder="Ej: sube 1 punto de RPE por semana y la semana 4 es de descarga" class="${claseInput} resize-none">${esc(instruccion)}</textarea>
-    <button data-click="iaProponer" ${pensando ? 'disabled' : ''} class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-lg uppercase tracking-wider disabled:opacity-60 transition">
+    ${listo ? '' : '<p data-ia-sin-ejercicios class="text-xs text-amber-300 bg-amber-950/30 border border-amber-900 rounded-lg p-3">Cargá los ejercicios de la primera semana para poder usar el asistente.</p>'}
+    <textarea data-ia-instruccion data-input="iaInstruccion" ${listo ? '' : 'disabled'} rows="2" placeholder="Ej: sube 1 punto de RPE por semana y la semana 4 es de descarga" class="${claseInput} resize-none">${esc(instruccion)}</textarea>
+    <button data-click="iaProponer" ${pensando || !listo ? 'disabled' : ''} class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-lg uppercase tracking-wider disabled:opacity-60 transition">
       ${pensando ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Pensando...' : '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Proponer cambios'}
     </button>
     ${error ? `<p data-ia-error class="text-xs text-red-300 bg-red-950/30 border border-red-900 rounded-lg p-3">${esc(error)}</p>` : ''}
