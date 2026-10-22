@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { abrirConstructorDePlanes } from './constructorDePlanes.js';
-import { crearPlan } from './plan.js';
+import { crearPlan, generarEstructura } from './plan.js';
+import { llamarIA } from '../ia/gemini.js';
 import { repo } from '../repo/index.js';
 import { sembrarPlan, planActivoDe } from '../repo/test-utils.js';
 import '../../../lib/ui.js'; // modales propios: window.confirm real de la app
@@ -12,6 +13,8 @@ import { generarPdfBlob } from '../pdf/generar.js';
 vi.mock('../pdf/generar.js', () => ({
   generarPdfBlob: vi.fn(async () => new Blob(['%PDF-1.7'], { type: 'application/pdf' })),
 }));
+// La IA de verdad (Gemini, en el servidor) no se usa en los tests
+vi.mock('../ia/gemini.js', () => ({ llamarIA: vi.fn() }));
 // Las páginas de la vista previa las dibuja pdf.js con canvas, que el DOM simulado no tiene
 vi.mock('../pdf/paginasPdf.js', () => ({ dibujarPaginasPdf: vi.fn(async () => {}) }));
 
@@ -29,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = '';
   vi.mocked(generarPdfBlob).mockClear();
+  vi.mocked(llamarIA).mockReset();
 });
 
 const $ = (selector) => content.querySelector(selector);
@@ -544,5 +548,188 @@ describe('constructor de planes: ciclos', () => {
     const { id } = await repo.crearCiclo(ALUMNO.id, plan('Ciclo'), estado);
     await abrirCiclo(id);
     expect($('[data-aviso-estado]').textContent).toContain(texto);
+  });
+});
+
+describe('constructor de planes: asistente de IA', () => {
+  const ejercicio = {
+    id: 'e1',
+    name: 'Press banca',
+    sets: '4',
+    reps: '8',
+    intensityType: 'RPE',
+    intensityValue: '7',
+    tech: '',
+    rest: '90s',
+    notes: '',
+    group: '',
+  };
+
+  /** 3 semanas de 1 día; solo la primera tiene un ejercicio. */
+  function planParaIA() {
+    const plan = generarEstructura({ ...crearPlan({ fechaInicio: '2026-10-19' }), macroName: 'Fuerza' }, 3, 1);
+    plan.weeks[0].days[0].blocks = [{ id: 'b1', type: 'fuerza', exercises: [ejercicio] }];
+    return plan;
+  }
+
+  /** Una IA que sube 1 punto de RPE por semana. */
+  const iaQueSubeRPE = async (peticion) => {
+    const semanas = JSON.parse(peticion.slice(peticion.indexOf('[{')));
+    for (const [i, w] of semanas.entries()) {
+      for (const d of w.days) for (const b of d.blocks) for (const e of b.exercises) e.intensityValue = String(7 + i);
+    }
+    return JSON.stringify(semanas);
+  };
+
+  const textoDelAviso = () => document.getElementById('app-modal-overlay-aux')?.textContent ?? '';
+  const pedir = async (instruccion = 'Sube 1 de RPE por semana') => {
+    const campo = $('[data-ia-instruccion]');
+    campo.value = instruccion;
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+    $('[data-click="iaProponer"]').click();
+    await esperar();
+  };
+  const rpeGuardado = async (w) =>
+    (await planActivoDe(ALUMNO.id)).weeks[w].days[0].blocks[0]?.exercises[0]?.intensityValue;
+
+  beforeEach(async () => {
+    await sembrarPlan(ALUMNO.id, planParaIA());
+  });
+
+  it('el constructor ofrece el asistente con una caja para escribir la instrucción', async () => {
+    await abrir();
+    expect($('[data-ia-instruccion]')).not.toBeNull();
+    expect($('[data-click="iaProponer"]').textContent).toContain('Proponer');
+  });
+
+  it('sin instrucción avisa y no llama a la IA', async () => {
+    await abrir();
+    await pedir('   ');
+    expect(textoDelAviso()).toContain('Escribí qué querés que haga la IA');
+    expect(llamarIA).not.toHaveBeenCalled();
+  });
+
+  it('muestra la propuesta antes de aplicarla: qué semanas se copian y qué cambia, sin guardar nada', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueSubeRPE);
+    await abrir();
+    await pedir();
+
+    const propuesta = $('[data-ia-propuesta]');
+    expect(propuesta.textContent).toContain('Semana 2');
+    expect(propuesta.textContent).toContain('Semana 3');
+    const cambios = $$('[data-ia-cambio]').map((c) => c.textContent);
+    expect(cambios).toHaveLength(2); // la semana 1 queda igual
+    expect(cambios[0]).toContain('Press banca');
+    expect(cambios[0]).toContain('7');
+    expect(cambios[0]).toContain('8');
+    expect(await rpeGuardado(1)).toBeUndefined(); // nada guardado todavía
+  });
+
+  it('al aplicar guarda las semanas copiadas con la progresión y las muestra', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueSubeRPE);
+    await abrir();
+    await pedir();
+    $('[data-click="iaAplicar"]').click();
+    await esperar();
+
+    expect([await rpeGuardado(0), await rpeGuardado(1), await rpeGuardado(2)]).toEqual(['7', '8', '9']);
+    expect((await planActivoDe(ALUMNO.id)).weeks[2].days[0].blocks[0].exercises[0].name).toBe('Press banca');
+    expect($('[data-ia-propuesta]')).toBeNull();
+    expect($$('[data-resumen-semana]')).toHaveLength(3);
+    expect($('[data-ia-instruccion]').value).toBe(''); // listo para otra instrucción
+  });
+
+  it('descartar deja el plan como estaba', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueSubeRPE);
+    await abrir();
+    await pedir();
+    $('[data-click="iaDescartar"]').click();
+    await esperar();
+
+    expect($('[data-ia-propuesta]')).toBeNull();
+    expect(await rpeGuardado(1)).toBeUndefined();
+  });
+
+  it('mientras la IA piensa el botón queda deshabilitado y no se puede pedir dos veces', async () => {
+    let responder;
+    vi.mocked(llamarIA).mockImplementation(() => new Promise((r) => (responder = r)));
+    await abrir();
+    await pedir();
+
+    const boton = $('[data-click="iaProponer"]');
+    expect(boton.disabled).toBe(true);
+    expect(boton.textContent).toContain('Pensando');
+    boton.disabled = false; // aunque lo habiliten desde las herramientas del navegador
+    boton.click();
+    await esperar();
+    expect(llamarIA).toHaveBeenCalledTimes(1);
+
+    responder(await iaQueSubeRPE(vi.mocked(llamarIA).mock.calls[0][0]));
+    await esperar();
+    expect($('[data-ia-propuesta]')).not.toBeNull();
+    expect($('[data-click="iaProponer"]').disabled).toBe(false);
+  });
+
+  it('si la IA falla muestra el error y el plan no cambia', async () => {
+    vi.mocked(llamarIA).mockRejectedValue(new Error('La IA tardó demasiado. Probá de nuevo.'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await abrir();
+    await pedir();
+
+    expect($('[data-ia-error]').textContent).toContain('La IA tardó demasiado');
+    expect($('[data-ia-propuesta]')).toBeNull();
+    expect(await rpeGuardado(1)).toBeUndefined();
+  });
+
+  it('si la IA cambia la estructura del plan lo avisa y no ofrece aplicar nada', async () => {
+    vi.mocked(llamarIA).mockResolvedValue('[]');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await abrir();
+    await pedir();
+
+    expect($('[data-ia-error]').textContent).toContain('cambió la estructura');
+    expect($('[data-click="iaAplicar"]')).toBeNull();
+  });
+
+  it('si la IA no propone ningún cambio y no hay semanas por copiar, lo dice sin botón de aplicar', async () => {
+    const plan = planParaIA();
+    const conOtroId = (id, idEjercicio) => [{ id, type: 'fuerza', exercises: [{ ...ejercicio, id: idEjercicio }] }];
+    plan.weeks[1].days[0].blocks = conOtroId('bx', 'ex');
+    plan.weeks[2].days[0].blocks = conOtroId('by', 'ey');
+    await sembrarPlan(ALUMNO.id, plan);
+    vi.mocked(llamarIA).mockImplementation(async (peticion) => peticion.slice(peticion.indexOf('[{')));
+    await abrir();
+    await pedir('No cambies nada');
+
+    expect($('[data-ia-propuesta]').textContent).toContain('no propone ningún cambio');
+    expect($('[data-click="iaAplicar"]')).toBeNull();
+  });
+
+  it('si el plan se editó mientras tanto, no pisa esa edición: pide intentar de nuevo', async () => {
+    vi.mocked(llamarIA).mockImplementation(iaQueSubeRPE);
+    await abrir();
+    await pedir();
+    cambiar($('[data-campo="macroName"]'), 'Cambiado a mano');
+    await esperar();
+
+    $('[data-click="iaAplicar"]').click();
+    await esperar();
+
+    expect($('[data-ia-error]').textContent).toContain('El plan cambió');
+    const plan = await planActivoDe(ALUMNO.id);
+    expect(plan.macroName).toBe('Cambiado a mano');
+    expect(await rpeGuardado(1)).toBeUndefined();
+  });
+
+  it('un nombre de ejercicio con HTML se muestra como texto en la propuesta', async () => {
+    const plan = planParaIA();
+    plan.weeks[0].days[0].blocks[0].exercises[0].name = '<img src=x onerror=alert(1)>';
+    await sembrarPlan(ALUMNO.id, plan);
+    vi.mocked(llamarIA).mockImplementation(iaQueSubeRPE);
+    await abrir();
+    await pedir();
+
+    expect($('[data-ia-propuesta] img')).toBeNull();
+    expect($('[data-ia-cambio]').textContent).toContain('<img src=x onerror=alert(1)>');
   });
 });

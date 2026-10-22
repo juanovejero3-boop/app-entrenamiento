@@ -5,6 +5,8 @@
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { escapeAttr as esc } from '../../../lib/dom.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
+import { llamarIA } from '../ia/gemini.js';
+import { proponerProgresion } from '../ia/progresion.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
 import { DESCANSOS, FASES, GRUPOS_SUPERSERIE, TECNICAS, TIPOS_BLOQUE, TIPOS_INTENSIDAD } from './catalogos.js';
@@ -44,7 +46,7 @@ let actual = null;
  * @param {{ cicloId: string, alVolver: () => void }} opciones  qué ciclo editar y qué hacer al tocar "Volver"
  */
 export async function abrirConstructorDePlanes(content, alumno, { cicloId, alVolver }) {
-  actual = { content, alumno, ciclo: null, plan: null, alVolver };
+  actual = { content, alumno, ciclo: null, plan: null, alVolver, ia: estadoIAInicial() };
   prepararCatalogoEjercicios(); // no se espera: el autocompletado aparece cuando termina de cargar
   const ciclos = await repo.listarCiclos(alumno.id);
   actual.ciclo = ciclos.find((c) => c.id === cicloId) ?? null;
@@ -119,6 +121,7 @@ function dibujar() {
       ${plan ? dibujarAvisoDeEstado(actual.ciclo.estado) + dibujarBotonesPdf() + dibujarCabecera(plan) + dibujarLineamientos(plan) : dibujarCicloNoEncontrado()}
       ${plan && !plan.weeks.length ? dibujarCicloVacio() : ''}
       ${plan ? dibujarGenerador(plan) : ''}
+      ${plan ? dibujarAsistenteIA() : ''}
       ${plan ? dibujarMapa(plan) : ''}
       ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
@@ -241,6 +244,112 @@ function dibujarGenerador(plan) {
       </button>
     </div>
   `;
+}
+
+// ---------------------------------------------------------------------------
+// Asistente de IA: el coach escribe una instrucción, ve qué cambiaría y recién ahí la aplica
+// ---------------------------------------------------------------------------
+
+const estadoIAInicial = () => ({ instruccion: '', pensando: false, propuesta: null, error: null });
+
+const ETIQUETAS_CAMPO = {
+  sets: 'Series',
+  reps: 'Reps',
+  intensityType: 'Tipo de intensidad',
+  intensityValue: 'Intensidad',
+  rest: 'Descanso',
+};
+const MAXIMO_CAMBIOS_VISIBLES = 80;
+
+function dibujarAsistenteIA() {
+  return `
+    <div data-ia-panel class="bg-cyberCard p-4 rounded-xl border border-dashed border-purple-500/60 space-y-3">
+      ${contenidoIA()}
+    </div>
+  `;
+}
+
+function contenidoIA() {
+  const { instruccion, pensando, propuesta, error } = actual.ia;
+  return `
+    <h3 class="text-xs font-black uppercase tracking-wider text-purple-300"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Asistente de progresión (IA)</h3>
+    <p class="text-[11px] text-gray-400">Armá la primera semana, escribí cómo querés que progrese el ciclo y la IA completa las demás semanas. Solo ajusta series, reps, intensidad y descanso, y antes de aplicar ves qué cambia.</p>
+    <textarea data-ia-instruccion data-input="iaInstruccion" rows="2" placeholder="Ej: sube 1 punto de RPE por semana y la semana 4 es de descarga" class="${claseInput} resize-none">${esc(instruccion)}</textarea>
+    <button data-click="iaProponer" ${pensando ? 'disabled' : ''} class="w-full py-2.5 bg-purple-700 hover:bg-purple-600 text-white font-black text-xs rounded-lg uppercase tracking-wider disabled:opacity-60 transition">
+      ${pensando ? '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Pensando...' : '<i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Proponer cambios'}
+    </button>
+    ${error ? `<p data-ia-error class="text-xs text-red-300 bg-red-950/30 border border-red-900 rounded-lg p-3">${esc(error)}</p>` : ''}
+    ${propuesta ? dibujarPropuestaIA(propuesta) : ''}
+  `;
+}
+
+function dibujarPropuestaIA({ cambios, copiadas }) {
+  const semanas = actual.plan.weeks;
+  const copiadasTexto = copiadas.length
+    ? `<p class="text-xs text-gray-200">Se copia la primera semana cargada a: <b>${copiadas.map((i) => esc(semanas[i].name)).join(', ')}</b>.</p>`
+    : '';
+  const visibles = cambios.slice(0, MAXIMO_CAMBIOS_VISIBLES);
+  const lista = visibles
+    .map(
+      (c) =>
+        `<li data-ia-cambio class="text-xs text-gray-300"><span class="text-gray-500">${esc(c.semana)} · ${esc(c.dia)} ·</span> ${esc(c.ejercicio)}: ${ETIQUETAS_CAMPO[c.campo]} <span class="text-gray-500 line-through">${esc(c.antes)}</span> → <b class="text-white">${esc(c.despues)}</b></li>`,
+    )
+    .join('');
+  const resto = cambios.length - visibles.length;
+  const hayAlgo = cambios.length > 0 || copiadas.length > 0;
+  return `
+    <div data-ia-propuesta class="space-y-2 border-t border-gray-700 pt-3">
+      <p class="text-xs font-bold uppercase tracking-wider text-purple-300">Propuesta de la IA</p>
+      ${copiadasTexto}
+      ${cambios.length ? `<p class="text-xs text-gray-200"><b>${cambios.length}</b> ${cambios.length === 1 ? 'cambio' : 'cambios'} de valores:</p><ul class="space-y-1 max-h-64 overflow-y-auto">${lista}</ul>${resto > 0 ? `<p class="text-[11px] text-gray-500">y ${resto} más</p>` : ''}` : ''}
+      ${hayAlgo ? '' : '<p class="text-xs text-gray-300">La IA no propone ningún cambio con esa instrucción.</p>'}
+      <div class="flex gap-2">
+        ${hayAlgo ? `<button data-click="iaAplicar" class="flex-1 py-2.5 neon-glow-button text-white font-black text-xs rounded-lg uppercase tracking-wider">Aplicar</button>` : ''}
+        <button data-click="iaDescartar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed px-4">Descartar</button>
+      </div>
+    </div>
+  `;
+}
+
+/** Actualiza solo el panel del asistente (no la pantalla entera, para no perder el scroll ni lo escrito). */
+function repintarIA() {
+  const panel = actual.content.querySelector('[data-ia-panel]');
+  if (panel) panel.innerHTML = contenidoIA();
+}
+
+async function proponerConIA() {
+  const sesion = actual;
+  if (sesion.ia.pensando) return;
+  const instruccion = sesion.content.querySelector('[data-ia-instruccion]')?.value ?? sesion.ia.instruccion;
+  if (!instruccion.trim()) return window.alert('Escribí qué querés que haga la IA.');
+
+  const base = sesion.plan; // la propuesta vale solo para este plan: si cambia, hay que pedirla de nuevo
+  sesion.ia = { instruccion, pensando: true, propuesta: null, error: null };
+  repintarIA();
+  try {
+    sesion.ia.propuesta = { ...(await proponerProgresion(llamarIA, base, instruccion)), base };
+  } catch (error) {
+    console.error('La IA no pudo proponer cambios', error);
+    sesion.ia.error = error.message;
+  }
+  sesion.ia.pensando = false;
+  if (actual === sesion) repintarIA(); // si el coach ya salió del constructor, no hay nada que repintar
+}
+
+async function aplicarPropuestaIA() {
+  const { propuesta } = actual.ia;
+  if (!propuesta) return;
+  if (propuesta.base !== actual.plan) {
+    actual.ia = { ...actual.ia, propuesta: null, error: 'El plan cambió mientras tanto. Pedile de nuevo a la IA.' };
+    return repintarIA();
+  }
+  actual.ia = estadoIAInicial();
+  await aplicar(propuesta.plan);
+}
+
+function descartarPropuestaIA() {
+  actual.ia = { ...actual.ia, propuesta: null, error: null };
+  repintarIA();
 }
 
 function dibujarMapa(plan) {
@@ -443,6 +552,12 @@ async function eliminarDiaConfirmando(w, d) {
 
 registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
+  iaInstruccion: (el) => {
+    actual.ia.instruccion = el.value;
+  },
+  iaProponer: () => proponerConIA(),
+  iaAplicar: () => aplicarPropuestaIA(),
+  iaDescartar: () => descartarPropuestaIA(),
   planGenerar: () => generar(),
   planCampo: (el) => cambiarCampoPlan(el),
   pdfLineamientos: () => mostrarPdf('lineamientos', actual.plan, actual.alumno),
