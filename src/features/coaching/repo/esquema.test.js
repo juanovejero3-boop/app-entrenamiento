@@ -36,7 +36,7 @@ beforeAll(async () => {
   await db.exec(SUPABASE_MINIMO);
   await db.exec(MIGRACION);
   await db.exec('grant select, insert, update, delete on all tables in schema public to anon, authenticated');
-});
+}, 60_000); // arrancar Postgres en memoria (WASM) puede tardar con la máquina cargada
 
 afterAll(() => db.close());
 
