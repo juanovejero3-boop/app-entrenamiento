@@ -65,6 +65,12 @@ async function responderConfirmacion(acepta) {
   return texto;
 }
 
+/** Abre la semana `w` del mapa del macrociclo (las semanas son pestañas). */
+const elegirSemana = async (w) => {
+  $(`[data-click="semanaElegir"][data-w="${w}"]`).click();
+  await esperar();
+};
+
 async function generar(semanas, dias) {
   $('#gen-semanas').value = String(semanas);
   $('#gen-dias').value = String(dias);
@@ -149,7 +155,7 @@ describe('constructor de planes: generar estructura', () => {
     await generar(3, 2);
 
     expect($$('[data-resumen-semana]')).toHaveLength(3);
-    expect($$('[data-semana]')).toHaveLength(3);
+    expect($$('[data-semana]')).toHaveLength(1); // se edita una semana a la vez
     expect($$('[data-semana="0"] [data-dia]')).toHaveLength(2);
     const plan = await guardado();
     expect(plan.weeks.map((w) => w.days.length)).toEqual([2, 2, 2]);
@@ -187,6 +193,7 @@ describe('constructor de planes: semanas', () => {
   it('editar nombre, fase y volumen de una semana se guarda y se ve en el mapa', async () => {
     await abrir();
     await generar(2, 1);
+    await elegirSemana(1);
 
     const semana = $('[data-semana="1"]');
     cambiar(semana.querySelector('[data-campo="name"]'), 'Semana de choque');
@@ -211,6 +218,7 @@ describe('constructor de planes: semanas', () => {
 
     $('[data-click="semanaAgregar"]').click();
     await esperar();
+    await elegirSemana(0);
     $('[data-click="semanaDuplicar"][data-w="0"]').click();
     await esperar();
     expect((await guardado()).weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 1 (copia)', 'Semana 2']);
@@ -219,7 +227,7 @@ describe('constructor de planes: semanas', () => {
     await esperar();
     expect(await responderConfirmacion(true)).toContain('Semana 1 (copia)');
     expect((await guardado()).weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 2']);
-    expect($$('[data-semana]')).toHaveLength(2);
+    expect($$('[data-resumen-semana]')).toHaveLength(2);
   });
 
   it('eliminar una semana se puede cancelar', async () => {
@@ -260,6 +268,7 @@ describe('constructor de planes: días', () => {
     await esperar();
 
     expect((await guardado()).weeks.map((w) => w.days[0].name)).toEqual(['Torso A', 'Torso A', 'Torso A']);
+    await elegirSemana(2);
     expect($('[data-change="diaCampo"][data-w="2"][data-d="0"]').value).toBe('Torso A');
   });
 });
@@ -357,6 +366,7 @@ describe('constructor de planes: bloques y ejercicios', () => {
     await esperar();
 
     expect((await guardado()).weeks[1].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Press banca']);
+    await elegirSemana(1);
     expect(campoEj('name', '1-0-0-0').value).toBe('Press banca');
   });
 
@@ -774,5 +784,100 @@ describe('constructor de planes: asistente de IA', () => {
 
     expect($('[data-ia-propuesta] img')).toBeNull();
     expect($('[data-ia-cambio]').textContent).toContain('<img src=x onerror=alert(1)>');
+  });
+});
+
+describe('constructor de planes: semanas como pestañas', () => {
+  const semanaAbierta = () => $('[data-semana]').dataset.semana;
+
+  it('muestra solo la primera semana y el mapa del macrociclo hace de pestañas', async () => {
+    await abrir();
+    await generar(4, 2);
+
+    expect($$('[data-semana]')).toHaveLength(1);
+    expect(semanaAbierta()).toBe('0');
+    expect($$('[data-click="semanaElegir"]')).toHaveLength(4);
+    expect($('[data-resumen-semana="0"]').getAttribute('aria-current')).toBe('true');
+    expect($('[data-resumen-semana="2"]').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('tocar una semana del mapa la abre y cierra la anterior', async () => {
+    await abrir();
+    await generar(4, 2);
+    await elegirSemana(2);
+
+    expect($$('[data-semana]')).toHaveLength(1);
+    expect(semanaAbierta()).toBe('2');
+    expect($('[data-semana="2"] [data-campo="name"]').value).toBe('Semana 3');
+    expect($('[data-resumen-semana="2"]').getAttribute('aria-current')).toBe('true');
+    expect($('[data-resumen-semana="0"]').getAttribute('aria-current')).toBeNull();
+  });
+
+  it('lo que se edita en una semana se guarda en esa semana', async () => {
+    await abrir();
+    await generar(3, 1);
+    await elegirSemana(1);
+    cambiar($('[data-semana="1"] [data-campo="name"]'), 'Descarga');
+    await esperar();
+    await elegirSemana(2);
+
+    expect((await guardado()).weeks.map((w) => w.name)).toEqual(['Semana 1', 'Descarga', 'Semana 3']);
+    expect($('[data-resumen-semana="1"]').textContent).toContain('Descarga');
+  });
+
+  it('seguir editando la semana abierta no cambia de pestaña', async () => {
+    await abrir();
+    await generar(3, 1);
+    await elegirSemana(1);
+    $('[data-click="diaAgregar"][data-w="1"]').click();
+    await esperar();
+
+    expect(semanaAbierta()).toBe('1');
+    expect($$('[data-semana="1"] [data-dia]')).toHaveLength(2);
+  });
+
+  it('una semana agregada o duplicada queda abierta', async () => {
+    await abrir();
+    await generar(2, 1);
+
+    $('[data-click="semanaAgregar"]').click();
+    await esperar();
+    expect(semanaAbierta()).toBe('2');
+
+    await elegirSemana(0);
+    $('[data-click="semanaDuplicar"][data-w="0"]').click();
+    await esperar();
+    expect(semanaAbierta()).toBe('1');
+    expect($('[data-semana="1"] [data-campo="name"]').value).toBe('Semana 1 (copia)');
+  });
+
+  it('al eliminar la última semana abierta pasa a la anterior', async () => {
+    await abrir();
+    await generar(3, 1);
+    await elegirSemana(2);
+    $('[data-click="semanaEliminar"][data-w="2"]').click();
+    await esperar();
+    await responderConfirmacion(true);
+
+    expect(semanaAbierta()).toBe('1');
+    expect($$('[data-resumen-semana]')).toHaveLength(2);
+  });
+
+  it('al regenerar la estructura vuelve a la primera semana', async () => {
+    await abrir();
+    await generar(3, 1);
+    await elegirSemana(2);
+    await generar(4, 1);
+    await responderConfirmacion(true);
+
+    expect(semanaAbierta()).toBe('0');
+  });
+
+  it('al volver a abrir el constructor empieza en la primera semana', async () => {
+    await abrir();
+    await generar(3, 1);
+    await elegirSemana(2);
+    await abrir();
+    expect(semanaAbierta()).toBe('0');
   });
 });

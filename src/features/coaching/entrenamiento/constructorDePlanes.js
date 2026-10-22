@@ -46,7 +46,7 @@ let actual = null;
  * @param {{ cicloId: string, alVolver: () => void }} opciones  qué ciclo editar y qué hacer al tocar "Volver"
  */
 export async function abrirConstructorDePlanes(content, alumno, { cicloId, alVolver }) {
-  actual = { content, alumno, ciclo: null, plan: null, alVolver, ia: estadoIAInicial() };
+  actual = { content, alumno, ciclo: null, plan: null, semana: 0, alVolver, ia: estadoIAInicial() };
   prepararCatalogoEjercicios(); // no se espera: el autocompletado aparece cuando termina de cargar
   const ciclos = await repo.listarCiclos(alumno.id);
   actual.ciclo = ciclos.find((c) => c.id === cicloId) ?? null;
@@ -104,8 +104,16 @@ const claseInput =
 const claseBotonChico =
   'text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border transition whitespace-nowrap';
 
+/** Posición de la semana que se está editando (siempre una que exista). */
+function semanaElegida() {
+  const ultima = actual.plan.weeks.length - 1;
+  actual.semana = Math.max(0, Math.min(actual.semana, ultima));
+  return actual.semana;
+}
+
 function dibujar() {
   const { content, alumno, plan } = actual;
+  const elegida = plan?.weeks.length ? semanaElegida() : 0;
   content.innerHTML = `
     <div class="space-y-4 pb-24">
       <div class="flex items-center gap-3">
@@ -122,8 +130,8 @@ function dibujar() {
       ${plan && !plan.weeks.length ? dibujarCicloVacio() : ''}
       ${plan ? dibujarGenerador(plan) : ''}
       ${plan?.weeks.length ? dibujarAsistenteIA() : ''}
-      ${plan ? dibujarMapa(plan) : ''}
-      ${plan ? plan.weeks.map((semana, w) => dibujarSemana(plan, semana, w)).join('') : ''}
+      ${plan ? dibujarMapa(plan, elegida) : ''}
+      ${plan?.weeks.length ? dibujarSemana(plan, plan.weeks[elegida], elegida) : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
     </div>
   `;
@@ -354,13 +362,16 @@ function descartarPropuestaIA() {
   repintarIA();
 }
 
-function dibujarMapa(plan) {
+/** El mapa del macrociclo: una pestaña por semana. Tocar una la abre para editarla. */
+function dibujarMapa(plan, elegida) {
   if (!plan.weeks.length) return '';
+  const clase = (w) =>
+    w === elegida ? 'bg-red-950/30 border-neonRed' : 'bg-cyberCard border-gray-800 hover:border-gray-500';
   return `
     <div>
-      <p class="text-[10px] text-gray-500 uppercase font-bold mb-2">Mapa del macrociclo</p>
+      <p class="text-[10px] text-gray-500 uppercase font-bold mb-2">Mapa del macrociclo · tocá una semana para editarla</p>
       <div data-mapa class="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
-        ${plan.weeks.map((semana, w) => `<div data-resumen-semana="${w}" class="min-w-[150px] bg-cyberCard border border-gray-800 rounded-lg p-3 text-xs space-y-1">${contenidoResumen(plan, semana, w)}</div>`).join('')}
+        ${plan.weeks.map((semana, w) => `<button type="button" data-click="semanaElegir" data-w="${w}" data-resumen-semana="${w}" ${w === elegida ? 'aria-current="true"' : ''} class="min-w-[150px] text-left border rounded-lg p-3 text-xs space-y-1 transition ${clase(w)}">${contenidoResumen(plan, semana, w)}</button>`).join('')}
       </div>
     </div>
   `;
@@ -368,11 +379,11 @@ function dibujarMapa(plan) {
 
 function contenidoResumen(plan, semana, w) {
   return `
-    <div class="font-black text-white uppercase truncate">${esc(semana.name)}</div>
-    <div class="text-gray-400">📅 ${esc(fechasDeSemana(plan.startDate, w))}</div>
-    <div class="${semana.objective ? 'text-neonRed font-bold' : 'text-gray-600 italic'}">${esc(semana.objective || 'Fase sin asignar')}</div>
-    ${semana.targetVolume ? `<div class="text-gray-400 border-t border-dashed border-gray-700 pt-1">🎯 ${esc(semana.targetVolume)}</div>` : ''}
-    <div class="inline-block mt-1 px-2 py-0.5 rounded bg-red-950/40 border border-red-900 text-neonRed font-bold">💪 ${contarSeries(semana)} series</div>
+    <span class="block font-black text-white uppercase truncate">${esc(semana.name)}</span>
+    <span class="block text-gray-400">📅 ${esc(fechasDeSemana(plan.startDate, w))}</span>
+    <span class="block ${semana.objective ? 'text-neonRed font-bold' : 'text-gray-600 italic'}">${esc(semana.objective || 'Fase sin asignar')}</span>
+    ${semana.targetVolume ? `<span class="block text-gray-400 border-t border-dashed border-gray-700 pt-1">🎯 ${esc(semana.targetVolume)}</span>` : ''}
+    <span class="inline-block mt-1 px-2 py-0.5 rounded bg-red-950/40 border border-red-900 text-neonRed font-bold">💪 ${contarSeries(semana)} series</span>
   `;
 }
 
@@ -512,6 +523,7 @@ async function generar() {
     );
     if (!ok) return;
   }
+  actual.semana = 0;
   await aplicar(generarEstructura(actual.plan, semanas, dias));
 }
 
@@ -571,10 +583,20 @@ registrarAcciones({
       redibujar: false,
     }),
   prioridadEliminar: (el) => aplicar(eliminarPrioridad(actual.plan, Number(el.dataset.i))),
-  semanaAgregar: () => aplicar(agregarSemana(actual.plan)),
+  semanaElegir: (el) => {
+    actual.semana = indice(el, 'w');
+    dibujar();
+  },
+  semanaAgregar: () => {
+    actual.semana = actual.plan.weeks.length; // la semana nueva queda abierta
+    return aplicar(agregarSemana(actual.plan));
+  },
   semanaCampo: (el) =>
     aplicar(actualizarSemana(actual.plan, indice(el, 'w'), { [el.dataset.campo]: el.value }), { redibujar: false }),
-  semanaDuplicar: (el) => aplicar(duplicarSemana(actual.plan, indice(el, 'w'))),
+  semanaDuplicar: (el) => {
+    actual.semana = indice(el, 'w') + 1; // la copia queda abierta
+    return aplicar(duplicarSemana(actual.plan, indice(el, 'w')));
+  },
   semanaEliminar: (el) => eliminarSemanaConfirmando(indice(el, 'w')),
   diaAgregar: (el) => aplicar(agregarDia(actual.plan, indice(el, 'w'))),
   diaCampo: (el) =>
