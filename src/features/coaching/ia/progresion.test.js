@@ -249,6 +249,14 @@ describe('armarPeticion', () => {
     expect(prompt).not.toContain('Fuerza'); // el nombre del macrociclo no hace falta
   });
 
+  it('explica que una progresión por semana es acumulativa y que un rango de repeticiones se mueve entero', () => {
+    const prompt = armarPeticion(planConPrimeraSemana(), 'Aumentame 2 repeticiones por semana en el press');
+    expect(prompt).toContain('acumulativa');
+    expect(prompt).toContain('la primera semana queda como está');
+    expect(prompt).toContain('"8-10"');
+    expect(prompt).toContain('"10-12"');
+  });
+
   it('sin instrucción no arma nada', () => {
     expect(() => armarPeticion(planConPrimeraSemana(), '   ')).toThrow('Escribí qué querés que haga la IA');
   });

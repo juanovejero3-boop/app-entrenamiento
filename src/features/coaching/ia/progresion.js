@@ -46,6 +46,9 @@ Aplicá la instrucción modificando ÚNICAMENTE estos campos de los ejercicios: 
 REGLAS:
 - Mantené iguales los ids, los nombres, las técnicas, las notas, el orden y la cantidad de semanas, días, bloques y ejercicios.
 - intensityType solo puede ser ${TIPOS_INTENSIDAD.join(', ')}. Los valores son texto corto (por ejemplo "8", "6-8", "90s").
+- Si la instrucción habla de progresar "por semana" o "hasta el final del ciclo", la progresión es acumulativa: la primera semana queda como está y cada semana siguiente suma el incremento sobre la anterior (con +2 repeticiones, 8 pasa a 10 y después a 12).
+- Si el valor es un rango, se mueve entero: con +2 repeticiones, "8-10" pasa a "10-12".
+- Aplicá la instrucción solo a los ejercicios o a las semanas que menciona; si no menciona ninguno, a todos.
 - Devolvé ÚNICAMENTE el arreglo JSON de semanas modificado, sin texto adicional ni markdown.
 
 INSTRUCCIÓN DEL ENTRENADOR: ${texto}
