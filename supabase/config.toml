@@ -2,3 +2,6 @@ project_id = "app-entrenamiento"
 
 [functions.admin-usuarios]
 verify_jwt = false
+
+[functions.ai-plan]
+verify_jwt = false

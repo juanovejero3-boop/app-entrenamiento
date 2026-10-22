@@ -242,7 +242,7 @@ export function actualizarBloque(plan, w, d, b, cambios) {
 }
 
 /** Copia profunda de un día, bloque o ejercicio con ids nuevos en todos sus niveles. */
-function conIdsNuevos(x) {
+export function conIdsNuevos(x) {
   const copia = structuredClone(x);
   (function renovar(nodo) {
     nodo.id = nuevoId();
