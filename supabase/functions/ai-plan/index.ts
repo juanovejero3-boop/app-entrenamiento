@@ -1,6 +1,7 @@
 // Asistente de progresión con IA (Gemini) para el constructor de planes.
 // Solo lo puede usar un admin con sesión iniciada. La clave de Gemini es el secreto GEMINI_API_KEY
 // (supabase secrets set GEMINI_API_KEY=...) y nunca llega al navegador.
+// Si Gemini está saturado (503, 429...) se reintenta con espera y, si sigue, con un modelo más liviano.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -9,9 +10,19 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const MODELO = "gemini-2.5-flash";
-const LARGO_MAXIMO = 250_000; // caracteres del pedido (el plan y, a veces, la biblioteca de ejercicios)
-const TIEMPO_MAXIMO_MS = 55_000;
+// Primero el modelo principal (se puede cambiar con el secreto GEMINI_MODEL) y después uno más liviano
+const MODELOS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const INTENTOS_POR_MODELO = [3, 2];
+const ESPERA_BASE_MS = 1_500; // 1,5 s, 3 s, 6 s...
+const ESPERA_MAXIMA_MS = 8_000;
+const ESTADOS_TEMPORALES = new Set([429, 500, 502, 503, 504]);
+const LARGO_MAXIMO = 250_000; // caracteres del pedido (el plan y la biblioteca de ejercicios)
+const TIEMPO_MAXIMO_MS = 55_000; // por intento
+const PRESUPUESTO_MS = 110_000; // entre todos los intentos
+const MARGEN_MINIMO_MS = 5_000; // con menos tiempo que esto no se intenta de nuevo
+
+const MENSAJE_SATURADA = "La IA tiene mucha demanda en este momento. Probá de nuevo en un minuto.";
+const MENSAJE_GENERICO = "La IA no pudo responder ahora. Probá de nuevo en un momento.";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +42,95 @@ async function esAdmin(jwt: string) {
   if (error || !user) return false;
   const { data: perfil } = await adminClient.from("profiles").select("role").eq("id", user.id).single();
   return perfil?.role === "admin";
+}
+
+type Intento =
+  | { ok: true; text: string; modelo: string }
+  | { ok: false; estado: number; mensaje: string; reintentable: boolean; modeloInexistente?: boolean };
+
+type Dependencias = {
+  fetchFn: typeof fetch;
+  esperar: (ms: number) => Promise<void>;
+  ahora: () => number;
+  modelos: string[];
+};
+
+const dependenciasReales = (): Dependencias => ({
+  fetchFn: (...args) => fetch(...args),
+  esperar: (ms) => new Promise((resolver) => setTimeout(resolver, ms)),
+  ahora: () => Date.now(),
+  modelos: MODELOS,
+});
+
+/** Una consulta a un modelo de Gemini; clasifica el resultado para decidir si vale la pena reintentar. */
+async function intentar(prompt: string, apiKey: string, modelo: string, limiteMs: number, fetchFn: typeof fetch): Promise<Intento> {
+  const control = new AbortController();
+  const timer = setTimeout(() => control.abort(), limiteMs);
+  try {
+    const res = await fetchFn(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
+      }),
+      signal: control.signal,
+    });
+    const data = await res.json().catch(() => null);
+    if (res.ok) {
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (typeof text === "string") return { ok: true, text, modelo };
+      console.error("Gemini respondió sin texto", modelo, JSON.stringify(data?.promptFeedback ?? data?.candidates?.[0]?.finishReason));
+      return { ok: false, estado: 502, mensaje: "La IA no devolvió una respuesta", reintentable: true };
+    }
+    console.error("Gemini respondió con error", modelo, res.status, JSON.stringify(data?.error ?? data));
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, estado: 502, mensaje: "La IA rechazó la clave del servidor. Revisá el secreto GEMINI_API_KEY.", reintentable: false };
+    }
+    if (res.status === 404) return { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: false, modeloInexistente: true };
+    const saturada = res.status === 503 || res.status === 429;
+    return {
+      ok: false,
+      estado: saturada ? 503 : 502,
+      mensaje: saturada ? MENSAJE_SATURADA : MENSAJE_GENERICO,
+      reintentable: ESTADOS_TEMPORALES.has(res.status),
+    };
+  } catch (error) {
+    const agotado = error instanceof DOMException && error.name === "AbortError";
+    console.error("Error llamando a Gemini", modelo, error);
+    return {
+      ok: false,
+      estado: 502,
+      mensaje: agotado ? "La IA tardó demasiado. Probá de nuevo." : "No se pudo consultar a la IA",
+      reintentable: true,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Consulta a Gemini con reintentos: si el modelo está saturado o falla de forma temporal, espera y vuelve a
+ * intentar; si agota los intentos, prueba con el siguiente modelo. Un error que no se arregla reintentando
+ * (clave inválida, pedido rechazado) se devuelve enseguida.
+ */
+export async function consultarGemini(prompt: string, apiKey: string, deps: Dependencias = dependenciasReales()) {
+  const inicio = deps.ahora();
+  let ultimo: Intento = { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: true };
+  for (const [posicion, modelo] of deps.modelos.entries()) {
+    const intentos = INTENTOS_POR_MODELO[posicion] ?? 1;
+    for (let i = 0; i < intentos; i++) {
+      if (i > 0) await deps.esperar(Math.min(ESPERA_BASE_MS * 2 ** (i - 1), ESPERA_MAXIMA_MS));
+      const restante = PRESUPUESTO_MS - (deps.ahora() - inicio);
+      if (restante < MARGEN_MINIMO_MS) return ultimo;
+      const resultado = await intentar(prompt, apiKey, modelo, Math.min(TIEMPO_MAXIMO_MS, restante), deps.fetchFn);
+      if (resultado.ok) return resultado;
+      ultimo = resultado;
+      if (resultado.modeloInexistente) break; // este modelo no existe: se prueba el siguiente
+      if (!resultado.reintentable) return resultado;
+    }
+  }
+  return ultimo;
 }
 
 Deno.serve(async (req) => {
@@ -53,31 +153,7 @@ Deno.serve(async (req) => {
   if (typeof prompt !== "string" || !prompt.trim()) return json({ error: "Falta el pedido para la IA" }, 400);
   if (prompt.length > LARGO_MAXIMO) return json({ error: "El plan es demasiado grande para la IA" }, 413);
 
-  const control = new AbortController();
-  const timer = setTimeout(() => control.abort(), TIEMPO_MAXIMO_MS);
-  try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODELO}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, responseMimeType: "application/json" },
-      }),
-      signal: control.signal,
-    });
-    const data = await res.json().catch(() => null);
-    if (!res.ok) {
-      console.error("Gemini respondió con error", res.status, JSON.stringify(data?.error ?? data));
-      return json({ error: "La IA no pudo responder ahora. Probá de nuevo en un momento." }, 502);
-    }
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (typeof text !== "string") return json({ error: "La IA no devolvió una respuesta" }, 502);
-    return json({ text });
-  } catch (error) {
-    const agotado = error instanceof DOMException && error.name === "AbortError";
-    console.error("Error llamando a Gemini", error);
-    return json({ error: agotado ? "La IA tardó demasiado. Probá de nuevo." : "No se pudo consultar a la IA" }, 502);
-  } finally {
-    clearTimeout(timer);
-  }
+  const resultado = await consultarGemini(prompt, apiKey);
+  if (!resultado.ok) return json({ error: resultado.mensaje }, resultado.estado);
+  return json({ text: resultado.text, modelo: resultado.modelo });
 });
