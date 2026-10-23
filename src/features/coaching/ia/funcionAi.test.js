@@ -19,12 +19,17 @@ const bien = (text = '[]') => respuesta(200, { candidates: [{ content: { parts: 
 const error = (estado) => respuesta(estado, { error: { code: estado, message: 'x', status: 'X' } });
 
 /** Dependencias falsas: respuestas en orden, esperas registradas y un reloj que avanza `paso` ms por consulta. */
-function dependencias(respuestas, { paso = 0 } = {}) {
+function dependencias(respuestas, { paso = 0, listado = null } = {}) {
   let reloj = 0;
   const esperas = [];
   const pedidos = [];
   const fetchFn = vi.fn(async (url, opciones) => {
     pedidos.push({ url, opciones });
+    // el listado de modelos disponibles es otra consulta: no gasta una de las respuestas en cola
+    if (/\/models\?/.test(url)) {
+      if (listado instanceof Error) throw listado;
+      return respuesta(200, { models: listado ?? [] });
+    }
     reloj += paso;
     const siguiente = respuestas.shift();
     if (siguiente instanceof Error) throw siguiente;
@@ -102,6 +107,50 @@ describe('función ai-plan: reintentos con Gemini', () => {
   it('si salió bien después de reintentar no hay detalle de errores', async () => {
     const { deps } = dependencias([error(503), bien()]);
     expect(await consultar(deps)).not.toHaveProperty('detalle');
+  });
+
+  describe('cuando un modelo ya no existe', () => {
+    const modelo = (name, metodos = ['generateContent']) => ({ name, supportedGenerationMethods: metodos });
+    const listado = [
+      modelo('models/gemini-3.5-flash'),
+      modelo('models/gemini-3.5-flash-lite'),
+      modelo('models/gemini-embedding-001', ['embedContent']),
+      modelo('models/imagen-4.0', ['predict']),
+    ];
+
+    it('si al final no logra responder, lista los modelos que sí tiene disponibles la clave', async () => {
+      const { deps } = dependencias([error(404), error(404)], { listado });
+      const resultado = await consultar(deps);
+      expect(resultado.ok).toBe(false);
+      expect(resultado.disponibles).toEqual(['gemini-3.5-flash', 'gemini-3.5-flash-lite']); // sin "models/" y solo los que generan texto
+    });
+
+    it('si responde bien con otro modelo no hace falta listar nada', async () => {
+      const { deps, pedidos } = dependencias([error(404), bien()], { listado });
+      expect((await consultar(deps)).ok).toBe(true);
+      expect(pedidos.some((p) => /\/models\?/.test(p.url))).toBe(false);
+    });
+
+    it('no pide el listado cuando el fallo no tiene que ver con modelos inexistentes', async () => {
+      const { deps, pedidos } = dependencias([error(503), error(503), error(503), error(503), error(503)], { listado });
+      expect(await consultar(deps)).not.toHaveProperty('disponibles');
+      expect(pedidos.some((p) => /\/models\?/.test(p.url))).toBe(false);
+    });
+
+    it('el listado se pide con la clave en el encabezado', async () => {
+      const { deps, pedidos } = dependencias([error(404), error(404)], { listado });
+      await consultar(deps);
+      const pedido = pedidos.find((p) => /\/models\?/.test(p.url));
+      expect(pedido.opciones.headers['x-goog-api-key']).toBe('clave');
+      expect(pedido.url).not.toContain('clave');
+    });
+
+    it('si el listado falla, el error original igual se devuelve', async () => {
+      const { deps } = dependencias([error(404), error(404)], { listado: new Error('red caída') });
+      const resultado = await consultar(deps);
+      expect(resultado.ok).toBe(false);
+      expect(resultado.disponibles).toEqual([]);
+    });
   });
 
   it('un 429 (demasiadas consultas) se trata igual que la saturación', async () => {

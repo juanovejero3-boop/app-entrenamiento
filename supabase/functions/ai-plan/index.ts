@@ -10,9 +10,9 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// Primero el modelo principal (se puede cambiar con el secreto GEMINI_MODEL) y después otros más livianos;
-// si alguno ya no existe (404), se salta al siguiente
-const MODELOS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+// Primero el modelo principal (se puede cambiar con el secreto GEMINI_MODEL) y después otros de respaldo; si alguno
+// no existe (404: Google retira modelos viejos), se salta al siguiente y, si ninguno anda, se informa cuáles hay
+const MODELOS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash"];
 const INTENTOS_POR_MODELO = [3, 2, 1];
 const ESPERA_BASE_MS = 1_500; // 1,5 s, 3 s, 6 s...
 const ESPERA_MAXIMA_MS = 8_000;
@@ -120,6 +120,24 @@ async function intentar(prompt: string, apiKey: string, modelo: string, limiteMs
   }
 }
 
+/** Los modelos de texto que tiene disponibles la clave (para poder elegir uno cuando el configurado ya no existe). */
+async function modelosDisponibles(apiKey: string, fetchFn: typeof fetch): Promise<string[]> {
+  try {
+    const res = await fetchFn("https://generativelanguage.googleapis.com/v1beta/models?pageSize=100", {
+      headers: { "x-goog-api-key": apiKey },
+    });
+    const data = await res.json();
+    return (data?.models ?? [])
+      .filter((m: { name?: string; supportedGenerationMethods?: string[] }) =>
+        /gemini/.test(m.name ?? "") && m.supportedGenerationMethods?.includes("generateContent"))
+      .map((m: { name: string }) => m.name.replace(/^models\//, ""))
+      .slice(0, 25);
+  } catch (error) {
+    console.error("No se pudo listar los modelos de Gemini", error);
+    return [];
+  }
+}
+
 /**
  * Consulta a Gemini con reintentos: si el modelo está saturado o falla de forma temporal, espera y vuelve a
  * intentar; si agota los intentos, prueba con el siguiente modelo. Un error que no se arregla reintentando
@@ -129,22 +147,30 @@ export async function consultarGemini(prompt: string, apiKey: string, deps: Depe
   const inicio = deps.ahora();
   let ultimo: Intento = { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: true, codigo: "sin tiempo" };
   const historial: string[] = []; // qué respondió cada intento, para el detalle del error
-  const fallo = (resultado: Intento) => ({ ...resultado, detalle: historial.join(", ") });
+  let hubo404 = false;
+  const fallo = async (resultado: Intento) => ({
+    ...resultado,
+    detalle: historial.join(", "),
+    ...(hubo404 ? { disponibles: await modelosDisponibles(apiKey, deps.fetchFn) } : {}),
+  });
   for (const [posicion, modelo] of deps.modelos.entries()) {
     const intentos = INTENTOS_POR_MODELO[posicion] ?? 1;
     for (let i = 0; i < intentos; i++) {
       if (i > 0) await deps.esperar(Math.min(ESPERA_BASE_MS * 2 ** (i - 1), ESPERA_MAXIMA_MS));
       const restante = PRESUPUESTO_MS - (deps.ahora() - inicio);
-      if (restante < MARGEN_MINIMO_MS) return fallo(ultimo);
+      if (restante < MARGEN_MINIMO_MS) return await fallo(ultimo);
       const resultado = await intentar(prompt, apiKey, modelo, Math.min(TIEMPO_MAXIMO_MS, restante), deps.fetchFn);
       if (resultado.ok) return resultado;
       ultimo = resultado;
       historial.push(`${modelo} ${resultado.codigo}`);
-      if (resultado.modeloInexistente) break; // este modelo no existe: se prueba el siguiente
-      if (!resultado.reintentable) return fallo(resultado);
+      if (resultado.modeloInexistente) {
+        hubo404 = true;
+        break; // este modelo no existe: se prueba el siguiente
+      }
+      if (!resultado.reintentable) return await fallo(resultado);
     }
   }
-  return fallo(ultimo);
+  return await fallo(ultimo);
 }
 
 Deno.serve(async (req) => {
@@ -171,7 +197,10 @@ Deno.serve(async (req) => {
   if (!resultado.ok) {
     // el detalle (qué respondió cada intento) ayuda a entender qué pasó sin abrir los registros
     const detalle = resultado.detalle ? ` (${resultado.detalle})` : "";
-    return json({ error: resultado.mensaje + detalle }, resultado.estado);
+    const modelos = resultado.disponibles?.length
+      ? ` Modelos disponibles para tu clave: ${resultado.disponibles.join(", ")}. Podés elegir uno con el secreto GEMINI_MODEL.`
+      : "";
+    return json({ error: resultado.mensaje + detalle + modelos }, resultado.estado);
   }
   return json({ text: resultado.text, modelo: resultado.modelo });
 });
