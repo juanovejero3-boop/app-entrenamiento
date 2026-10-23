@@ -85,6 +85,25 @@ describe('función ai-plan: reintentos con Gemini', () => {
     expect(fetchFn).toHaveBeenCalledTimes(5); // 3 con el principal + 2 con el liviano
   });
 
+  it('cuando falla, el resultado detalla qué respondió cada intento (para saber qué pasó sin mirar los registros)', async () => {
+    const { deps } = dependencias([error(503), error(503), error(503), error(429), error(500)]);
+    const resultado = await consultar(deps);
+    expect(resultado.detalle).toBe('principal 503, principal 503, principal 503, liviano 429, liviano 500');
+  });
+
+  it('un corte de red o un timeout figuran como tales en el detalle', async () => {
+    const abortado = new DOMException('cancelado', 'AbortError');
+    const { deps } = dependencias([new Error('red caída'), abortado, error(503), error(503), error(503)]);
+    expect((await consultar(deps)).detalle).toBe(
+      'principal red, principal timeout, principal 503, liviano 503, liviano 503',
+    );
+  });
+
+  it('si salió bien después de reintentar no hay detalle de errores', async () => {
+    const { deps } = dependencias([error(503), bien()]);
+    expect(await consultar(deps)).not.toHaveProperty('detalle');
+  });
+
   it('un 429 (demasiadas consultas) se trata igual que la saturación', async () => {
     const { deps } = dependencias([error(429), error(429), error(429), error(429), error(429)]);
     expect(await consultar(deps)).toMatchObject({ ok: false, estado: 503 });

@@ -10,9 +10,10 @@ const adminClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// Primero el modelo principal (se puede cambiar con el secreto GEMINI_MODEL) y después uno más liviano
-const MODELOS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const INTENTOS_POR_MODELO = [3, 2];
+// Primero el modelo principal (se puede cambiar con el secreto GEMINI_MODEL) y después otros más livianos;
+// si alguno ya no existe (404), se salta al siguiente
+const MODELOS = [Deno.env.get("GEMINI_MODEL") ?? "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const INTENTOS_POR_MODELO = [3, 2, 1];
 const ESPERA_BASE_MS = 1_500; // 1,5 s, 3 s, 6 s...
 const ESPERA_MAXIMA_MS = 8_000;
 const ESTADOS_TEMPORALES = new Set([429, 500, 502, 503, 504]);
@@ -46,7 +47,7 @@ async function esAdmin(jwt: string) {
 
 type Intento =
   | { ok: true; text: string; modelo: string }
-  | { ok: false; estado: number; mensaje: string; reintentable: boolean; modeloInexistente?: boolean };
+  | { ok: false; estado: number; mensaje: string; reintentable: boolean; codigo: number | string; modeloInexistente?: boolean };
 
 type Dependencias = {
   fetchFn: typeof fetch;
@@ -81,19 +82,28 @@ async function intentar(prompt: string, apiKey: string, modelo: string, limiteMs
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (typeof text === "string") return { ok: true, text, modelo };
       console.error("Gemini respondió sin texto", modelo, JSON.stringify(data?.promptFeedback ?? data?.candidates?.[0]?.finishReason));
-      return { ok: false, estado: 502, mensaje: "La IA no devolvió una respuesta", reintentable: true };
+      return { ok: false, estado: 502, mensaje: "La IA no devolvió una respuesta", reintentable: true, codigo: "sin texto" };
     }
     console.error("Gemini respondió con error", modelo, res.status, JSON.stringify(data?.error ?? data));
     if (res.status === 401 || res.status === 403) {
-      return { ok: false, estado: 502, mensaje: "La IA rechazó la clave del servidor. Revisá el secreto GEMINI_API_KEY.", reintentable: false };
+      return {
+        ok: false,
+        estado: 502,
+        mensaje: "La IA rechazó la clave del servidor. Revisá el secreto GEMINI_API_KEY.",
+        reintentable: false,
+        codigo: res.status,
+      };
     }
-    if (res.status === 404) return { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: false, modeloInexistente: true };
+    if (res.status === 404) {
+      return { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: false, modeloInexistente: true, codigo: 404 };
+    }
     const saturada = res.status === 503 || res.status === 429;
     return {
       ok: false,
       estado: saturada ? 503 : 502,
       mensaje: saturada ? MENSAJE_SATURADA : MENSAJE_GENERICO,
       reintentable: ESTADOS_TEMPORALES.has(res.status),
+      codigo: res.status,
     };
   } catch (error) {
     const agotado = error instanceof DOMException && error.name === "AbortError";
@@ -103,6 +113,7 @@ async function intentar(prompt: string, apiKey: string, modelo: string, limiteMs
       estado: 502,
       mensaje: agotado ? "La IA tardó demasiado. Probá de nuevo." : "No se pudo consultar a la IA",
       reintentable: true,
+      codigo: agotado ? "timeout" : "red",
     };
   } finally {
     clearTimeout(timer);
@@ -116,21 +127,24 @@ async function intentar(prompt: string, apiKey: string, modelo: string, limiteMs
  */
 export async function consultarGemini(prompt: string, apiKey: string, deps: Dependencias = dependenciasReales()) {
   const inicio = deps.ahora();
-  let ultimo: Intento = { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: true };
+  let ultimo: Intento = { ok: false, estado: 502, mensaje: MENSAJE_GENERICO, reintentable: true, codigo: "sin tiempo" };
+  const historial: string[] = []; // qué respondió cada intento, para el detalle del error
+  const fallo = (resultado: Intento) => ({ ...resultado, detalle: historial.join(", ") });
   for (const [posicion, modelo] of deps.modelos.entries()) {
     const intentos = INTENTOS_POR_MODELO[posicion] ?? 1;
     for (let i = 0; i < intentos; i++) {
       if (i > 0) await deps.esperar(Math.min(ESPERA_BASE_MS * 2 ** (i - 1), ESPERA_MAXIMA_MS));
       const restante = PRESUPUESTO_MS - (deps.ahora() - inicio);
-      if (restante < MARGEN_MINIMO_MS) return ultimo;
+      if (restante < MARGEN_MINIMO_MS) return fallo(ultimo);
       const resultado = await intentar(prompt, apiKey, modelo, Math.min(TIEMPO_MAXIMO_MS, restante), deps.fetchFn);
       if (resultado.ok) return resultado;
       ultimo = resultado;
+      historial.push(`${modelo} ${resultado.codigo}`);
       if (resultado.modeloInexistente) break; // este modelo no existe: se prueba el siguiente
-      if (!resultado.reintentable) return resultado;
+      if (!resultado.reintentable) return fallo(resultado);
     }
   }
-  return ultimo;
+  return fallo(ultimo);
 }
 
 Deno.serve(async (req) => {
@@ -154,6 +168,10 @@ Deno.serve(async (req) => {
   if (prompt.length > LARGO_MAXIMO) return json({ error: "El plan es demasiado grande para la IA" }, 413);
 
   const resultado = await consultarGemini(prompt, apiKey);
-  if (!resultado.ok) return json({ error: resultado.mensaje }, resultado.estado);
+  if (!resultado.ok) {
+    // el detalle (qué respondió cada intento) ayuda a entender qué pasó sin abrir los registros
+    const detalle = resultado.detalle ? ` (${resultado.detalle})` : "";
+    return json({ error: resultado.mensaje + detalle }, resultado.estado);
+  }
   return json({ text: resultado.text, modelo: resultado.modelo });
 });
