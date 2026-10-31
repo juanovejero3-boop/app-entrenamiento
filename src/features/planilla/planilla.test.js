@@ -14,11 +14,15 @@ const PERFIL_ALUMNO = { ...ALUMNO, role: 'alumno', sheet_url: 'https://docs.goog
 
 let content;
 beforeEach(() => {
+  // La vista del alumno abre la semana de "hoy": se fija la fecha para que los tests no dependan del día en que corren
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 9, 20)); // el plan de prueba arranca el lunes 19/10/2026
   content = document.createElement('div');
   content.id = 'app-content'; // los botones de la pestaña redibujan en #app-content
   document.body.appendChild(content);
 });
 afterEach(() => {
+  vi.useRealTimers();
   document.body.innerHTML = '';
   resetPlanillaPestanas();
   Object.assign(state, { currentUser: null, userProfile: null, adminAllUsers: [] });

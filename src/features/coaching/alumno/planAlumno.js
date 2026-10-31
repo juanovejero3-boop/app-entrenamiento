@@ -30,7 +30,7 @@ import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesio
  *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento | null,
  *   registro: import('./registro.js').Registro, sesiones: import('./sesiones.js').Sesiones, hoy: string,
  *   soloLectura: boolean, alVolver: (() => void) | null,
- *   w: number, d: number, videos: Map<string, string>
+ *   w: number, d: number, videos: Map<string, string>, abiertos: Set<string>
  * }} VistaDelPlan
  */
 
@@ -92,6 +92,7 @@ export async function abrirPlanAlumno(
     w: plan ? semanaActual(plan, hoy) : 0,
     d: 0,
     videos,
+    abiertos: new Set(), // ids de los ejercicios desplegados
   };
   content.dataset.planAlumno = 'true';
   const instancia = crearVista(vista);
@@ -188,6 +189,7 @@ function crearVista(vista) {
       </div>
     </div>
 
+    <div data-barra-fija class="sticky top-0 z-30 bg-black py-2 space-y-2 border-b border-gray-800">
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
       ${plan.weeks
         .map((s, i) => {
@@ -198,8 +200,6 @@ function crearVista(vista) {
         })
         .join('')}
     </div>
-    ${meta ? `<p class="text-xs text-gray-400">${esc(meta)}</p>` : ''}
-
     ${
       semana.days.length
         ? `<div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -216,10 +216,12 @@ function crearVista(vista) {
                 return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}">${esc(dia.name)}${marca}</button>`;
               })
               .join('')}
-          </div>
-          ${dibujarDia(semana.days[d])}`
-        : '<p class="text-sm text-gray-500 italic">Sin días cargados.</p>'
+          </div>`
+        : ''
     }
+    </div>
+    ${meta ? `<p class="text-xs text-gray-400">${esc(meta)}</p>` : ''}
+    ${semana.days.length ? dibujarDia(semana.days[d]) : '<p class="text-sm text-gray-500 italic">Sin días cargados.</p>'}
   `;
   }
 
@@ -238,6 +240,7 @@ function crearVista(vista) {
         <div data-progreso-omitidas class="h-1.5 bg-red-500 transition-all" style="width: ${rojo}%"></div>
       </div>
     </div>
+    <div class="flex justify-end"><button data-click="alumnoEjerciciosTodos" class="text-[11px] font-bold uppercase tracking-wider text-gray-300 hover:text-neonRed">${textoBotonTodos()}</button></div>
     ${bloques.map(dibujarBloque).join('')}
     ${sesion || vista.soloLectura ? '' : dibujarCierreDeSesion()}
   `;
@@ -304,20 +307,47 @@ function crearVista(vista) {
       ej.rest && `Descanso ${ej.rest}`,
       ej.tech,
     ].filter(Boolean);
+    const abierto = vista.abiertos.has(ej.id);
+    const { texto, completo } = resumenDeEjercicio(ej);
     return `
     <article data-ejercicio="${esc(ej.id)}" class="bg-cyberCard rounded-xl border p-3 space-y-2 ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${esc(color)}"` : ''}>
       <div class="flex items-start gap-2">
+        <button type="button" data-click="alumnoEjercicio" data-e="${esc(ej.id)}" aria-expanded="${abierto}" class="flex-1 min-w-0 flex items-start gap-2 text-left">
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(etiqueta)}</span>` : ''}
-        <div class="flex-1 min-w-0">
-          <h4 class="font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</h4>
-          <div class="flex flex-wrap gap-1 mt-1">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</div>
-        </div>
+        <span class="flex-1 min-w-0 block">
+          <span class="block font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
+          <span class="flex flex-wrap gap-1 mt-1">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</span>
+        </span>
+        <span data-ej-resumen ${completo ? 'data-completo="true"' : ''} class="${claseResumen(completo)}">${esc(texto)}</span>
+        <i data-ej-flecha class="fa-solid fa-chevron-down text-gray-300 transition mt-1 ${abierto ? 'rotate-180' : ''}"></i>
+        </button>
         ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
       </div>
-      ${ej.notes ? `<p class="text-xs text-gray-400">${esc(ej.notes)}</p>` : ''}
-      ${dibujarSeries(ej)}
+      <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
+        ${ej.notes ? `<p class="text-xs text-gray-400">${esc(ej.notes)}</p>` : ''}
+        ${dibujarSeries(ej)}
+      </div>
     </article>
   `;
+  }
+
+  const claseResumen = (completo) =>
+    `shrink-0 text-xs font-bold px-2 py-1 rounded-md border whitespace-nowrap ${
+      completo ? 'border-emerald-700 text-emerald-300 bg-emerald-950/40' : 'border-gray-600 text-gray-200'
+    }`;
+
+  /** "2/4" (y "· 1 omitida"): cuántas series del ejercicio se hicieron; completo si están todas. */
+  function resumenDeEjercicio(ej) {
+    const total = cantidadDeSeries(ej);
+    let hechas = 0;
+    let omitidas = 0;
+    for (let n = 1; n <= total; n++) {
+      const serie = serieDe(vista.registro, ej.id, n);
+      if (serie.done) hechas++;
+      else if (serie.skipped) omitidas++;
+    }
+    const omitidasTexto = omitidas ? ` · ${omitidas} ${omitidas === 1 ? 'omitida' : 'omitidas'}` : '';
+    return { texto: `${hechas}/${total}${omitidasTexto}`, completo: hechas === total };
   }
 
   function dibujarSeries(ej) {
@@ -362,6 +392,68 @@ function crearVista(vista) {
     if (barraRoja) barraRoja.style.width = `${rojo}%`;
   }
 
+  const articuloDe = (ejercicioId) =>
+    [...vista.content.querySelectorAll('[data-ejercicio]')].find((a) => a.dataset.ejercicio === ejercicioId);
+
+  /** Actualiza el "2/4" del encabezado de un ejercicio, sin redibujar nada más. */
+  function actualizarResumenDeEjercicio(ejercicioId) {
+    const ejercicio = diaActual()
+      .blocks.flatMap((b) => b.exercises)
+      .find((e) => e.id === ejercicioId);
+    const resumen = articuloDe(ejercicioId)?.querySelector('[data-ej-resumen]');
+    if (!ejercicio || !resumen) return;
+    const { texto, completo } = resumenDeEjercicio(ejercicio);
+    resumen.textContent = texto;
+    resumen.className = claseResumen(completo);
+    if (completo) resumen.dataset.completo = 'true';
+    else delete resumen.dataset.completo;
+  }
+
+  const idsDelDia = () =>
+    diaActual()
+      .blocks.filter((b) => b.exercises.length)
+      .flatMap((b) => b.exercises.map((e) => e.id));
+  const todosAbiertos = () => idsDelDia().every((id) => vista.abiertos.has(id));
+  const textoBotonTodos = () => (todosAbiertos() ? 'Plegar todos' : 'Abrir todos');
+
+  /** Muestra u oculta el cuerpo de un ejercicio (sin redibujar). */
+  function mostrarCuerpo(ejercicioId, abierto) {
+    const articulo = articuloDe(ejercicioId);
+    if (!articulo) return;
+    articulo.querySelector('[data-ej-cuerpo]').hidden = !abierto;
+    articulo.querySelector('[data-click="alumnoEjercicio"]').setAttribute('aria-expanded', String(abierto));
+    articulo.querySelector('[data-ej-flecha]')?.classList.toggle('rotate-180', abierto);
+  }
+
+  function actualizarBotonTodos() {
+    const boton = vista.content.querySelector('[data-click="alumnoEjerciciosTodos"]');
+    if (boton) boton.textContent = textoBotonTodos();
+  }
+
+  function alternarEjercicio(ejercicioId) {
+    const abrir = !vista.abiertos.has(ejercicioId);
+    if (abrir) vista.abiertos.add(ejercicioId);
+    else vista.abiertos.delete(ejercicioId);
+    mostrarCuerpo(ejercicioId, abrir);
+    actualizarBotonTodos();
+  }
+
+  /** Abre todos los ejercicios del día o, si ya estaban todos abiertos, los pliega. */
+  function alternarTodos() {
+    const abrir = !todosAbiertos();
+    for (const id of idsDelDia()) {
+      if (abrir) vista.abiertos.add(id);
+      else vista.abiertos.delete(id);
+      mostrarCuerpo(id, abrir);
+    }
+    actualizarBotonTodos();
+  }
+
+  /** Al cambiar de semana o de día desde la barra fija, vuelve al principio de la vista si se había scrolleado. */
+  function traerAlTope() {
+    if (vista.content.getBoundingClientRect().top < 0) vista.content.scrollIntoView?.({ block: 'start' });
+  }
+
   /** Pinta los botones de hecha / no la hice de una serie según el registro (sin redibujar el resto). */
   function pintarEstadoDeSerie(ejercicioId, numero) {
     const fila = [...vista.content.querySelectorAll('[data-serie]')].find(
@@ -384,6 +476,7 @@ function crearVista(vista) {
     if (vista.soloLectura || diaTerminado()) return;
     vista.registro = actualizarSerie(vista.registro, ejercicioId, numero, cambios);
     pintarEstadoDeSerie(ejercicioId, numero);
+    actualizarResumenDeEjercicio(ejercicioId);
     actualizarProgreso();
     try {
       await repo.guardarRegistroDelCiclo(vista.cicloId, vista.registro);
@@ -483,11 +576,15 @@ function crearVista(vista) {
       vista.w = Number(el.dataset.w);
       vista.d = 0;
       dibujar();
+      traerAlTope();
     },
     dia: (el) => {
       vista.d = Number(el.dataset.d);
       dibujar();
+      traerAlTope();
     },
+    ejercicio: (el) => alternarEjercicio(el.dataset.e),
+    ejerciciosTodos: () => alternarTodos(),
     serie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
     check: (el) => alternarEstado(el, 'done'),
     omitir: (el) => alternarEstado(el, 'skipped'),
@@ -508,6 +605,8 @@ registrarAcciones({
   alumnoSerie: (el) => instanciaDe(el)?.serie(el),
   alumnoCheck: (el) => instanciaDe(el)?.check(el),
   alumnoOmitir: (el) => instanciaDe(el)?.omitir(el),
+  alumnoEjercicio: (el) => instanciaDe(el)?.ejercicio(el),
+  alumnoEjerciciosTodos: (el) => instanciaDe(el)?.ejerciciosTodos(),
   alumnoTerminar: (el) => instanciaDe(el)?.terminar(),
   alumnoNoEntrene: (el) => instanciaDe(el)?.noEntrene(),
   alumnoReabrir: (el) => instanciaDe(el)?.reabrir(),

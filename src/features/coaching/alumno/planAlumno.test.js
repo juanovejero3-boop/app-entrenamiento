@@ -816,3 +816,188 @@ describe('vista del alumno: día no entrenado', () => {
     expect($('[data-click="alumnoNoEntrene"]')).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Barra fija y ejercicios plegables
+// ---------------------------------------------------------------------------
+
+describe('vista del alumno: barra fija de semanas y días', () => {
+  beforeEach(() => guardarPlan());
+
+  it('las semanas y los días van en una barra que queda pegada al tope al scrollear', async () => {
+    await abrir();
+    const barra = $('[data-barra-fija]');
+
+    expect(barra.className).toContain('sticky');
+    expect(barra.className).toContain('top-0');
+    expect(barra.querySelectorAll('[data-click="alumnoSemana"]')).toHaveLength(2);
+    expect(barra.querySelectorAll('[data-click="alumnoDia"]')).toHaveLength(2);
+  });
+
+  it('los ejercicios y el resto del día quedan fuera de la barra (son lo que scrollea)', async () => {
+    await abrir();
+    const barra = $('[data-barra-fija]');
+    expect(barra.querySelector('[data-ejercicio]')).toBeNull();
+    expect(barra.querySelector('[data-progreso]')).toBeNull();
+  });
+
+  it('la barra se mantiene al cambiar de día y de semana', async () => {
+    await abrir();
+    $('[data-click="alumnoDia"][data-d="1"]').click();
+    expect($$('[data-barra-fija]')).toHaveLength(1);
+    expect($('[data-barra-fija] [data-click="alumnoDia"][aria-current="true"]').dataset.d).toBe('1');
+
+    $('[data-click="alumnoSemana"][data-w="1"]').click(); // la semana 2 del plan de prueba no tiene días
+    expect($$('[data-barra-fija]')).toHaveLength(1);
+    expect($('[data-barra-fija] [data-click="alumnoSemana"][aria-current="true"]').dataset.w).toBe('1');
+  });
+
+  it('en modo lectura del coach también está', async () => {
+    await abrir({ soloLectura: true });
+    expect($('[data-barra-fija] [data-click="alumnoDia"]')).not.toBeNull();
+  });
+});
+
+describe('vista del alumno: ejercicios plegables', () => {
+  beforeEach(() => guardarPlan());
+
+  const ejercicio = (id) => $(`[data-ejercicio="${id}"]`);
+  const cuerpo = (id) => ejercicio(id).querySelector('[data-ej-cuerpo]');
+  const encabezado = (id) => ejercicio(id).querySelector('[data-click="alumnoEjercicio"]');
+  const alternar = async (id) => {
+    encabezado(id).click();
+    await esperar();
+  };
+
+  it('los ejercicios arrancan plegados: se ve el nombre y los datos, no las series', async () => {
+    await abrir();
+
+    expect(cuerpo('e1').hidden).toBe(true);
+    expect(encabezado('e1').getAttribute('aria-expanded')).toBe('false');
+    expect(encabezado('e1').textContent).toContain('Press banca');
+    expect(encabezado('e1').textContent).toContain('Reps 8-10');
+    expect(ejercicio('e1').querySelector('[data-insignia]')).not.toBeNull();
+  });
+
+  it('tocar el ejercicio lo abre y tocarlo de nuevo lo pliega', async () => {
+    await abrir();
+
+    await alternar('e1');
+    expect(cuerpo('e1').hidden).toBe(false);
+    expect(encabezado('e1').getAttribute('aria-expanded')).toBe('true');
+    expect(cuerpo('e2').hidden).toBe(true); // los demás siguen plegados
+
+    await alternar('e1');
+    expect(cuerpo('e1').hidden).toBe(true);
+    expect(encabezado('e1').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('abrir un ejercicio no redibuja la pantalla (no se pierde lo que se está haciendo)', async () => {
+    await abrir();
+    const antes = ejercicio('e2');
+    await alternar('e1');
+    expect(ejercicio('e2')).toBe(antes);
+  });
+
+  it('lo que se abrió sigue abierto al cambiar de día y volver', async () => {
+    await abrir();
+    await alternar('e1');
+
+    $('[data-click="alumnoDia"][data-d="1"]').click();
+    $('[data-click="alumnoDia"][data-d="0"]').click();
+
+    expect(cuerpo('e1').hidden).toBe(false);
+    expect(cuerpo('e2').hidden).toBe(true);
+  });
+
+  it('el botón de Demo queda a la vista y no pliega ni abre el ejercicio', async () => {
+    await abrir();
+    const demo = ejercicio('e1').querySelector('[data-click="materialAbrirLink"]');
+    if (demo) expect(encabezado('e1').contains(demo)).toBe(false); // es un botón aparte, no está dentro del que pliega
+  });
+
+  it('"Abrir todos" despliega todos los ejercicios del día y pasa a decir "Plegar todos"', async () => {
+    await abrir();
+    const todos = () => $('[data-click="alumnoEjerciciosTodos"]');
+    expect(todos().textContent).toContain('Abrir todos');
+
+    todos().click();
+    await esperar();
+    expect($$('[data-ej-cuerpo]').every((c) => !c.hidden)).toBe(true);
+    expect(todos().textContent).toContain('Plegar todos');
+
+    todos().click();
+    await esperar();
+    expect($$('[data-ej-cuerpo]').every((c) => c.hidden)).toBe(true);
+    expect(todos().textContent).toContain('Abrir todos');
+  });
+
+  it('si se abren todos a mano el botón cambia a "Plegar todos"', async () => {
+    await abrir();
+    for (const c of $$('[data-ej-cuerpo]'))
+      c.closest('[data-ejercicio]').querySelector('[data-click="alumnoEjercicio"]').click();
+    await esperar();
+    expect($('[data-click="alumnoEjerciciosTodos"]').textContent).toContain('Plegar todos');
+  });
+
+  it('el encabezado muestra cuántas series se hicieron y se actualiza al marcarlas', async () => {
+    await abrir();
+    const resumen = () => ejercicio('e1').querySelector('[data-ej-resumen]');
+    expect(resumen().textContent).toBe('0/4');
+    expect(resumen().dataset.completo).toBeUndefined();
+
+    await alternar('e1');
+    check('e1', 1).click();
+    await esperar();
+    expect(resumen().textContent).toBe('1/4');
+
+    for (const n of [2, 3, 4]) check('e1', n).click();
+    await esperar();
+    expect(resumen().textContent).toBe('4/4');
+    expect(resumen().dataset.completo).toBe('true');
+
+    check('e1', 4).click(); // la desmarca
+    await esperar();
+    expect(resumen().dataset.completo).toBeUndefined();
+  });
+
+  it('las series omitidas se cuentan aparte en el encabezado', async () => {
+    await abrir();
+    await alternar('e1');
+    check('e1', 1).click();
+    $('[data-click="alumnoOmitir"][data-e="e1"][data-n="2"]').click();
+    await esperar();
+    expect(ejercicio('e1').querySelector('[data-ej-resumen]').textContent).toBe('1/4 · 1 omitida');
+  });
+
+  it('un día terminado conserva el resumen y los ejercicios se pueden seguir abriendo para consultarlos', async () => {
+    await guardarPlan(planDeUnaSerie());
+    await abrir();
+    await alternar('e1');
+    check('e1', 1).click();
+    await esperar();
+    await terminar();
+
+    expect(ejercicio('e1').querySelector('[data-ej-resumen]').textContent).toBe('1/1');
+    expect(cuerpo('e1').hidden).toBe(false); // el estado abierto se mantiene al redibujar
+    await alternar('e1');
+    expect(cuerpo('e1').hidden).toBe(true);
+  });
+
+  it('en modo lectura del coach también se pliegan y abren', async () => {
+    await abrir({ soloLectura: true });
+    expect(cuerpo('e1').hidden).toBe(true);
+    await alternar('e1');
+    expect(cuerpo('e1').hidden).toBe(false);
+  });
+
+  it('cada ciclo tiene sus ejercicios abiertos por separado', async () => {
+    await abrir();
+    await alternar('e1');
+    const otro = document.createElement('div');
+    document.body.appendChild(otro);
+    await abrirPlanAlumno(otro, ALUMNO, { hoy: SEMANA_1 });
+    expect(otro.querySelector('[data-ejercicio="e1"] [data-ej-cuerpo]').hidden).toBe(true);
+    expect(cuerpo('e1').hidden).toBe(false);
+  });
+});
