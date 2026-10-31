@@ -216,7 +216,7 @@ function crearVista(vista) {
                 return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}">${esc(dia.name)}${marca}</button>`;
               })
               .join('')}
-          </div>`
+          </div>${dibujarProgreso(semana.days[d])}`
         : ''
     }
     </div>
@@ -228,22 +228,28 @@ function crearVista(vista) {
   function dibujarDia(dia) {
     const bloques = dia.blocks.filter((b) => b.exercises.length);
     if (!bloques.length) return '<p class="text-sm text-gray-500 italic">Sin ejercicios cargados.</p>';
-    const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
-    const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
     const sesion = sesionDe(vista.sesiones, dia.id);
     return `
     ${sesion ? dibujarSesionTerminada(sesion) : vista.soloLectura ? '<p data-sin-terminar class="text-xs text-gray-500 italic">Sesión sin terminar.</p>' : ''}
-    <div class="space-y-1">
-      <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-400">${textoProgreso(hechas, omitidas, total)}</p>
-      <div class="h-1.5 bg-gray-800 rounded flex overflow-hidden">
-        <div data-progreso-barra class="h-1.5 bg-emerald-500 transition-all" style="width: ${verde}%"></div>
-        <div data-progreso-omitidas class="h-1.5 bg-red-500 transition-all" style="width: ${rojo}%"></div>
-      </div>
-    </div>
     <div class="flex justify-end"><button data-click="alumnoEjerciciosTodos" class="text-[11px] font-bold uppercase tracking-wider text-gray-300 hover:text-neonRed">${textoBotonTodos()}</button></div>
     ${bloques.map(dibujarBloque).join('')}
     ${sesion || vista.soloLectura ? '' : dibujarCierreDeSesion()}
   `;
+  }
+
+  /** El contador de series del día (texto y barra verde/roja): va en la barra fija para verlo siempre. */
+  function dibujarProgreso(dia) {
+    if (!dia.blocks.some((b) => b.exercises.length)) return '';
+    const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
+    const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
+    return `
+      <div class="space-y-1">
+        <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-300">${textoProgreso(hechas, omitidas, total)}</p>
+        <div class="h-1.5 bg-gray-800 rounded flex overflow-hidden">
+          <div data-progreso-barra class="h-1.5 bg-emerald-500 transition-all" style="width: ${verde}%"></div>
+          <div data-progreso-omitidas class="h-1.5 bg-red-500 transition-all" style="width: ${rojo}%"></div>
+        </div>
+      </div>`;
   }
 
   const textoProgreso = (hechas, omitidas, total) =>

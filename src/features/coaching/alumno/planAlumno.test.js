@@ -834,11 +834,43 @@ describe('vista del alumno: barra fija de semanas y días', () => {
     expect(barra.querySelectorAll('[data-click="alumnoDia"]')).toHaveLength(2);
   });
 
+  it('el contador de series del día va en la barra, así se ve siempre', async () => {
+    await abrir();
+    const barra = $('[data-barra-fija]');
+    expect(barra.querySelector('[data-progreso]').textContent).toBe('0 / 11 series');
+    expect(barra.querySelector('[data-progreso-barra]')).not.toBeNull();
+    expect(barra.querySelector('[data-progreso-omitidas]')).not.toBeNull();
+    expect($$('[data-progreso]')).toHaveLength(1); // y no está repetido en el día
+  });
+
+  it('el contador sigue el avance de las series y el cambio de día', async () => {
+    await abrir();
+    check('e1', 1).click();
+    await esperar();
+    expect($('[data-barra-fija] [data-progreso]').textContent).toBe('1 / 11 series');
+
+    $('[data-click="alumnoDia"][data-d="1"]').click(); // el día 2 del plan de prueba no tiene ejercicios
+    expect($('[data-barra-fija] [data-progreso]')).toBeNull();
+
+    $('[data-click="alumnoDia"][data-d="0"]').click();
+    expect($('[data-barra-fija] [data-progreso]').textContent).toBe('1 / 11 series');
+  });
+
+  it('un día sin ejercicios no muestra contador en la barra', async () => {
+    await guardarPlan({
+      ...planCompleto(),
+      weeks: [{ ...planCompleto().weeks[0], days: [{ id: 'dv', name: 'Vacío', blocks: [] }] }],
+    });
+    await abrir();
+    expect($('[data-barra-fija]')).not.toBeNull();
+    expect($('[data-barra-fija] [data-progreso]')).toBeNull();
+  });
+
   it('los ejercicios y el resto del día quedan fuera de la barra (son lo que scrollea)', async () => {
     await abrir();
     const barra = $('[data-barra-fija]');
     expect(barra.querySelector('[data-ejercicio]')).toBeNull();
-    expect(barra.querySelector('[data-progreso]')).toBeNull();
+    expect(barra.querySelector('[data-click="alumnoEjerciciosTodos"]')).toBeNull();
   });
 
   it('la barra se mantiene al cambiar de día y de semana', async () => {
