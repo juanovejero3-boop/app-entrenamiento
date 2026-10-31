@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { abrirConstructorDePlanes } from './constructorDePlanes.js';
 import { crearPlan, generarEstructura } from './plan.js';
 import { llamarIA } from '../ia/gemini.js';
@@ -1050,5 +1050,267 @@ describe('constructor de planes: asistente de IA completando días', () => {
     expect($('[data-ia-propuesta] img')).toBeNull();
     expect($('[data-ia-agregado]').textContent).toContain('<img src=x onerror=alert(1)>');
     expect(textoDelAviso()).toBe('');
+  });
+});
+
+describe('constructor de planes: barra fija y plegables', () => {
+  const ej = (id, nombre, extra = {}) => ({
+    id,
+    name: nombre,
+    sets: '4',
+    reps: '8-10',
+    intensityType: 'RIR',
+    intensityValue: '2',
+    tech: '',
+    rest: '90s',
+    notes: '',
+    group: '',
+    ...extra,
+  });
+
+  /** 3 semanas de 2 días; la semana 1 tiene 2 ejercicios el día 1 (7 series) y 1 el día 2. */
+  function planConEjercicios() {
+    const plan = generarEstructura({ ...crearPlan({ fechaInicio: '2026-10-19' }), macroName: 'Fuerza' }, 3, 2);
+    plan.weeks[0].days[0].blocks = [
+      { id: 'b1', type: 'fuerza', exercises: [ej('e1', 'Press banca'), ej('e2', 'Remo', { sets: '3', reps: '12' })] },
+    ];
+    plan.weeks[0].days[1].blocks = [
+      { id: 'b2', type: 'hipertrofia', exercises: [ej('e3', 'Sentadilla', { sets: '5' })] },
+    ];
+    return plan;
+  }
+  beforeEach(() => sembrarPlan(ALUMNO.id, planConEjercicios()));
+
+  const barra = () => $('[data-barra-fija]');
+  const cuerpoDia = (w, d) => $(`[data-dia="${w}-${d}"] [data-dia-cuerpo]`);
+  const cuerpoEj = (pos) => $(`[data-ejercicio="${pos}"] [data-ej-cuerpo]`);
+  const tocar = async (selector) => {
+    $(selector).click();
+    await esperar();
+  };
+
+  describe('barra fija', () => {
+    it('lleva las semanas y los días de la semana abierta, y queda pegada al tope', async () => {
+      await abrir();
+
+      expect(barra().className).toContain('sticky');
+      expect(barra().className).toContain('top-0');
+      expect(barra().querySelectorAll('[data-click="semanaIr"]')).toHaveLength(3);
+      expect(barra().querySelectorAll('[data-click="diaIr"]')).toHaveLength(2);
+      expect(barra().querySelector('[data-click="constructorPlegarTodo"]')).not.toBeNull();
+      expect(barra().querySelector('[data-click="constructorAbrirTodo"]')).not.toBeNull();
+      expect(barra().querySelector('[data-ejercicio]')).toBeNull(); // el contenido scrollea, la barra no
+    });
+
+    it('elegir una semana en la barra la abre, marca esa semana y muestra sus días', async () => {
+      await abrir();
+      await tocar('[data-click="semanaIr"][data-w="2"]');
+
+      expect($('[data-semana]').dataset.semana).toBe('2');
+      expect(barra().querySelector('[data-click="semanaIr"][data-w="2"]').getAttribute('aria-current')).toBe('true');
+      expect(barra().querySelector('[data-click="semanaIr"][data-w="0"]').getAttribute('aria-current')).toBeNull();
+      expect($$('[data-barra-fija]')).toHaveLength(1);
+    });
+
+    it('un plan sin semanas no tiene barra', async () => {
+      await sembrarPlan(ALUMNO.id, crearPlan({ fechaInicio: '2026-10-19' }));
+      await abrir();
+      expect(barra()).toBeNull();
+    });
+
+    it('tocar un día de la barra lo abre y se desplaza hasta él', async () => {
+      const desplazar = vi.fn();
+      const original = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = desplazar;
+      onTestFinished(() => {
+        Element.prototype.scrollIntoView = original;
+      });
+      await abrir();
+      expect(cuerpoDia(0, 1).hidden).toBe(true);
+
+      await tocar('[data-click="diaIr"][data-d="1"]');
+
+      expect(cuerpoDia(0, 1).hidden).toBe(false);
+      expect(desplazar).toHaveBeenCalledWith({ block: 'start' });
+      expect($('[data-dia="0-1"]').className).toContain('scroll-mt'); // deja lugar para que la barra no lo tape
+    });
+  });
+
+  describe('días plegables', () => {
+    it('al abrir una semana el primer día viene abierto y los demás plegados', async () => {
+      await abrir();
+      expect(cuerpoDia(0, 0).hidden).toBe(false);
+      expect(cuerpoDia(0, 1).hidden).toBe(true);
+    });
+
+    it('el encabezado del día muestra su nombre editable y cuántos ejercicios y series tiene', async () => {
+      await abrir();
+      expect($('[data-dia="0-0"] [data-change="diaCampo"]').value).toBe('Día 1');
+      expect($('[data-dia-resumen="0-0"]').textContent).toBe('2 ejercicios · 7 series');
+      expect($('[data-dia-resumen="0-1"]').textContent).toBe('1 ejercicio · 5 series');
+    });
+
+    it('tocar la flecha pliega y despliega el día sin redibujar', async () => {
+      await abrir();
+      const dia = $('[data-dia="0-1"]');
+      await tocar('[data-dia="0-1"] [data-click="diaToggle"]');
+      expect(cuerpoDia(0, 1).hidden).toBe(false);
+      expect(dia.querySelector('[data-click="diaToggle"]').getAttribute('aria-expanded')).toBe('true');
+
+      await tocar('[data-dia="0-1"] [data-click="diaToggle"]');
+      expect(cuerpoDia(0, 1).hidden).toBe(true);
+      expect($('[data-dia="0-1"]')).toBe(dia); // el mismo elemento: no se redibujó
+    });
+
+    it('cambiar el nombre del día no lo pliega ni lo abre', async () => {
+      await abrir();
+      cambiar($('[data-dia="0-1"] [data-change="diaCampo"]'), 'Pierna');
+      await esperar();
+      expect(cuerpoDia(0, 1).hidden).toBe(true);
+      expect($('[data-dia="0-1"] [data-change="diaCampo"]').value).toBe('Pierna');
+    });
+
+    it('lo que se abrió sigue abierto al cambiar de semana y volver, y la semana nueva abre su primer día', async () => {
+      await abrir();
+      await tocar('[data-dia="0-1"] [data-click="diaToggle"]');
+
+      await tocar('[data-click="semanaIr"][data-w="1"]');
+      expect(cuerpoDia(1, 0).hidden).toBe(false);
+      expect(cuerpoDia(1, 1).hidden).toBe(true);
+
+      await tocar('[data-click="semanaIr"][data-w="0"]');
+      expect(cuerpoDia(0, 0).hidden).toBe(false);
+      expect(cuerpoDia(0, 1).hidden).toBe(false);
+    });
+
+    it('un día agregado viene abierto', async () => {
+      await abrir();
+      await tocar('[data-click="diaAgregar"][data-w="0"]');
+      expect(cuerpoDia(0, 2).hidden).toBe(false);
+    });
+
+    it('un día que estaba abierto sigue abierto después de otra edición que redibuja', async () => {
+      await abrir();
+      await tocar('[data-dia="0-1"] [data-click="diaToggle"]');
+      await tocar('[data-click="diaAgregar"][data-w="0"]'); // redibuja todo
+      expect(cuerpoDia(0, 1).hidden).toBe(false);
+      expect(cuerpoDia(0, 0).hidden).toBe(false);
+    });
+  });
+
+  describe('ejercicios plegables', () => {
+    it('los ejercicios que ya existían vienen plegados, con su nombre y un resumen', async () => {
+      await abrir();
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(true);
+      expect($('[data-ejercicio="0-0-0-0"] [data-change="ejercicioCampo"][data-campo="name"]').value).toBe(
+        'Press banca',
+      );
+      expect($('[data-ejercicio="0-0-0-0"] [data-ej-resumen]').textContent).toBe('4 × 8-10 · RIR 2');
+      expect($('[data-ejercicio="0-0-0-1"] [data-ej-resumen]').textContent).toBe('3 × 12 · RIR 2');
+    });
+
+    it('tocar la flecha despliega los campos y vuelve a plegarlos, sin redibujar', async () => {
+      await abrir();
+      const tarjeta = $('[data-ejercicio="0-0-0-0"]');
+      await tocar('[data-ejercicio="0-0-0-0"] [data-click="ejercicioToggle"]');
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(false);
+      expect(tarjeta.querySelector('[data-click="ejercicioToggle"]').getAttribute('aria-expanded')).toBe('true');
+
+      await tocar('[data-ejercicio="0-0-0-0"] [data-click="ejercicioToggle"]');
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(true);
+      expect($('[data-ejercicio="0-0-0-0"]')).toBe(tarjeta);
+    });
+
+    it('un ejercicio nuevo viene abierto para cargarlo', async () => {
+      await abrir();
+      await tocar('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]');
+      expect(cuerpoEj('0-0-0-2').hidden).toBe(false);
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(true); // los demás siguen plegados
+    });
+
+    it('cambiar el nombre del ejercicio desde el encabezado no lo pliega ni lo abre', async () => {
+      await abrir();
+      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="name"]'), 'Press inclinado');
+      await esperar();
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(true);
+      expect((await guardado()).weeks[0].days[0].blocks[0].exercises[0].name).toBe('Press inclinado');
+    });
+
+    it('los campos de un ejercicio plegado se pueden editar igual (siguen en la pantalla)', async () => {
+      await abrir();
+      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="sets"]'), '6');
+      await esperar();
+      expect((await guardado()).weeks[0].days[0].blocks[0].exercises[0].sets).toBe('6');
+    });
+
+    it('el resumen del ejercicio y el del día se actualizan al editar, sin redibujar', async () => {
+      await abrir();
+      const tarjeta = $('[data-ejercicio="0-0-0-0"]');
+      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="sets"]'), '6');
+      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="reps"]'), '5');
+      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="intensityValue"]'), '1');
+      await esperar();
+
+      expect($('[data-ejercicio="0-0-0-0"] [data-ej-resumen]').textContent).toBe('6 × 5 · RIR 1');
+      expect($('[data-dia-resumen="0-0"]').textContent).toBe('2 ejercicios · 9 series');
+      expect($('[data-ejercicio="0-0-0-0"]')).toBe(tarjeta);
+    });
+
+    it('un ejercicio abierto sigue abierto después de una edición que redibuja', async () => {
+      await abrir();
+      await tocar('[data-ejercicio="0-0-0-1"] [data-click="ejercicioToggle"]');
+      await tocar('[data-click="diaAgregar"][data-w="0"]');
+      expect(cuerpoEj('0-0-0-1').hidden).toBe(false);
+      expect(cuerpoEj('0-0-0-0').hidden).toBe(true);
+    });
+  });
+
+  describe('plegar y abrir todo', () => {
+    it('"Abrir todo" despliega los días y ejercicios de la semana abierta', async () => {
+      await abrir();
+      await tocar('[data-click="constructorAbrirTodo"]');
+
+      expect($$('[data-dia-cuerpo]').every((c) => !c.hidden)).toBe(true);
+      expect($$('[data-ej-cuerpo]').every((c) => !c.hidden)).toBe(true);
+    });
+
+    it('"Plegar todo" pliega los días y ejercicios de la semana abierta', async () => {
+      await abrir();
+      await tocar('[data-click="constructorAbrirTodo"]');
+      await tocar('[data-click="constructorPlegarTodo"]');
+
+      expect($$('[data-dia-cuerpo]').every((c) => c.hidden)).toBe(true);
+      expect($$('[data-ej-cuerpo]').every((c) => c.hidden)).toBe(true);
+    });
+
+    it('solo afecta a la semana abierta: las otras conservan lo suyo', async () => {
+      await abrir();
+      await tocar('[data-click="semanaIr"][data-w="1"]'); // abre su primer día
+      await tocar('[data-click="semanaIr"][data-w="0"]');
+      await tocar('[data-click="constructorPlegarTodo"]');
+      expect($$('[data-dia-cuerpo]').every((c) => c.hidden)).toBe(true);
+
+      await tocar('[data-click="semanaIr"][data-w="1"]');
+      expect(cuerpoDia(1, 0).hidden).toBe(false);
+    });
+
+    it('lo plegado queda así aunque se redibuje', async () => {
+      await abrir();
+      await tocar('[data-click="constructorPlegarTodo"]');
+      await tocar('[data-click="diaAgregar"][data-w="0"]'); // redibuja; el día nuevo viene abierto
+      expect(cuerpoDia(0, 0).hidden).toBe(true);
+      expect(cuerpoDia(0, 1).hidden).toBe(true);
+      expect(cuerpoDia(0, 2).hidden).toBe(false);
+    });
+  });
+
+  it('regenerar la estructura arranca de nuevo: primer día abierto', async () => {
+    await abrir();
+    await tocar('[data-click="constructorAbrirTodo"]');
+    await generar(2, 2);
+    await responderConfirmacion(true);
+
+    expect(cuerpoDia(0, 0).hidden).toBe(false);
+    expect(cuerpoDia(0, 1).hidden).toBe(true);
   });
 });

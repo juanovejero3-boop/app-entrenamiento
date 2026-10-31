@@ -47,7 +47,19 @@ let actual = null;
  * @param {{ cicloId: string, alVolver: () => void }} opciones  qué ciclo editar y qué hacer al tocar "Volver"
  */
 export async function abrirConstructorDePlanes(content, alumno, { cicloId, alVolver }) {
-  actual = { content, alumno, ciclo: null, plan: null, semana: 0, alVolver, ia: estadoIAInicial() };
+  actual = {
+    content,
+    alumno,
+    ciclo: null,
+    plan: null,
+    semana: 0,
+    alVolver,
+    ia: estadoIAInicial(),
+    // lo que está desplegado (ids de días y de ejercicios) y las semanas que ya abrieron su primer día
+    diasAbiertos: new Set(),
+    ejerciciosAbiertos: new Set(),
+    semanasIniciadas: new Set(),
+  };
   prepararCatalogoEjercicios(); // no se espera: el autocompletado aparece cuando termina de cargar
   const ciclos = await repo.listarCiclos(alumno.id);
   actual.ciclo = ciclos.find((c) => c.id === cicloId) ?? null;
@@ -112,9 +124,17 @@ function semanaElegida() {
   return actual.semana;
 }
 
+/** La primera vez que se muestra una semana abre su primer día (los demás vienen plegados). */
+function iniciarSemana(semana) {
+  if (actual.semanasIniciadas.has(semana.id)) return;
+  actual.semanasIniciadas.add(semana.id);
+  if (semana.days[0]) actual.diasAbiertos.add(semana.days[0].id);
+}
+
 function dibujar() {
   const { content, alumno, plan } = actual;
   const elegida = plan?.weeks.length ? semanaElegida() : 0;
+  if (plan?.weeks.length) iniciarSemana(plan.weeks[elegida]);
   content.innerHTML = `
     <div class="space-y-4 pb-24">
       <div class="flex items-center gap-3">
@@ -132,6 +152,7 @@ function dibujar() {
       ${plan ? dibujarGenerador(plan) : ''}
       ${plan?.weeks.length ? dibujarAsistenteIA() : ''}
       ${plan ? dibujarMapa(plan, elegida) : ''}
+      ${plan?.weeks.length ? dibujarBarraFija(plan, elegida) : ''}
       ${plan?.weeks.length ? dibujarSemana(plan, plan.weeks[elegida], elegida) : ''}
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
     </div>
@@ -375,6 +396,53 @@ function descartarPropuestaIA() {
   repintarIA();
 }
 
+const claseChip = (activa) =>
+  `shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border transition ${
+    activa ? 'bg-neonRed border-neonRed text-white' : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
+  }`;
+
+/** "2 ejercicios · 7 series": lo que tiene un día, para verlo aunque esté plegado. */
+function resumenDelDia(dia) {
+  const ejercicios = dia.blocks.reduce((total, b) => total + b.exercises.length, 0);
+  const series = contarSeries({ days: [dia] });
+  return `${ejercicios} ${ejercicios === 1 ? 'ejercicio' : 'ejercicios'} · ${series} ${series === 1 ? 'serie' : 'series'}`;
+}
+
+/** "4 × 8-10 · RIR 2": los datos principales de un ejercicio plegado. */
+function resumenDelEjercicio(ej) {
+  const cargado = [ej.sets || '-', ej.reps || '-'].join(' × ');
+  return ej.intensityValue ? `${cargado} · ${ej.intensityType} ${ej.intensityValue}` : cargado;
+}
+
+/**
+ * Barra pegada al tope al scrollear: las semanas, los días de la semana abierta (tocar uno lo abre y se
+ * desplaza hasta él) y los botones para plegar o abrir todo.
+ */
+function dibujarBarraFija(plan, elegida) {
+  const semanas = plan.weeks
+    .map(
+      (s, i) =>
+        `<button type="button" data-click="semanaIr" data-w="${i}" ${i === elegida ? 'aria-current="true"' : ''} class="${claseChip(i === elegida)}">${esc(s.name)}</button>`,
+    )
+    .join('');
+  const dias = plan.weeks[elegida].days
+    .map(
+      (d, i) =>
+        `<button type="button" data-click="diaIr" data-d="${i}" class="${claseChip(false)}">${esc(d.name)}</button>`,
+    )
+    .join('');
+  return `
+    <div data-barra-fija class="sticky top-0 z-30 bg-black py-2 space-y-2 border-b border-gray-800">
+      <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">${semanas}</div>
+      <div class="flex items-center gap-2">
+        <div class="flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-none">${dias}</div>
+        <button type="button" data-click="constructorPlegarTodo" title="Plegar los días y ejercicios de esta semana" class="shrink-0 ${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed"><i class="fa-solid fa-compress"></i></button>
+        <button type="button" data-click="constructorAbrirTodo" title="Abrir los días y ejercicios de esta semana" class="shrink-0 ${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed"><i class="fa-solid fa-expand"></i></button>
+      </div>
+    </div>
+  `;
+}
+
 /** El mapa del macrociclo: una pestaña por semana. Tocar una la abre para editarla. */
 function dibujarMapa(plan, elegida) {
   if (!plan.weeks.length) return '';
@@ -429,16 +497,24 @@ function dibujarSemana(plan, semana, w) {
   `;
 }
 
+const flecha = (abierto) =>
+  `<i data-flecha class="fa-solid fa-chevron-down transition ${abierto ? 'rotate-180' : ''}"></i>`;
+
 function dibujarDia(dia, w, d) {
+  const abierto = actual.diasAbiertos.has(dia.id);
   return `
-    <div data-dia="${w}-${d}" class="bg-cyberDark rounded-lg border border-gray-800 p-3 space-y-2">
+    <div data-dia="${w}-${d}" data-dia-id="${esc(dia.id)}" class="scroll-mt-32 bg-cyberDark rounded-lg border border-gray-800 p-3 space-y-2">
       <div class="flex items-center gap-2">
+        <button type="button" data-click="diaToggle" data-w="${w}" data-d="${d}" aria-expanded="${abierto}" title="Plegar o desplegar el día" class="shrink-0 px-1 text-gray-300 hover:text-neonRed">${flecha(abierto)}</button>
         <input data-change="diaCampo" data-w="${w}" data-d="${d}" value="${esc(dia.name)}" class="flex-1 min-w-0 bg-transparent text-white font-bold text-sm outline-none border-b border-transparent focus:border-neonRed">
         <button data-click="diaPropagar" data-w="${w}" data-d="${d}" title="Copiar este día a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
         <button data-click="diaEliminar" data-w="${w}" data-d="${d}" class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-trash"></i></button>
       </div>
-      ${dia.blocks.map((bloque, b) => dibujarBloque(bloque, w, d, b)).join('')}
-      <button data-click="bloqueAgregar" data-w="${w}" data-d="${d}" class="w-full py-1.5 bg-cyberCarbon border border-gray-700 text-gray-300 text-[11px] font-bold rounded uppercase hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-1"></i>Bloque</button>
+      <p data-dia-resumen="${w}-${d}" class="text-[10px] text-gray-400 pl-7">${esc(resumenDelDia(dia))}</p>
+      <div data-dia-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
+        ${dia.blocks.map((bloque, b) => dibujarBloque(bloque, w, d, b)).join('')}
+        <button data-click="bloqueAgregar" data-w="${w}" data-d="${d}" class="w-full py-1.5 bg-cyberCarbon border border-gray-700 text-gray-300 text-[11px] font-bold rounded uppercase hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-1"></i>Bloque</button>
+      </div>
     </div>
   `;
 }
@@ -475,14 +551,22 @@ function dibujarEjercicio(ej, w, d, b, e, etiqueta) {
   const descansos = ['', ...DESCANSOS];
   const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
   const grupos = ['', ...Object.keys(GRUPOS_SUPERSERIE)];
+  const abierto = actual.ejerciciosAbiertos.has(ej.id);
   return `
-    <div data-ejercicio="${w}-${d}-${b}-${e}" class="bg-cyberDark rounded p-2 space-y-2 border ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${color}"` : ''}>
+    <div data-ejercicio="${w}-${d}-${b}-${e}" data-ej-id="${esc(ej.id)}" class="bg-cyberDark rounded p-2 space-y-2 border ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${color}"` : ''}>
       <div class="flex items-center gap-2">
+        <button type="button" data-click="ejercicioToggle" ${pos} aria-expanded="${abierto}" title="Plegar o desplegar el ejercicio" class="shrink-0 px-1 text-gray-300 hover:text-neonRed">${flecha(abierto)}</button>
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${color}; background: ${color}22; border: 1px solid ${color}">${esc(etiqueta)}</span>` : ''}
         <input ${campo('name')} list="${ID_CATALOGO}" value="${esc(ej.name)}" placeholder="Nombre del ejercicio" class="${claseCampo} font-bold">
-        <button data-click="ejercicioPropagar" ${pos} title="Agregar este ejercicio a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
-        <button data-click="ejercicioEliminar" ${pos} class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-xmark"></i></button>
       </div>
+      <div class="flex items-center justify-between gap-2 pl-7">
+        <p data-ej-resumen class="text-[10px] text-gray-400">${esc(resumenDelEjercicio(ej))}</p>
+        <div class="flex shrink-0 gap-2">
+          <button data-click="ejercicioPropagar" ${pos} title="Agregar este ejercicio a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
+          <button data-click="ejercicioEliminar" ${pos} class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+      <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
       <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
         <label><span class="text-[9px] text-gray-500 uppercase">Series</span><input ${campo('sets')} value="${esc(ej.sets)}" class="${claseCampo}"></label>
         <label><span class="text-[9px] text-gray-500 uppercase">Reps</span><input ${campo('reps')} value="${esc(ej.reps)}" class="${claseCampo}"></label>
@@ -502,6 +586,7 @@ function dibujarEjercicio(ej, w, d, b, e, etiqueta) {
           <select ${campo('group')} class="bg-black border border-gray-700 rounded p-1 text-xs font-bold outline-none" style="color: ${color}">${opcionesDe(grupos, ej.group, '—')}</select>
         </label>
       </div>
+      </div>
     </div>
   `;
 }
@@ -514,7 +599,59 @@ function actualizarResumenes() {
     if (resumen) resumen.innerHTML = contenidoResumen(plan, semana, w);
     const fechas = content.querySelector(`[data-fechas-semana="${w}"]`);
     if (fechas) fechas.textContent = fechasDeSemana(plan.startDate, w);
+    const chip = content.querySelector(`[data-click="semanaIr"][data-w="${w}"]`);
+    if (chip) chip.textContent = semana.name;
   });
+  // La semana abierta: lo que dicen sus días y ejercicios plegados
+  const abierta = plan.weeks[semanaElegida()];
+  abierta?.days.forEach((dia, d) => {
+    const w = actual.semana;
+    const resumenDia = content.querySelector(`[data-dia-resumen="${w}-${d}"]`);
+    if (resumenDia) resumenDia.textContent = resumenDelDia(dia);
+    const chipDia = content.querySelector(`[data-click="diaIr"][data-d="${d}"]`);
+    if (chipDia) chipDia.textContent = dia.name;
+    dia.blocks.forEach((bloque, b) =>
+      bloque.exercises.forEach((ej, e) => {
+        const resumen = content.querySelector(`[data-ejercicio="${w}-${d}-${b}-${e}"] [data-ej-resumen]`);
+        if (resumen) resumen.textContent = resumenDelEjercicio(ej);
+      }),
+    );
+  });
+}
+
+/** Muestra u oculta cada día y ejercicio según lo que está desplegado (sin redibujar). */
+function repintarPlegado() {
+  const sincronizar = (selector, atributoId, atributoCuerpo, abiertos) => {
+    for (const tarjeta of actual.content.querySelectorAll(selector)) {
+      const abierto = abiertos.has(tarjeta.getAttribute(atributoId));
+      tarjeta.querySelector(atributoCuerpo).hidden = !abierto;
+      const boton = tarjeta.querySelector('[aria-expanded]');
+      boton.setAttribute('aria-expanded', String(abierto));
+      boton.querySelector('[data-flecha]')?.classList.toggle('rotate-180', abierto);
+    }
+  };
+  sincronizar('[data-dia]', 'data-dia-id', '[data-dia-cuerpo]', actual.diasAbiertos);
+  sincronizar('[data-ejercicio]', 'data-ej-id', '[data-ej-cuerpo]', actual.ejerciciosAbiertos);
+}
+
+/** Abre o pliega todos los días y ejercicios de la semana que se está editando. */
+function plegarSemana(abrir) {
+  const semana = actual.plan.weeks[semanaElegida()];
+  for (const dia of semana.days) {
+    if (abrir) actual.diasAbiertos.add(dia.id);
+    else actual.diasAbiertos.delete(dia.id);
+    for (const ej of dia.blocks.flatMap((b) => b.exercises)) {
+      if (abrir) actual.ejerciciosAbiertos.add(ej.id);
+      else actual.ejerciciosAbiertos.delete(ej.id);
+    }
+  }
+  repintarPlegado();
+}
+
+function alternar(conjunto, id) {
+  if (conjunto.has(id)) conjunto.delete(id);
+  else conjunto.add(id);
+  repintarPlegado();
 }
 
 // ---------------------------------------------------------------------------
@@ -537,6 +674,9 @@ async function generar() {
     if (!ok) return;
   }
   actual.semana = 0;
+  actual.diasAbiertos.clear();
+  actual.ejerciciosAbiertos.clear();
+  actual.semanasIniciadas.clear();
   await aplicar(generarEstructura(actual.plan, semanas, dias));
 }
 
@@ -600,6 +740,26 @@ registrarAcciones({
     actual.semana = indice(el, 'w');
     dibujar();
   },
+  semanaIr: (el) => {
+    actual.semana = indice(el, 'w');
+    dibujar();
+  },
+  diaIr: (el) => {
+    const dia = actual.plan.weeks[semanaElegida()].days[indice(el, 'd')];
+    actual.diasAbiertos.add(dia.id);
+    repintarPlegado();
+    [...actual.content.querySelectorAll('[data-dia-id]')]
+      .find((t) => t.dataset.diaId === dia.id)
+      ?.scrollIntoView?.({ block: 'start' });
+  },
+  diaToggle: (el) => alternar(actual.diasAbiertos, actual.plan.weeks[semanaElegida()].days[indice(el, 'd')].id),
+  ejercicioToggle: (el) => {
+    const ej =
+      actual.plan.weeks[indice(el, 'w')].days[indice(el, 'd')].blocks[indice(el, 'b')].exercises[indice(el, 'e')];
+    alternar(actual.ejerciciosAbiertos, ej.id);
+  },
+  constructorPlegarTodo: () => plegarSemana(false),
+  constructorAbrirTodo: () => plegarSemana(true),
   semanaAgregar: () => {
     actual.semana = actual.plan.weeks.length; // la semana nueva queda abierta
     return aplicar(agregarSemana(actual.plan));
@@ -611,7 +771,11 @@ registrarAcciones({
     return aplicar(duplicarSemana(actual.plan, indice(el, 'w')));
   },
   semanaEliminar: (el) => eliminarSemanaConfirmando(indice(el, 'w')),
-  diaAgregar: (el) => aplicar(agregarDia(actual.plan, indice(el, 'w'))),
+  diaAgregar: (el) => {
+    const nuevo = agregarDia(actual.plan, indice(el, 'w'));
+    actual.diasAbiertos.add(nuevo.weeks[indice(el, 'w')].days.at(-1).id); // el día nuevo viene abierto
+    return aplicar(nuevo);
+  },
   diaCampo: (el) =>
     aplicar(actualizarDia(actual.plan, indice(el, 'w'), indice(el, 'd'), { name: el.value }), { redibujar: false }),
   diaEliminar: (el) => eliminarDiaConfirmando(indice(el, 'w'), indice(el, 'd')),
@@ -621,7 +785,12 @@ registrarAcciones({
   bloqueCampo: (el) =>
     aplicar(actualizarBloque(actual.plan, indice(el, 'w'), indice(el, 'd'), indice(el, 'b'), { type: el.value })),
   bloqueEliminar: (el) => eliminarBloqueConfirmando(indice(el, 'w'), indice(el, 'd'), indice(el, 'b')),
-  ejercicioAgregar: (el) => aplicar(agregarEjercicio(actual.plan, indice(el, 'w'), indice(el, 'd'), indice(el, 'b'))),
+  ejercicioAgregar: (el) => {
+    const [w, d, b] = ['w', 'd', 'b'].map((k) => indice(el, k));
+    const nuevo = agregarEjercicio(actual.plan, w, d, b);
+    actual.ejerciciosAbiertos.add(nuevo.weeks[w].days[d].blocks[b].exercises.at(-1).id); // el nuevo viene abierto
+    return aplicar(nuevo);
+  },
   ejercicioCampo: (el) => cambiarCampoEjercicio(el),
   ejercicioEliminar: (el) => aplicar(eliminarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),
   ejercicioPropagar: (el) => aplicar(propagarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),
