@@ -45,19 +45,10 @@ export async function renderTabEntrenamiento(content) {
         await mostrarFicha(content, alumno);
       } else {
         adminPlanillaActivo = null;
-        content.innerHTML = renderAdminPlanillaBuscador();
-        adminPlanillaActualizarLista('');
+        await mostrarBuscador(content);
       }
     } else {
-      content.innerHTML = renderAdminPlanillaBuscador();
-      adminPlanillaActualizarLista('');
-      setTimeout(() => {
-        const input = document.getElementById('admin-planilla-search');
-        if (input) input.focus();
-      }, 50);
-      // El coach también puede tener un plan asignado: lo ve y lo completa acá
-      content.insertAdjacentHTML('beforeend', `<div class="mt-6">${SECCION_MI_PLAN}</div>`);
-      await montarMiPlan(content);
+      await mostrarBuscador(content);
     }
   } else {
     const sheetUrl = state.userProfile?.sheet_url;
@@ -136,6 +127,21 @@ async function montarEntrenamientoDelAlumno(content, u) {
 function mostrarFicha(content, u) {
   content.innerHTML = renderAdminPlanillaAlumno(u);
   return montarEntrenamientoDelAlumno(content, u);
+}
+
+/**
+ * Dibuja el buscador de alumnos y, debajo, el plan propio del coach (si tiene uno asignado lo ve y lo
+ * completa acá). Es la pantalla de inicio de la Planilla: tanto al entrar como al volver desde una ficha.
+ */
+async function mostrarBuscador(content) {
+  content.innerHTML = renderAdminPlanillaBuscador();
+  adminPlanillaActualizarLista('');
+  setTimeout(() => {
+    const input = document.getElementById('admin-planilla-search');
+    if (input) input.focus();
+  }, 50);
+  content.insertAdjacentHTML('beforeend', `<div class="mt-6">${SECCION_MI_PLAN}</div>`);
+  await montarMiPlan(content);
 }
 
 function renderAdminPlanillaBuscador() {
@@ -350,13 +356,7 @@ function adminPlanillaCerrarPestana(userId) {
 
 function adminPlanillaMostrarBuscador() {
   adminPlanillaActivo = null;
-  const content = document.getElementById('app-content');
-  content.innerHTML = renderAdminPlanillaBuscador();
-  adminPlanillaActualizarLista('');
-  setTimeout(() => {
-    const input = document.getElementById('admin-planilla-search');
-    if (input) input.focus();
-  }, 50);
+  mostrarBuscador(document.getElementById('app-content'));
 }
 
 // Cierra las pestañas de alumnos abiertas (al salir de la pestaña Planilla).

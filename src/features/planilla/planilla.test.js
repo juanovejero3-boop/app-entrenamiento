@@ -233,6 +233,40 @@ describe('Planilla del coach: su propio plan', () => {
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
+  describe('al volver al buscador desde la ficha de un alumno', () => {
+    const abrirYVolver = async (cerrar) => {
+      await sembrarPlan(COACH.id, planCompleto());
+      await renderTabEntrenamiento(content);
+      $(`[data-click="adminPlanillaSeleccionar"][data-id="${ALUMNO.id}"]`).click();
+      await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
+      expect(content.textContent).not.toContain('Mi plan de entrenamiento'); // en la ficha no está
+      cerrar();
+    };
+    const planDelCoach = () => vi.waitFor(() => expect($('[data-mi-plan] [data-plan-alumno]')).not.toBeNull());
+
+    it('con "+" (buscador) el coach sigue viendo su plan', async () => {
+      await abrirYVolver(() => $('[data-click="adminPlanillaMostrarBuscador"]').click());
+      await planDelCoach();
+      expect(content.textContent).toContain('Hipertrofia base');
+      expect($('#admin-planilla-search')).not.toBeNull();
+    });
+
+    it('al cerrar la última pestaña también', async () => {
+      await abrirYVolver(() => $(`[data-click="adminPlanillaCerrarPestana"][data-id="${ALUMNO.id}"]`).click());
+      await planDelCoach();
+      expect(content.textContent).toContain('Mi plan de entrenamiento');
+    });
+
+    it('sin plan propio no aparece la sección', async () => {
+      await renderTabEntrenamiento(content);
+      $(`[data-click="adminPlanillaSeleccionar"][data-id="${ALUMNO.id}"]`).click();
+      await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
+      $('[data-click="adminPlanillaMostrarBuscador"]').click();
+      await esperar();
+      expect(content.textContent).not.toContain('Mi plan de entrenamiento');
+    });
+  });
+
   it('el buscador de alumnos sigue estando', async () => {
     await sembrarPlan(COACH.id, planCompleto());
     await renderTabEntrenamiento(content);
