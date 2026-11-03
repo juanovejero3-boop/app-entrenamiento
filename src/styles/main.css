@@ -223,8 +223,3 @@
     cursor: pointer;
   }
 }
-
-/* El menú de abajo sube lo que ocupa el teclado del celular (ver src/lib/pieFijo.js) */
-body > nav {
-  bottom: var(--teclado, 0px);
-}
