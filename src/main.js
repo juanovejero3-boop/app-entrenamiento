@@ -6,6 +6,8 @@ import './router.js';
 // Secciones que no importa el router: se cargan para que registren sus acciones
 import './features/admin/alumnos.js';
 import './features/admin/vencimientos.js';
+import { iniciarPieFijo } from './lib/pieFijo.js';
 import { iniciarSesion } from './session.js';
 
+iniciarPieFijo(); // el menú de abajo sigue siendo lo último de la pantalla cuando se abre el teclado
 iniciarSesion();
