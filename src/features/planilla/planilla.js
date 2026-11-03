@@ -26,7 +26,12 @@ const SECCION_MI_PLAN = `
 /** Muestra el plan propio dentro de la sección, o la quita si no hay plan (la pantalla queda como siempre). */
 async function montarMiPlan(content) {
   const seccion = content.querySelector('[data-mi-plan]');
-  const hayPlan = await abrirPlanesDelAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
+  let hayPlan = false;
+  try {
+    hayPlan = await abrirPlanesDelAlumno(seccion.querySelector('[data-mi-plan-contenido]'), state.userProfile);
+  } catch (error) {
+    console.error('No se pudo cargar el plan propio', error); // la planilla de siempre se muestra igual
+  }
   if (hayPlan) seccion.hidden = false;
   else seccion.remove();
 }
@@ -37,7 +42,7 @@ export async function renderTabEntrenamiento(content) {
     if (adminPlanillaActivo) {
       const alumno = state.adminAllUsers.find((u) => u.id === adminPlanillaActivo);
       if (alumno) {
-        content.innerHTML = renderAdminPlanillaAlumno(alumno);
+        await mostrarFicha(content, alumno);
       } else {
         adminPlanillaActivo = null;
         content.innerHTML = renderAdminPlanillaBuscador();
@@ -109,6 +114,30 @@ export async function renderTabEntrenamiento(content) {
 }
 
 // ---------- ADMIN: PLANILLA DE ALUMNO (PESTAÑAS) ----------
+
+/**
+ * Muestra el entrenamiento del alumno dentro de su ficha, como lo ve él: el coach lo mira en solo lectura y
+ * se va actualizando en vivo mientras el alumno completa las series. En su propia ficha (el coach también
+ * puede tener un plan) lo ve para completarlo, sin modo lectura.
+ */
+async function montarEntrenamientoDelAlumno(content, u) {
+  const contenedor = content.querySelector('[data-entrenamiento-alumno]');
+  if (!contenedor) return;
+  const propio = u.id === state.userProfile?.id;
+  try {
+    await abrirPlanesDelAlumno(contenedor, u, { soloLectura: !propio, enVivo: !propio });
+  } catch (error) {
+    console.error('No se pudo cargar el entrenamiento del alumno', error);
+    contenedor.innerHTML = `<p class="text-xs text-red-300">No se pudo cargar el entrenamiento: ${escapeAttr(error.message)}</p>`;
+  }
+}
+
+/** Dibuja la ficha del alumno en la pantalla y carga su entrenamiento. */
+function mostrarFicha(content, u) {
+  content.innerHTML = renderAdminPlanillaAlumno(u);
+  return montarEntrenamientoDelAlumno(content, u);
+}
+
 function renderAdminPlanillaBuscador() {
   adminPlanillaPagina = 0;
   return `
@@ -279,9 +308,13 @@ function renderAdminPlanillaAlumno(u) {
         <button data-click="planillaAbrirCiclos" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
           <i class="fa-solid fa-pen-ruler mr-2"></i> Ciclos de entrenamiento
         </button>
-        <button data-click="planillaVerComoAlumno" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-gray-300 font-black text-sm py-3 rounded-2xl uppercase tracking-wider border border-gray-600 hover:border-neonRed hover:text-neonRed transition">
-          <i class="fa-solid fa-eye mr-2"></i> ${u.id === state.userProfile?.id ? 'Ver mi plan (podés completarlo)' : 'Ver como alumno (solo lectura)'}
-        </button>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+          <i class="fa-solid fa-dumbbell mr-2"></i> Entrenamiento ${u.id === state.userProfile?.id ? '(el tuyo: podés completarlo)' : 'del alumno'}
+        </h3>
+        <div data-entrenamiento-alumno></div>
       </div>
     </div>
   `;
@@ -293,19 +326,13 @@ function adminPlanillaSeleccionar(userId) {
   }
   adminPlanillaActivo = userId;
   const u = state.adminAllUsers.find((x) => x.id === userId);
-  if (u) {
-    const content = document.getElementById('app-content');
-    content.innerHTML = renderAdminPlanillaAlumno(u);
-  }
+  if (u) mostrarFicha(document.getElementById('app-content'), u);
 }
 
 function adminPlanillaActivar(userId) {
   adminPlanillaActivo = userId;
   const u = state.adminAllUsers.find((x) => x.id === userId);
-  if (u) {
-    const content = document.getElementById('app-content');
-    content.innerHTML = renderAdminPlanillaAlumno(u);
-  }
+  if (u) mostrarFicha(document.getElementById('app-content'), u);
 }
 
 function adminPlanillaCerrarPestana(userId) {
@@ -317,10 +344,7 @@ function adminPlanillaCerrarPestana(userId) {
     adminPlanillaMostrarBuscador();
   } else {
     const u = state.adminAllUsers.find((x) => x.id === adminPlanillaActivo);
-    if (u) {
-      const content = document.getElementById('app-content');
-      content.innerHTML = renderAdminPlanillaAlumno(u);
-    }
+    if (u) mostrarFicha(document.getElementById('app-content'), u);
   }
 }
 
@@ -352,14 +376,6 @@ registrarAcciones({
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
     abrirCiclosDelAlumno(document.getElementById('app-content'), u, {
-      alVolver: () => adminPlanillaActivar(u.id),
-    });
-  },
-  planillaVerComoAlumno: (el) => {
-    const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
-    if (!u) return;
-    abrirPlanesDelAlumno(document.getElementById('app-content'), u, {
-      soloLectura: u.id !== state.userProfile?.id, // su propio plan sí lo puede completar
       alVolver: () => adminPlanillaActivar(u.id),
     });
   },

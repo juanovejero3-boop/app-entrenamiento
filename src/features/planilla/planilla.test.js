@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
-import { repo } from '../coaching/repo/index.js';
+import { clienteDePrueba, repo } from '../coaching/repo/index.js';
 import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
 import { state } from '../../state.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
@@ -92,53 +92,110 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 });
 
-describe('Planilla del coach: ver como alumno', () => {
+describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
+  const OTRO = { id: 'u2', name: 'Lucía Gómez', email: 'lucia@ejemplo.com', role: 'alumno' };
   beforeEach(() => {
     state.currentUser = { id: COACH.id, email: COACH.email };
     state.userProfile = COACH;
-    state.adminAllUsers = [PERFIL_ALUMNO];
+    state.adminAllUsers = [PERFIL_ALUMNO, OTRO];
   });
 
+  const seleccionar = async (id) => {
+    $(`[data-click="adminPlanillaSeleccionar"][data-id="${id}"]`).click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno] [data-plan-alumno]')).not.toBeNull());
+  };
   async function abrirFichaDelAlumno() {
     await renderTabEntrenamiento(content);
-    $('[data-click="adminPlanillaSeleccionar"]').click();
+    await seleccionar(ALUMNO.id);
   }
+  const anotaElAlumno = async (alumnoId, registro) => {
+    const ciclo = (await repo.listarCiclos(alumnoId))[0];
+    await repo.guardarRegistroDelCiclo(ciclo.id, registro);
+  };
 
-  it('la ficha del alumno tiene "Ver como alumno" junto a "Ciclos de entrenamiento"', async () => {
-    await abrirFichaDelAlumno();
-    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
-    expect($('[data-click="planillaVerComoAlumno"]')).not.toBeNull();
-  });
-
-  it('abre el plan de ese alumno en modo lectura, sin poder anotar', async () => {
+  it('la ficha muestra directo el entrenamiento del alumno, como lo ve él y en solo lectura, sin pantalla aparte', async () => {
     await sembrarPlan(ALUMNO.id, planCompleto());
     await abrirFichaDelAlumno();
 
-    $('[data-click="planillaVerComoAlumno"]').click();
-    await esperar();
-
-    expect(content.textContent).toContain('Modo lectura');
-    expect(content.textContent).toContain('Hipertrofia base');
-    expect([...content.querySelectorAll('[data-change="alumnoSerie"]')].every((i) => i.disabled)).toBe(true);
+    const entrenamiento = $('[data-entrenamiento-alumno]');
+    expect(entrenamiento.textContent).toContain('Hipertrofia base');
+    expect(entrenamiento.querySelector('[data-en-vivo]').textContent).toContain('En vivo');
+    expect(entrenamiento.querySelector('[data-click="alumnoVolver"]')).toBeNull(); // no hay a dónde volver
+    expect([...entrenamiento.querySelectorAll('[data-change="alumnoSerie"]')].every((i) => i.disabled)).toBe(true);
+    // y la ficha sigue ahí: pestañas, planilla de Sheets y el acceso a los ciclos
+    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
+    expect($('[data-click="adminPlanillaActivar"]')).not.toBeNull();
   });
 
-  it('"Volver" regresa a la ficha del alumno', async () => {
+  it('ya no existe el botón "Ver como alumno", que reemplazaba toda la pantalla', async () => {
     await sembrarPlan(ALUMNO.id, planCompleto());
     await abrirFichaDelAlumno();
-    $('[data-click="planillaVerComoAlumno"]').click();
-    await esperar();
-
-    $('[data-click="alumnoVolver"]').click();
-
-    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
-    expect(content.textContent).not.toContain('Modo lectura');
+    expect($('[data-click="planillaVerComoAlumno"]')).toBeNull();
   });
 
-  it('si el alumno no tiene plan lo avisa', async () => {
+  it('las series que el alumno va completando aparecen en la ficha al instante', async () => {
+    await sembrarPlan(ALUMNO.id, planCompleto());
     await abrirFichaDelAlumno();
-    $('[data-click="planillaVerComoAlumno"]').click();
-    await esperar();
-    expect(content.textContent).toContain('todavía no tiene un plan');
+    const check = () => $('[data-click="alumnoCheck"][data-e="e1"][data-n="1"]');
+    expect(check().getAttribute('aria-pressed')).toBe('false');
+
+    await anotaElAlumno(ALUMNO.id, { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } });
+
+    await vi.waitFor(() => expect(check().getAttribute('aria-pressed')).toBe('true'));
+    expect($('[data-barra-fija] [data-progreso]').textContent).toBe('1 / 11 series');
+  });
+
+  it('si el alumno no tiene plan lo avisa dentro de la ficha', async () => {
+    await abrirFichaDelAlumno();
+    expect($('[data-entrenamiento-alumno]').textContent).toContain('todavía no tiene un plan');
+  });
+
+  it('con varios alumnos abiertos en pestañas, cada ficha muestra el entrenamiento del suyo', async () => {
+    await sembrarPlan(ALUMNO.id, { ...planCompleto(), macroName: 'Plan de Franco' });
+    await sembrarPlan(OTRO.id, { ...planCompleto(), macroName: 'Plan de Lucía' });
+    await renderTabEntrenamiento(content);
+    await seleccionar(ALUMNO.id);
+    expect($('[data-entrenamiento-alumno]').textContent).toContain('Plan de Franco');
+
+    // vuelve al buscador (las pestañas quedan abiertas) y abre al otro alumno
+    $('[data-click="adminPlanillaMostrarBuscador"]').click();
+    await seleccionar(OTRO.id);
+    expect($('[data-entrenamiento-alumno]').textContent).toContain('Plan de Lucía');
+
+    // vuelve a la pestaña del primero
+    $(`[data-click="adminPlanillaActivar"][data-id="${ALUMNO.id}"]`).click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno]').textContent).toContain('Plan de Franco'));
+  });
+
+  it('solo escucha en vivo al alumno de la ficha que está abierta', async () => {
+    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(OTRO.id, planCompleto());
+    await renderTabEntrenamiento(content);
+    await seleccionar(ALUMNO.id);
+    $('[data-click="adminPlanillaMostrarBuscador"]').click();
+    await seleccionar(OTRO.id);
+    await anotaElAlumno(ALUMNO.id, { e1: { 1: { kg: '80', reps: '8', done: true, skipped: false } } }); // el que ya no se mira
+    await vi.waitFor(() => expect(clienteDePrueba.canalesActivos()).toBe(1));
+  });
+
+  it('"Ciclos de entrenamiento" abre los ciclos y "Volver" regresa a la ficha, con el entrenamiento a la vista', async () => {
+    await sembrarPlan(ALUMNO.id, planCompleto());
+    await abrirFichaDelAlumno();
+    $('[data-click="planillaAbrirCiclos"]').click();
+    await vi.waitFor(() => expect($('[data-click="ciclosVolver"]')).not.toBeNull());
+
+    $('[data-click="ciclosVolver"]').click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno] [data-plan-alumno]')).not.toBeNull());
+    expect($('[data-entrenamiento-alumno]').textContent).toContain('Hipertrofia base');
+  });
+
+  it('si no se puede cargar el entrenamiento lo avisa en vez de dejar la ficha vacía', async () => {
+    await renderTabEntrenamiento(content);
+    vi.spyOn(repo, 'listarCiclos').mockRejectedValueOnce(new Error('sin conexión'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    $(`[data-click="adminPlanillaSeleccionar"][data-id="${ALUMNO.id}"]`).click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno]').textContent).toContain('No se pudo cargar'));
+    expect($('[data-entrenamiento-alumno]').textContent).toContain('sin conexión');
   });
 });
 
@@ -168,6 +225,14 @@ describe('Planilla del coach: su propio plan', () => {
     expect(Object.values((await registroDe(COACH.id)).e1)[0].kg).toBe('100');
   });
 
+  it('si falla la carga de su plan, la planilla igual se muestra (sin esa sección)', async () => {
+    vi.spyOn(repo, 'listarCiclos').mockRejectedValueOnce(new Error('sin conexión'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await renderTabEntrenamiento(content);
+    expect($('#admin-planilla-search')).not.toBeNull();
+    expect(content.textContent).not.toContain('Mi plan de entrenamiento');
+  });
+
   it('el buscador de alumnos sigue estando', async () => {
     await sembrarPlan(COACH.id, planCompleto());
     await renderTabEntrenamiento(content);
@@ -185,19 +250,15 @@ describe('Planilla del coach: su propio plan', () => {
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
-  it('en su propia ficha, "Ver mi plan" abre el plan para completarlo (no en solo lectura)', async () => {
+  it('en su propia ficha ve su plan para completarlo: no es solo lectura ni en vivo', async () => {
     await sembrarPlan(COACH.id, planCompleto());
     await renderTabEntrenamiento(content);
     $(`[data-click="adminPlanillaSeleccionar"][data-id="${COACH.id}"]`).click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno] [data-plan-alumno]')).not.toBeNull());
 
-    const boton = $('[data-click="planillaVerComoAlumno"]');
-    expect(boton.textContent).toContain('Ver mi plan');
-    boton.click();
-    await esperar();
-
-    expect(content.textContent).not.toContain('Modo lectura');
+    expect($('[data-entrenamiento-alumno]').textContent).not.toContain('Modo lectura');
+    expect($('[data-en-vivo]')).toBeNull();
+    expect(clienteDePrueba.canalesActivos()).toBe(0);
     expect([...content.querySelectorAll('[data-change="alumnoSerie"]')].some((i) => i.disabled)).toBe(false);
-    $('[data-click="alumnoVolver"]').click(); // y se puede volver a la ficha
-    expect($('[data-click="planillaAbrirCiclos"]')).not.toBeNull();
   });
 });
