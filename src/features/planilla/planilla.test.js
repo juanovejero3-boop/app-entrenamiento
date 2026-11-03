@@ -119,7 +119,7 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
 
     const entrenamiento = $('[data-entrenamiento-alumno]');
     expect(entrenamiento.textContent).toContain('Hipertrofia base');
-    expect(entrenamiento.querySelector('[data-en-vivo]').textContent).toContain('En vivo');
+    expect(entrenamiento.querySelector('[data-en-vivo]').textContent).toContain('Observando cambios');
     expect(entrenamiento.querySelector('[data-click="alumnoVolver"]')).toBeNull(); // no hay a dónde volver
     expect([...entrenamiento.querySelectorAll('[data-change="alumnoSerie"]')].every((i) => i.disabled)).toBe(true);
     // y la ficha sigue ahí: pestañas, planilla de Sheets y el acceso a los ciclos

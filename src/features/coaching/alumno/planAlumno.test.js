@@ -1191,9 +1191,10 @@ describe('vista en vivo del coach', () => {
     cicloId = (await repo.listarCiclos(ALUMNO.id))[0].id;
   });
 
-  it('avisa que está en vivo, es de solo lectura y no tiene el botón de volver', async () => {
+  it('avisa que está observando cambios, es de solo lectura y no tiene el botón de volver', async () => {
     await abrirVivo();
-    expect($('[data-en-vivo]').textContent).toContain('En vivo');
+    expect($('[data-en-vivo]').textContent).toContain('Observando cambios');
+    expect($('[data-en-vivo]').textContent).not.toContain('En vivo'); // no promete más de lo que hace
     expect($('[data-en-vivo]').textContent).toContain('modo lectura');
     expect($('[data-click="alumnoVolver"]')).toBeNull();
     expect($$('[data-change="alumnoSerie"]').every((i) => i.disabled)).toBe(true);
@@ -1249,6 +1250,19 @@ describe('vista en vivo del coach', () => {
     await vi.waitFor(() => expect(chipDia(1).getAttribute('aria-current')).toBe('true'));
     expect($('[data-serie="e9-1"]').dataset.reciente).toBe('true');
     expect(campo('e9', 1, 'kg').value).toBe('100');
+  });
+
+  it('el botón de seguir explica con qué hace y en qué estado está', async () => {
+    await abrirVivo();
+    const boton = () => $('[data-click="alumnoSeguir"]');
+    expect(boton().textContent).toContain('Siguiendo al alumno');
+    expect(boton().title).toContain('dejar de acompañar');
+    expect(boton().className).toContain('emerald'); // activado: se ve verde
+
+    boton().click();
+    expect(boton().textContent).toContain('Seguir al alumno');
+    expect(boton().title).toContain('acompañe al alumno');
+    expect(boton().className).not.toContain('emerald');
   });
 
   it('si el coach navega a mano deja de seguir, y puede volver a seguir con el botón', async () => {

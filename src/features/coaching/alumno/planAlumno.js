@@ -189,8 +189,8 @@ function crearVista(vista) {
     return `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
         ${volver}
         <span class="relative flex h-2.5 w-2.5 shrink-0"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span></span>
-        <p data-en-vivo class="flex-1 min-w-0"><b class="uppercase tracking-wide">En vivo</b> · modo lectura de ${esc(nombreDelAlumno(vista.alumno))}.${hora ? ` <span data-actualizado class="text-sky-300/80">Actualizado ${esc(hora)}</span>` : ''}</p>
-        <button data-click="alumnoSeguir" aria-pressed="${vista.seguir}" class="shrink-0 ${claseBotonChico}">${vista.seguir ? 'Siguiendo al alumno' : 'Seguir al alumno'}</button>
+        <p data-en-vivo class="flex-1 min-w-0"><b class="uppercase tracking-wide">Observando cambios</b> · modo lectura de ${esc(nombreDelAlumno(vista.alumno))}.${hora ? ` <span data-actualizado class="text-sky-300/80">Actualizado ${esc(hora)}</span>` : ''}</p>
+        <button data-click="alumnoSeguir" aria-pressed="${vista.seguir}" title="${vista.seguir ? 'Tocá para dejar de acompañar al alumno de día en día' : 'Tocá para que la vista acompañe al alumno de día en día'}" class="shrink-0 ${claseBotonChico} ${vista.seguir ? '!border-emerald-600 !text-emerald-300' : ''}"><i class="fa-solid ${vista.seguir ? 'fa-location-crosshairs' : 'fa-location-dot'} mr-1"></i>${vista.seguir ? 'Siguiendo al alumno' : 'Seguir al alumno'}</button>
       </div>`;
   }
 

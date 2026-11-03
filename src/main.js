@@ -6,6 +6,8 @@ import './router.js';
 // Secciones que no importa el router: se cargan para que registren sus acciones
 import './features/admin/alumnos.js';
 import './features/admin/vencimientos.js';
+import { iniciarTeclado } from './lib/teclado.js';
 import { iniciarSesion } from './session.js';
 
+iniciarTeclado(); // el menú de abajo se esconde mientras se escribe en el celular
 iniciarSesion();

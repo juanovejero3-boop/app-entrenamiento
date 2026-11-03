@@ -223,3 +223,8 @@
     cursor: pointer;
   }
 }
+
+/* Mientras se escribe en el celular el menú de abajo se esconde (ver src/lib/teclado.js) */
+body.teclado-abierto nav {
+  display: none !important;
+}
