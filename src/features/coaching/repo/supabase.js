@@ -154,6 +154,29 @@ export function crearRepoSupabase(cliente) {
     // Lo que anota el alumno en un ciclo
     // -----------------------------------------------------------------------
 
+    /**
+     * Avisa cada vez que cambian las series o las sesiones del ciclo (Realtime de Supabase), para ver en vivo lo que
+     * completa el alumno. Se filtra por ciclo porque forma parte de la clave de las dos tablas: así también llegan
+     * los borrados (por ejemplo, al reabrir un día). Devuelve la función para dejar de escuchar.
+     * @param {string} cicloId
+     * @param {(tabla: 'training_set_logs' | 'training_sessions') => void} alCambiar
+     * @returns {() => void}
+     */
+    suscribirCiclo(cicloId, alCambiar) {
+      exigir(cicloId, 'cicloId');
+      // un nombre distinto por suscripción: supabase-js comparte los canales que tienen el mismo nombre
+      const canal = cliente.channel(`ciclo-${cicloId}-${crypto.randomUUID().slice(0, 8)}`);
+      for (const tabla of ['training_set_logs', 'training_sessions']) {
+        canal.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: tabla, filter: `cycle_id=eq.${cicloId}` },
+          () => alCambiar(tabla),
+        );
+      }
+      canal.subscribe();
+      return () => cliente.removeChannel(canal);
+    },
+
     /** Kg, reps y estado por serie. Vacío si no anotó nada. */
     async cargarRegistroDelCiclo(cicloId) {
       exigir(cicloId, 'cicloId');

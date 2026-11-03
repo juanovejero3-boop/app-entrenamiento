@@ -1,5 +1,6 @@
 // Cliente de Supabase falso para los tests: tablas en memoria y solo lo que usa el repo
-// (select/insert/update/upsert/delete con eq, in, order, limit, single y maybeSingle).
+// (select/insert/update/upsert/delete con eq, in, order, limit, single y maybeSingle) y los canales de Realtime
+// (channel/on/subscribe/removeChannel), que avisan cuando se escribe en una tabla, como haría Supabase.
 // Aplica los valores por defecto y las claves únicas que importan; los permisos (RLS) y las
 // restricciones se prueban contra Postgres de verdad en esquema.test.js.
 
@@ -15,6 +16,24 @@ export function crearClienteFalso() {
   const llamadas = [];
   let falla = null;
   let reloj = 0; // created_at crece con cada fila nueva, así el orden por fecha es el de creación
+  /** @type {{ nombre: string, suscripto: boolean, escuchas: { tabla: string, filtro: string, alCambiar: Function }[] }[]} */
+  let canales = [];
+
+  /** Avisa (de forma asíncrona, como la red) a los canales que escuchan esa tabla y cuyo filtro coincide. */
+  function notificar(tabla, evento, filas) {
+    for (const fila of filas) {
+      setTimeout(() => {
+        for (const canal of canales) {
+          for (const escucha of canal.escuchas) {
+            if (escucha.tabla !== tabla) continue;
+            const [columna, valor] = escucha.filtro.split('=eq.');
+            if (columna && String(fila[columna]) !== valor) continue;
+            escucha.alCambiar({ eventType: evento, table: tabla, new: fila });
+          }
+        }
+      }, 0);
+    }
+  }
 
   class Consulta {
     constructor(tabla) {
@@ -129,6 +148,12 @@ export function crearClienteFalso() {
         }
       }
 
+      const eventos = { insert: 'INSERT', update: 'UPDATE', upsert: 'UPDATE', delete: 'DELETE' };
+      if (eventos[this.op]) {
+        const afectadas = this.op === 'upsert' ? this.filas : resultado;
+        notificar(this.tabla, eventos[this.op], afectadas);
+      }
+
       if (this.uno === 'single' || this.uno === 'maybe') {
         if (resultado.length > 1) return { data: null, error: { message: 'Más de una fila' } };
         if (!resultado.length && this.uno === 'single') return { data: null, error: { message: 'Sin filas' } };
@@ -140,13 +165,37 @@ export function crearClienteFalso() {
 
   return {
     from: (tabla) => new Consulta(tabla),
+    channel(nombre) {
+      const canal = { nombre, suscripto: false, escuchas: [] };
+      canales.push(canal);
+      const api = {
+        on(_tipo, { table, filter }, alCambiar) {
+          canal.escuchas.push({ tabla: table, filtro: filter ?? '', alCambiar });
+          return api;
+        },
+        subscribe() {
+          canal.suscripto = true;
+          return api;
+        },
+        _canal: canal,
+      };
+      return api;
+    },
+    removeChannel(api) {
+      canales = canales.filter((c) => c !== api._canal);
+    },
     // ayudas para los tests
+    get canales() {
+      return canales;
+    },
+    canalesActivos: () => canales.length,
     tablas,
     llamadas,
     /** Vacía las tablas y el registro de llamadas (entre test y test). */
     reiniciar() {
       for (const tabla of Object.keys(tablas)) tablas[tabla] = [];
       llamadas.length = 0;
+      canales = [];
       falla = null;
     },
     /** La próxima consulta devuelve este error. */

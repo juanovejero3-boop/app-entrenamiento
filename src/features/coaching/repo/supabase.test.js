@@ -289,3 +289,78 @@ describe('repo de Supabase: sesiones de un ciclo', () => {
     expect(await repo.cargarSesionesDelCiclo(otro.id)).toEqual({});
   });
 });
+
+describe('repo de Supabase: seguir un ciclo en vivo', () => {
+  let ciclo;
+  const esperar = () => new Promise((resolver) => setTimeout(resolver, 0));
+  beforeEach(async () => {
+    ciclo = await repo.crearCiclo(ANA, planDe('Fuerza'), 'activo');
+  });
+
+  it('avisa cuando se anota una serie del ciclo, indicando qué tabla cambió', async () => {
+    const avisos = [];
+    repo.suscribirCiclo(ciclo.id, (tabla) => avisos.push(tabla));
+
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
+    await esperar();
+
+    expect(avisos).toEqual(['training_set_logs']);
+  });
+
+  it('avisa cuando se termina o se reabre un día', async () => {
+    const avisos = [];
+    repo.suscribirCiclo(ciclo.id, (tabla) => avisos.push(tabla));
+
+    await repo.guardarSesionesDelCiclo(ciclo.id, { d1: diaHecho });
+    await repo.guardarSesionesDelCiclo(ciclo.id, {}); // reabrir: borra la fila
+    await esperar();
+
+    expect(avisos).toEqual(['training_sessions', 'training_sessions']);
+  });
+
+  it('no avisa por lo que pasa en otros ciclos', async () => {
+    const otro = await repo.crearCiclo(LUIS, planDe('De Luis'), 'activo');
+    const avisos = [];
+    repo.suscribirCiclo(ciclo.id, (tabla) => avisos.push(tabla));
+
+    await repo.guardarRegistroDelCiclo(otro.id, { e1: { 1: serieHecha } });
+    await repo.guardarSesionesDelCiclo(otro.id, { d1: diaHecho });
+    await esperar();
+
+    expect(avisos).toEqual([]);
+  });
+
+  it('escucha las dos tablas filtrando por ciclo (así también llegan los borrados)', async () => {
+    repo.suscribirCiclo(ciclo.id, () => {});
+    const escuchas = cliente.canales.flatMap((c) => c.escuchas);
+    expect(escuchas.map((e) => [e.tabla, e.filtro])).toEqual([
+      ['training_set_logs', `cycle_id=eq.${ciclo.id}`],
+      ['training_sessions', `cycle_id=eq.${ciclo.id}`],
+    ]);
+    expect(cliente.canales.every((c) => c.suscripto)).toBe(true);
+  });
+
+  it('la función que devuelve deja de escuchar y cierra el canal', async () => {
+    const avisos = [];
+    const dejarDeSeguir = repo.suscribirCiclo(ciclo.id, (tabla) => avisos.push(tabla));
+    expect(cliente.canalesActivos()).toBe(1);
+
+    dejarDeSeguir();
+    await repo.guardarRegistroDelCiclo(ciclo.id, { e1: { 1: serieHecha } });
+    await esperar();
+
+    expect(cliente.canalesActivos()).toBe(0);
+    expect(avisos).toEqual([]);
+  });
+
+  it('cada suscripción tiene su propio canal (se puede seguir el mismo ciclo desde dos pantallas)', () => {
+    repo.suscribirCiclo(ciclo.id, () => {});
+    repo.suscribirCiclo(ciclo.id, () => {});
+    const nombres = cliente.canales.map((c) => c.nombre);
+    expect(new Set(nombres).size).toBe(2);
+  });
+
+  it('exige el ciclo', () => {
+    expect(() => repo.suscribirCiclo('', () => {})).toThrow('cicloId');
+  });
+});
