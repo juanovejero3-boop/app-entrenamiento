@@ -21,6 +21,7 @@ import {
   progresoDelDia,
   replicarKg,
   serieDe,
+  seriesCambiadas,
 } from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
 
@@ -31,12 +32,25 @@ import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesio
  *   plan: import('../entrenamiento/plan.js').PlanEntrenamiento | null,
  *   registro: import('./registro.js').Registro, sesiones: import('./sesiones.js').Sesiones, hoy: string,
  *   soloLectura: boolean, alVolver: (() => void) | null,
- *   w: number, d: number, videos: Map<string, string>, abiertos: Set<string>
+ *   w: number, d: number, videos: Map<string, string>, abiertos: Set<string>,
+ *   enVivo: boolean, seguir: boolean, actualizadoEn: Date | null, esperaEnVivoMs: number, resaltadoMs: number
  * }} VistaDelPlan
  */
 
 /** Una instancia de la vista por contenedor (así se pueden mostrar varios ciclos a la vez). */
 const instancias = new WeakMap();
+
+/** Las vistas en vivo abiertas: contenedor -> función que deja de escuchar los cambios. */
+const seguimientos = new Map();
+
+/** Deja de escuchar las vistas en vivo de `actual` (se está por abrir otra ahí) y las de pantallas que ya no están. */
+function limpiarSeguimientos(actual) {
+  for (const [contenedor, dejarDeEscuchar] of seguimientos) {
+    if (contenedor !== actual && contenedor.isConnected) continue;
+    dejarDeEscuchar();
+    seguimientos.delete(contenedor);
+  }
+}
 
 let catalogoVideos = null;
 
@@ -63,12 +77,24 @@ async function cargarVideos() {
  *   soloLectura: modo del coach, sin poder anotar. alVolver: agrega un botón "Volver".
  *   sinBarra: no muestra la barra superior (aviso de lectura y Volver), para usarla dentro de otra pantalla.
  *   hoy: AAAA-MM-DD, para elegir la semana inicial (por defecto, la de hoy).
+ *   enVivo: solo con soloLectura; se actualiza cuando el alumno anota algo (Realtime), resalta lo nuevo y
+ *   sigue al alumno de día en día. esperaEnVivoMs / resaltadoMs: cuánto se espera para juntar avisos y cuánto
+ *   dura el resaltado (se pueden achicar en los tests).
  * @returns {Promise<boolean>} si el alumno tiene un plan para mostrar
  */
 export async function abrirPlanAlumno(
   content,
   alumno,
-  { cicloId = null, soloLectura = false, sinBarra = false, alVolver = null, hoy = hoyISO() } = {},
+  {
+    cicloId = null,
+    soloLectura = false,
+    sinBarra = false,
+    alVolver = null,
+    hoy = hoyISO(),
+    enVivo = false,
+    esperaEnVivoMs = 300,
+    resaltadoMs = 3000,
+  } = {},
 ) {
   const ciclos = await repo.listarCiclos(alumno.id);
   const ciclo = cicloId ? (ciclos.find((c) => c.id === cicloId) ?? null) : cicloActivo(ciclos);
@@ -94,11 +120,18 @@ export async function abrirPlanAlumno(
     d: 0,
     videos,
     abiertos: new Set(), // ids de los ejercicios desplegados
+    enVivo: enVivo && soloLectura, // solo el coach en modo lectura puede seguir al alumno
+    seguir: true, // la vista acompaña al alumno al día donde está anotando
+    actualizadoEn: null,
+    esperaEnVivoMs,
+    resaltadoMs,
   };
   content.dataset.planAlumno = 'true';
   const instancia = crearVista(vista);
   instancias.set(content, instancia);
   instancia.dibujar();
+  limpiarSeguimientos(content);
+  if (vista.enVivo && vista.cicloId) seguimientos.set(content, instancia.iniciarEnVivo());
   return Boolean(plan);
 }
 
@@ -141,12 +174,24 @@ function crearVista(vista) {
     const volver = alVolver
       ? `<button data-click="alumnoVolver" class="text-gray-300 hover:text-neonRed" title="Volver"><i class="fa-solid fa-arrow-left"></i></button>`
       : '';
+    if (soloLectura && vista.enVivo) return dibujarBarraEnVivo(volver);
     return soloLectura
       ? `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
         ${volver}
         <p><b class="uppercase tracking-wide">Modo lectura</b> · Así ve el plan ${esc(nombreDelAlumno(alumno))}. Desde acá no se puede anotar.</p>
       </div>`
       : `<div class="flex items-center gap-3 text-xs text-gray-400">${volver}<span class="uppercase tracking-wide font-bold">Mi plan</span></div>`;
+  }
+
+  /** El aviso del coach cuando mira en vivo: que se actualiza solo y si acompaña al alumno de día en día. */
+  function dibujarBarraEnVivo(volver) {
+    const hora = vista.actualizadoEn?.toLocaleTimeString('es-AR') ?? '';
+    return `<div class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 flex items-center gap-3 text-xs text-sky-200">
+        ${volver}
+        <span class="relative flex h-2.5 w-2.5 shrink-0"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500"></span></span>
+        <p data-en-vivo class="flex-1 min-w-0"><b class="uppercase tracking-wide">En vivo</b> · modo lectura de ${esc(nombreDelAlumno(vista.alumno))}.${hora ? ` <span data-actualizado class="text-sky-300/80">Actualizado ${esc(hora)}</span>` : ''}</p>
+        <button data-click="alumnoSeguir" aria-pressed="${vista.seguir}" class="shrink-0 ${claseBotonChico}">${vista.seguir ? 'Siguiendo al alumno' : 'Seguir al alumno'}</button>
+      </div>`;
   }
 
   function dibujarSinPlan() {
@@ -509,6 +554,91 @@ function crearVista(vista) {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // En vivo (el coach mira lo que el alumno va completando)
+  // ---------------------------------------------------------------------------
+
+  /** En qué semana y día está un ejercicio, o null. */
+  function ubicacionDe(ejercicioId) {
+    for (const [w, semana] of vista.plan.weeks.entries()) {
+      for (const [d, dia] of semana.days.entries()) {
+        if (dia.blocks.some((b) => b.exercises.some((e) => e.id === ejercicioId))) return { w, d };
+      }
+    }
+    return null;
+  }
+
+  /** Abre los ejercicios donde hubo cambios y, si se está siguiendo al alumno, se pasa a su semana y día. */
+  function seguirALaActividad(cambiadas) {
+    if (!cambiadas.length) return;
+    for (const { ejercicio } of cambiadas) vista.abiertos.add(ejercicio);
+    if (!vista.seguir) return;
+    const lugar = ubicacionDe(cambiadas.at(-1).ejercicio);
+    if (lugar) Object.assign(vista, lugar);
+  }
+
+  /** Resalta un rato las series que acaban de cambiar. */
+  function resaltar(cambiadas) {
+    const clases = ['ring-2', 'ring-emerald-400', 'rounded-lg'];
+    const filas = cambiadas
+      .map(({ ejercicio, n }) =>
+        [...vista.content.querySelectorAll('[data-serie]')].find((f) => f.dataset.serie === `${ejercicio}-${n}`),
+      )
+      .filter(Boolean);
+    for (const fila of filas) {
+      fila.dataset.reciente = 'true';
+      fila.classList.add(...clases);
+    }
+    setTimeout(() => {
+      for (const fila of filas) {
+        delete fila.dataset.reciente;
+        fila.classList.remove(...clases);
+      }
+    }, vista.resaltadoMs);
+  }
+
+  /** Vuelve a leer lo que anotó el alumno y lo muestra, sin perder el lugar donde se estaba scrolleando. */
+  async function refrescarDesdeLaBase() {
+    try {
+      const [registro, sesiones] = await Promise.all([
+        repo.cargarRegistroDelCiclo(vista.cicloId),
+        repo.cargarSesionesDelCiclo(vista.cicloId),
+      ]);
+      if (!vista.content.isConnected) return;
+      const cambiadas = seriesCambiadas(vista.registro, registro);
+      vista.registro = registro;
+      vista.sesiones = sesiones;
+      vista.actualizadoEn = new Date();
+      seguirALaActividad(cambiadas);
+      const alto = window.scrollY;
+      dibujar();
+      window.scrollTo?.(0, alto);
+      resaltar(cambiadas);
+    } catch (error) {
+      console.error('No se pudo actualizar la vista en vivo', error); // el próximo aviso lo vuelve a intentar
+    }
+  }
+
+  /** Empieza a escuchar los cambios del ciclo; devuelve la función para dejar de hacerlo. */
+  function iniciarEnVivo() {
+    let espera = null;
+    const dejarDeEscuchar = repo.suscribirCiclo(vista.cicloId, () => {
+      if (!vista.content.isConnected) {
+        // la pantalla ya no está: no hace falta seguir escuchando
+        clearTimeout(espera);
+        dejarDeEscuchar();
+        seguimientos.delete(vista.content);
+        return;
+      }
+      clearTimeout(espera); // varios avisos seguidos se juntan en una sola recarga
+      espera = setTimeout(refrescarDesdeLaBase, vista.esperaEnVivoMs);
+    });
+    return () => {
+      clearTimeout(espera);
+      dejarDeEscuchar();
+    };
+  }
+
   /** Hecha / "no la hice": tocar el estado activo lo vuelve a pendiente. */
   function alternarEstado(boton, campo) {
     const { e, n } = boton.dataset;
@@ -598,14 +728,21 @@ function crearVista(vista) {
     semana: (el) => {
       vista.w = Number(el.dataset.w);
       vista.d = 0;
+      vista.seguir = false; // si el coach navega a mano, deja de acompañar al alumno
       dibujar();
       traerAlTope();
     },
     dia: (el) => {
       vista.d = Number(el.dataset.d);
+      vista.seguir = false;
       dibujar();
       traerAlTope();
     },
+    seguir: () => {
+      vista.seguir = !vista.seguir;
+      dibujar();
+    },
+    iniciarEnVivo,
     ejercicio: (el) => alternarEjercicio(el.dataset.e),
     ejerciciosTodos: () => alternarTodos(),
     serie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
@@ -625,6 +762,7 @@ registrarAcciones({
   alumnoVolver: (el) => instanciaDe(el)?.volver(),
   alumnoSemana: (el) => instanciaDe(el)?.semana(el),
   alumnoDia: (el) => instanciaDe(el)?.dia(el),
+  alumnoSeguir: (el) => instanciaDe(el)?.seguir(),
   alumnoSerie: (el) => instanciaDe(el)?.serie(el),
   alumnoCheck: (el) => instanciaDe(el)?.check(el),
   alumnoOmitir: (el) => instanciaDe(el)?.omitir(el),

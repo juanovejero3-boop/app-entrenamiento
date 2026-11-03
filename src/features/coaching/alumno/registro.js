@@ -52,6 +52,27 @@ export function replicarKg(registro, ejercicio, numero, kg) {
   return nuevo;
 }
 
+/**
+ * Las series que cambiaron entre dos registros (nuevas, modificadas o que desaparecieron), para mostrar qué
+ * acaba de anotar el alumno cuando el entrenador lo mira en vivo.
+ * @returns {{ ejercicio: string, n: number }[]}
+ */
+export function seriesCambiadas(antes, despues) {
+  const posiciones = [];
+  for (const registro of [despues, antes]) {
+    for (const [ejercicio, series] of Object.entries(registro)) {
+      for (const n of Object.keys(series)) {
+        if (!posiciones.some((p) => p.ejercicio === ejercicio && p.n === Number(n)))
+          posiciones.push({ ejercicio, n: Number(n) });
+      }
+    }
+  }
+  return posiciones.filter(
+    ({ ejercicio, n }) =>
+      JSON.stringify(serieDe(antes, ejercicio, n)) !== JSON.stringify(serieDe(despues, ejercicio, n)),
+  );
+}
+
 /** Series hechas y omitidas sobre el total de series del día (todos sus bloques). */
 export function progresoDelDia(dia, registro) {
   let hechas = 0;

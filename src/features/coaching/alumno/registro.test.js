@@ -8,6 +8,7 @@ import {
   progresoDelDia,
   replicarKg,
   serieDe,
+  seriesCambiadas,
 } from './registro.js';
 
 const ej = (id, sets) => ({ id, name: id, sets });
@@ -294,5 +295,41 @@ describe('replicarKg', () => {
     const copia = structuredClone(original);
     replicarKg(original, ej('a', '3'), 1, '80');
     expect(original).toEqual(copia);
+  });
+});
+
+describe('seriesCambiadas', () => {
+  const hecha = { kg: '80', reps: '8', done: true, skipped: false };
+
+  it('lista las series nuevas o modificadas', () => {
+    const antes = actualizarSerie({}, 'a', 1, hecha);
+    let despues = actualizarSerie(antes, 'a', 2, { kg: '70' });
+    despues = actualizarSerie(despues, 'b', 1, { done: true });
+    expect(seriesCambiadas(antes, despues)).toEqual([
+      { ejercicio: 'a', n: 2 },
+      { ejercicio: 'b', n: 1 },
+    ]);
+  });
+
+  it('detecta cualquier campo: kg, reps, hecha u omitida', () => {
+    const antes = actualizarSerie({}, 'a', 1, hecha);
+    for (const cambios of [{ kg: '90' }, { reps: '10' }, { skipped: true }, { done: false }]) {
+      expect(seriesCambiadas(antes, actualizarSerie(antes, 'a', 1, cambios))).toEqual([{ ejercicio: 'a', n: 1 }]);
+    }
+  });
+
+  it('no incluye las que quedaron igual', () => {
+    const antes = actualizarSerie({}, 'a', 1, hecha);
+    expect(seriesCambiadas(antes, structuredClone(antes))).toEqual([]);
+    expect(seriesCambiadas({}, {})).toEqual([]);
+  });
+
+  it('una serie que desapareció también cuenta como cambio', () => {
+    const antes = actualizarSerie({}, 'a', 1, hecha);
+    expect(seriesCambiadas(antes, {})).toEqual([{ ejercicio: 'a', n: 1 }]);
+  });
+
+  it('una serie vacía que aparece (sin nada anotado) no es un cambio', () => {
+    expect(seriesCambiadas({}, actualizarSerie({}, 'a', 1, {}))).toEqual([]);
   });
 });

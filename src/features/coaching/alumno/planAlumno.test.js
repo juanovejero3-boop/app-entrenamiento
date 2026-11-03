@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../lib/ui.js'; // modales propios (alert/confirm) que usa mostrarPdf al fallar
 import { generarPdfBlob } from '../pdf/generar.js';
 import { ALUMNO, planCompleto } from '../pdf/test-utils.js';
-import { repo } from '../repo/index.js';
+import { clienteDePrueba, repo } from '../repo/index.js';
 import { sembrarPlan, registroDe, sesionesDe, guardarRegistroDe, guardarSesionesDe } from '../repo/test-utils.js';
 import { abrirPlanAlumno } from './planAlumno.js';
 
@@ -1148,5 +1148,190 @@ describe('vista del alumno: el peso se copia a las series siguientes', () => {
     await esperar();
     expect(document.body.textContent).toContain('No se pudo guardar');
     expect(kgs('e1')).toEqual(['80', '80', '80', '80']);
+  });
+});
+
+describe('vista en vivo del coach', () => {
+  let cicloId;
+  /** La misma semana 1, con un segundo día que también tiene ejercicios (e9). */
+  function planConDosDias() {
+    const plan = planCompleto();
+    plan.weeks[0].days[1].blocks = [
+      {
+        id: 'b9',
+        type: 'fuerza',
+        exercises: [
+          {
+            id: 'e9',
+            name: 'Sentadilla',
+            sets: '3',
+            reps: '8',
+            intensityType: 'RIR',
+            intensityValue: '2',
+            tech: '',
+            rest: '2 min',
+            notes: '',
+            group: '',
+          },
+        ],
+      },
+    ];
+    return plan;
+  }
+  const hecha = (kg = '80') => ({ kg, reps: '8', done: true, skipped: false });
+  const abrirVivo = (extra = {}) =>
+    abrir({ soloLectura: true, enVivo: true, esperaEnVivoMs: 0, resaltadoMs: 60, ...extra });
+  /** Lo que hace el alumno desde su celular: guarda sus series. */
+  const alumnoAnota = (registro) => repo.guardarRegistroDelCiclo(cicloId, registro);
+  const chipDia = (d) => $(`[data-barra-fija] [data-click="alumnoDia"][data-d="${d}"]`);
+  const cuerpoEj = (id) => $(`[data-ejercicio="${id}"] [data-ej-cuerpo]`);
+
+  beforeEach(async () => {
+    await guardarPlan(planConDosDias());
+    cicloId = (await repo.listarCiclos(ALUMNO.id))[0].id;
+  });
+
+  it('avisa que está en vivo, es de solo lectura y no tiene el botón de volver', async () => {
+    await abrirVivo();
+    expect($('[data-en-vivo]').textContent).toContain('En vivo');
+    expect($('[data-en-vivo]').textContent).toContain('modo lectura');
+    expect($('[data-click="alumnoVolver"]')).toBeNull();
+    expect($$('[data-change="alumnoSerie"]').every((i) => i.disabled)).toBe(true);
+  });
+
+  it('las series que completa el alumno aparecen solas, sin recargar', async () => {
+    await abrirVivo();
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('false');
+
+    await alumnoAnota({ e1: { 1: hecha('80') } });
+
+    await vi.waitFor(() => expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true'));
+    expect(campo('e1', 1, 'kg').value).toBe('80');
+    expect($('[data-barra-fija] [data-progreso]').textContent).toBe('1 / 11 series');
+    expect($('[data-actualizado]').textContent).toContain('Actualizado');
+  });
+
+  it('resalta las series que acaban de cambiar y después deja de resaltarlas', async () => {
+    await abrirVivo();
+    await alumnoAnota({ e1: { 1: hecha() } });
+
+    await vi.waitFor(() => expect($('[data-serie="e1-1"]').dataset.reciente).toBe('true'));
+    expect($('[data-serie="e2-1"]').dataset.reciente).toBeUndefined();
+    await vi.waitFor(() => expect($('[data-serie="e1-1"]').dataset.reciente).toBeUndefined());
+  });
+
+  it('abre el ejercicio donde el alumno está anotando', async () => {
+    await abrirVivo();
+    expect(cuerpoEj('e1').hidden).toBe(true);
+    await alumnoAnota({ e1: { 1: hecha() } });
+    await vi.waitFor(() => expect(cuerpoEj('e1').hidden).toBe(false));
+    expect(cuerpoEj('e2').hidden).toBe(true);
+  });
+
+  it('cuando el alumno termina el día se ve el aviso, y desaparece si lo reabre', async () => {
+    await abrirVivo();
+    await repo.guardarSesionesDelCiclo(cicloId, {
+      d1: { fecha: '2026-10-20', terminadaEn: '2026-10-20T20:00:00.000Z', estado: 'hecha' },
+    });
+    await vi.waitFor(() => expect($('[data-sesion-terminada]')).not.toBeNull());
+    expect($('[data-click="alumnoDia"][data-d="0"]').dataset.hecho).toBe('true');
+
+    await repo.guardarSesionesDelCiclo(cicloId, {});
+    await vi.waitFor(() => expect($('[data-sesion-terminada]')).toBeNull());
+  });
+
+  it('sigue al alumno: si anota en otro día, la vista se pasa a ese día', async () => {
+    await abrirVivo();
+    expect(chipDia(0).getAttribute('aria-current')).toBe('true');
+
+    await alumnoAnota({ e9: { 1: hecha('100') } });
+
+    await vi.waitFor(() => expect(chipDia(1).getAttribute('aria-current')).toBe('true'));
+    expect($('[data-serie="e9-1"]').dataset.reciente).toBe('true');
+    expect(campo('e9', 1, 'kg').value).toBe('100');
+  });
+
+  it('si el coach navega a mano deja de seguir, y puede volver a seguir con el botón', async () => {
+    await abrirVivo();
+    expect($('[data-click="alumnoSeguir"]').textContent).toContain('Siguiendo');
+
+    $('[data-click="alumnoDia"][data-d="1"]').click(); // el coach elige mirar el día 2
+    expect($('[data-click="alumnoSeguir"]').textContent).toContain('Seguir al alumno');
+
+    await alumnoAnota({ e1: { 1: hecha() } }); // el alumno anota en el día 1
+    await vi.waitFor(() => expect($('[data-actualizado]')).not.toBeNull()); // la vista ya se actualizó
+    expect(chipDia(1).getAttribute('aria-current')).toBe('true'); // pero el coach sigue en el día 2
+    expect($('[data-ejercicio="e9"]')).not.toBeNull();
+    expect(check('e1', 1)).toBeNull(); // y no lo arrastró al día 1
+
+    $('[data-click="alumnoSeguir"]').click();
+    expect($('[data-click="alumnoSeguir"]').textContent).toContain('Siguiendo');
+    await alumnoAnota({ e1: { 1: hecha(), 2: hecha() } });
+    await vi.waitFor(() => expect(chipDia(0).getAttribute('aria-current')).toBe('true')); // vuelve al día de la actividad
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true'); // y ahí se ve lo que ya había anotado
+  });
+
+  it('varias anotaciones seguidas se muestran juntas, con una sola recarga', async () => {
+    await abrirVivo({ esperaEnVivoMs: 40 });
+    const cargas = vi.spyOn(repo, 'cargarRegistroDelCiclo');
+    cargas.mockClear();
+
+    await alumnoAnota({ e1: { 1: hecha() } });
+    await alumnoAnota({ e1: { 1: hecha(), 2: hecha() } });
+    await alumnoAnota({ e1: { 1: hecha(), 2: hecha(), 3: hecha() } });
+
+    await vi.waitFor(() => expect(check('e1', 3).getAttribute('aria-pressed')).toBe('true'));
+    expect(cargas).toHaveBeenCalledTimes(1);
+  });
+
+  it('si falla una recarga no se rompe y se actualiza con el próximo cambio', async () => {
+    await abrirVivo();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(repo, 'cargarRegistroDelCiclo').mockRejectedValueOnce(new Error('sin conexión'));
+
+    await alumnoAnota({ e1: { 1: hecha() } });
+    await vi.waitFor(() => expect(error).toHaveBeenCalled());
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('false'); // todavía no se vio
+
+    await alumnoAnota({ e1: { 1: hecha(), 2: hecha() } });
+    await vi.waitFor(() => expect(check('e1', 2).getAttribute('aria-pressed')).toBe('true'));
+    expect(check('e1', 1).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  describe('suscripción', () => {
+    it('escucha mientras la vista está abierta, y abrir de nuevo en el mismo lugar no deja una suscripción de más', async () => {
+      await abrirVivo();
+      expect(clienteDePrueba.canalesActivos()).toBe(1);
+      await abrirVivo();
+      expect(clienteDePrueba.canalesActivos()).toBe(1);
+    });
+
+    it('si la pantalla se cierra deja de escuchar apenas llega el próximo aviso', async () => {
+      await abrirVivo();
+      content.remove();
+      await alumnoAnota({ e1: { 1: hecha() } });
+      await vi.waitFor(() => expect(clienteDePrueba.canalesActivos()).toBe(0));
+    });
+
+    it('al abrir otra vista en vivo limpia las de pantallas que ya no están', async () => {
+      await abrirVivo();
+      content.remove();
+      const otra = document.createElement('div');
+      document.body.appendChild(otra);
+      await abrirPlanAlumno(otra, ALUMNO, { soloLectura: true, enVivo: true, esperaEnVivoMs: 0, hoy: SEMANA_1 });
+      expect(clienteDePrueba.canalesActivos()).toBe(1);
+    });
+
+    it('sin enVivo, o siendo el propio alumno, no se suscribe a nada', async () => {
+      await abrir({ soloLectura: true });
+      await abrir({ enVivo: true });
+      expect(clienteDePrueba.canalesActivos()).toBe(0);
+    });
+
+    it('un alumno sin plan no tiene nada que seguir', async () => {
+      await clienteDePrueba.from('training_cycles').delete().eq('id', cicloId);
+      await abrirVivo();
+      expect(clienteDePrueba.canalesActivos()).toBe(0);
+    });
   });
 });
