@@ -6,6 +6,7 @@ import {
   omitirTodasLasSeries,
   pasarPendientesAOmitidas,
   progresoDelDia,
+  replicarKg,
   serieDe,
 } from './registro.js';
 
@@ -207,5 +208,91 @@ describe('pasarPendientesAOmitidas', () => {
     const nuevo = pasarPendientesAOmitidas(d, original);
     expect(serieDe(nuevo, 'otro', 1)).toEqual({ kg: '5', reps: '', done: false, skipped: false });
     expect(serieDe(original, 'a', 1).skipped).toBe(false);
+  });
+});
+
+describe('replicarKg', () => {
+  const kgDe = (registro, id, n) => serieDe(registro, id, n).kg;
+
+  it('copia el peso de la serie a las series que siguen', () => {
+    const d = ej('a', '4');
+    const r = replicarKg(actualizarSerie({}, 'a', 1, { kg: '80' }), d, 1, '80');
+    expect([1, 2, 3, 4].map((n) => kgDe(r, 'a', n))).toEqual(['80', '80', '80', '80']);
+  });
+
+  it('no toca las series anteriores', () => {
+    const d = ej('a', '3');
+    let r = actualizarSerie({}, 'a', 1, { kg: '80' });
+    r = actualizarSerie(r, 'a', 2, { kg: '100' });
+    r = replicarKg(r, d, 2, '100');
+    expect([1, 2, 3].map((n) => kgDe(r, 'a', n))).toEqual(['80', '100', '100']);
+  });
+
+  it('el ejemplo del entrenador: 80 en la primera, 100 en la segunda y 120 en la tercera', () => {
+    const d = ej('a', '3');
+    let r = {};
+    for (const [n, kg] of [
+      [1, '80'],
+      [2, '100'],
+      [3, '120'],
+    ]) {
+      r = replicarKg(actualizarSerie(r, 'a', n, { kg }), d, n, kg);
+    }
+    expect([1, 2, 3].map((n) => kgDe(r, 'a', n))).toEqual(['80', '100', '120']);
+  });
+
+  it('pisa lo que había escrito en las series siguientes que todavía están pendientes', () => {
+    const d = ej('a', '3');
+    let r = actualizarSerie({}, 'a', 3, { kg: '120' });
+    r = replicarKg(actualizarSerie(r, 'a', 1, { kg: '90' }), d, 1, '90');
+    expect([1, 2, 3].map((n) => kgDe(r, 'a', n))).toEqual(['90', '90', '90']);
+  });
+
+  it('no toca las series siguientes que ya se hicieron ni las que se omitieron', () => {
+    const d = ej('a', '4');
+    let r = actualizarSerie({}, 'a', 2, { kg: '100', done: true });
+    r = actualizarSerie(r, 'a', 3, { kg: '60', skipped: true });
+    r = replicarKg(actualizarSerie(r, 'a', 1, { kg: '80' }), d, 1, '80');
+    expect([1, 2, 3, 4].map((n) => kgDe(r, 'a', n))).toEqual(['80', '100', '60', '80']);
+  });
+
+  it('conserva las repeticiones y el estado de las series a las que copia', () => {
+    const d = ej('a', '2');
+    let r = actualizarSerie({}, 'a', 2, { reps: '10' });
+    r = replicarKg(actualizarSerie(r, 'a', 1, { kg: '80', reps: '8' }), d, 1, '80');
+    expect(serieDe(r, 'a', 2)).toEqual({ kg: '80', reps: '10', done: false, skipped: false });
+    expect(serieDe(r, 'a', 1).reps).toBe('8');
+  });
+
+  it('un valor vacío (o solo espacios) no se copia: no borra las series que siguen', () => {
+    const d = ej('a', '3');
+    let r = actualizarSerie({}, 'a', 2, { kg: '70' });
+    r = replicarKg(actualizarSerie(r, 'a', 1, { kg: '' }), d, 1, '');
+    expect(kgDe(r, 'a', 2)).toBe('70');
+    expect(replicarKg(r, d, 1, '   ')).toBe(r);
+  });
+
+  it('con un rango de series (3-4) llega hasta la última fila', () => {
+    const r = replicarKg({}, ej('a', '3-4'), 1, '50');
+    expect([1, 2, 3, 4].map((n) => kgDe(r, 'a', n))).toEqual(['', '50', '50', '50']);
+  });
+
+  it('copia el valor tal como se escribió, recortado (decimales con coma o punto)', () => {
+    expect(kgDe(replicarKg({}, ej('a', '2'), 1, ' 82,5 '), 'a', 2)).toBe('82,5');
+    expect(kgDe(replicarKg({}, ej('a', '2'), 1, '82.5'), 'a', 2)).toBe('82.5');
+  });
+
+  it('la última serie no tiene a quién copiar, y los otros ejercicios no se tocan', () => {
+    const original = actualizarSerie({}, 'otro', 1, { kg: '5' });
+    expect(replicarKg(original, ej('a', '3'), 3, '80')).toEqual(original);
+    const r = replicarKg(original, ej('a', '3'), 1, '80');
+    expect(r.otro).toEqual(original.otro);
+  });
+
+  it('no modifica el registro original', () => {
+    const original = actualizarSerie({}, 'a', 1, { kg: '80' });
+    const copia = structuredClone(original);
+    replicarKg(original, ej('a', '3'), 1, '80');
+    expect(original).toEqual(copia);
   });
 });

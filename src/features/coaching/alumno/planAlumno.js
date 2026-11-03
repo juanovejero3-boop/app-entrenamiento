@@ -19,6 +19,7 @@ import {
   omitirTodasLasSeries,
   pasarPendientesAOmitidas,
   progresoDelDia,
+  replicarKg,
   serieDe,
 } from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
@@ -478,9 +479,25 @@ function crearVista(vista) {
   const diaActual = () => vista.plan.weeks[vista.w].days[vista.d];
   const diaTerminado = () => Boolean(sesionDe(vista.sesiones, diaActual()?.id));
 
+  /** Al cargar el peso de una serie, lo copia a las siguientes que siguen pendientes y lo muestra en sus campos. */
+  function copiarKgASiguientes(ejercicioId, numero, kg) {
+    const ejercicio = diaActual()
+      .blocks.flatMap((b) => b.exercises)
+      .find((e) => e.id === ejercicioId);
+    if (!ejercicio) return;
+    vista.registro = replicarKg(vista.registro, ejercicio, numero, kg);
+    for (let n = numero + 1; n <= cantidadDeSeries(ejercicio); n++) {
+      const campoKg = [...vista.content.querySelectorAll('[data-change="alumnoSerie"][data-campo="kg"]')].find(
+        (c) => c.dataset.e === ejercicioId && c.dataset.n === String(n),
+      );
+      if (campoKg) campoKg.value = serieDe(vista.registro, ejercicioId, n).kg;
+    }
+  }
+
   async function anotarSerie(ejercicioId, numero, cambios) {
     if (vista.soloLectura || diaTerminado()) return;
     vista.registro = actualizarSerie(vista.registro, ejercicioId, numero, cambios);
+    if ('kg' in cambios) copiarKgASiguientes(ejercicioId, numero, cambios.kg);
     pintarEstadoDeSerie(ejercicioId, numero);
     actualizarResumenDeEjercicio(ejercicioId);
     actualizarProgreso();

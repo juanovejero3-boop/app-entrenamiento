@@ -36,6 +36,22 @@ export function actualizarSerie(registro, ejercicioId, numero, cambios) {
   return { ...registro, [ejercicioId]: { ...registro[ejercicioId], [numero]: serie } };
 }
 
+/**
+ * Copia el peso de la serie `numero` a las series que le siguen en el ejercicio, para no tener que cargar lo
+ * mismo en cada una. Solo pisa las que todavía están pendientes (no las que ya se hicieron o se omitieron) y
+ * un valor vacío no se copia (borrar el peso de una serie no borra el de las demás).
+ */
+export function replicarKg(registro, ejercicio, numero, kg) {
+  const valor = texto(kg).trim();
+  if (!valor) return registro;
+  let nuevo = registro;
+  for (let n = numero + 1; n <= cantidadDeSeries(ejercicio); n++) {
+    const serie = serieDe(nuevo, ejercicio.id, n);
+    if (!serie.done && !serie.skipped) nuevo = actualizarSerie(nuevo, ejercicio.id, n, { kg: valor });
+  }
+  return nuevo;
+}
+
 /** Series hechas y omitidas sobre el total de series del día (todos sus bloques). */
 export function progresoDelDia(dia, registro) {
   let hechas = 0;

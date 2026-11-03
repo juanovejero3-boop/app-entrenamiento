@@ -1033,3 +1033,120 @@ describe('vista del alumno: ejercicios plegables', () => {
     expect(cuerpo('e1').hidden).toBe(false);
   });
 });
+
+describe('vista del alumno: el peso se copia a las series siguientes', () => {
+  beforeEach(() => guardarPlan());
+
+  const kgs = (id, cantidad = 4) => Array.from({ length: cantidad }, (_, i) => campo(id, i + 1, 'kg').value);
+
+  it('al cargar los kilos de una serie, las que siguen se completan con el mismo valor', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+
+    expect(kgs('e1')).toEqual(['80', '80', '80', '80']);
+  });
+
+  it('el ejemplo del entrenador: 80, después 100 en la segunda y 120 en la tercera', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'kg'), '80');
+    escribir(campo('e1', 2, 'kg'), '100');
+    expect(kgs('e1')).toEqual(['80', '100', '100', '100']);
+
+    escribir(campo('e1', 3, 'kg'), '120');
+    await esperar();
+    expect(kgs('e1')).toEqual(['80', '100', '120', '120']);
+  });
+
+  it('lo copiado también queda guardado', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+
+    const registro = await registroDe(ALUMNO.id);
+    expect([1, 2, 3, 4].map((n) => registro.e1[n].kg)).toEqual(['80', '80', '80', '80']);
+  });
+
+  it('no se copia a las series que ya se marcaron como hechas ni a las omitidas', async () => {
+    await abrir();
+    escribir(campo('e1', 2, 'kg'), '100');
+    check('e1', 2).click();
+    $('[data-click="alumnoOmitir"][data-e="e1"][data-n="3"]').click();
+    await esperar();
+
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+
+    // la 3 recibió el 100 de la 2 antes de omitirla; el 80 ya no la pisa, ni a la hecha (la 2)
+    expect(kgs('e1')).toEqual(['80', '100', '100', '80']);
+    const registro = await registroDe(ALUMNO.id);
+    expect(registro.e1[2]).toMatchObject({ kg: '100', done: true });
+    expect(registro.e1[3]).toMatchObject({ kg: '100', skipped: true });
+    expect(registro.e1[4].kg).toBe('80');
+  });
+
+  it('solo se copian los kilos: las repeticiones de cada serie se anotan por separado', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'reps'), '8');
+    await esperar();
+    expect([1, 2, 3, 4].map((n) => campo('e1', n, 'reps').value)).toEqual(['8', '', '', '']);
+  });
+
+  it('borrar los kilos de una serie no borra los de las siguientes', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'kg'), '80');
+    escribir(campo('e1', 1, 'kg'), '');
+    await esperar();
+    expect(kgs('e1')).toEqual(['', '80', '80', '80']);
+  });
+
+  it('no se copia a otros ejercicios', async () => {
+    await abrir();
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+    expect(kgs('e2', 3)).toEqual(['', '', '']);
+  });
+
+  it('con un rango de series llega hasta la última fila', async () => {
+    const plan = planCompleto();
+    plan.weeks[0].days[0].blocks[0].exercises[0].sets = '3-4';
+    await guardarPlan(plan);
+    await abrir();
+    escribir(campo('e1', 2, 'kg'), '60');
+    await esperar();
+    expect(kgs('e1')).toEqual(['', '60', '60', '60']);
+  });
+
+  it('en modo lectura del coach no se copia nada, ni siquiera si le sacan el disabled', async () => {
+    await abrir({ soloLectura: true });
+    campo('e1', 1, 'kg').disabled = false;
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+    expect(kgs('e1')).toEqual(['80', '', '', '']); // lo escrito en el campo, pero sin copiar ni guardar
+    expect(await registroDe(ALUMNO.id)).toEqual({});
+  });
+
+  it('en un día terminado no se copia ni se guarda nada, ni siquiera si le sacan el disabled', async () => {
+    await guardarSesionesDe(ALUMNO.id, {
+      d1: { fecha: '2026-10-19', terminadaEn: '2026-10-19T20:00:00.000Z', estado: 'hecha' },
+    });
+    await abrir();
+
+    campo('e1', 1, 'kg').disabled = false;
+    escribir(campo('e1', 1, 'kg'), '99');
+    await esperar();
+
+    expect(kgs('e1')).toEqual(['99', '', '', '']);
+    expect(await registroDe(ALUMNO.id)).toEqual({});
+  });
+
+  it('si no se puede guardar avisa, y lo copiado queda en pantalla para reintentar', async () => {
+    await abrir();
+    vi.spyOn(repo, 'guardarRegistroDelCiclo').mockRejectedValueOnce(new Error('sin conexión'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    escribir(campo('e1', 1, 'kg'), '80');
+    await esperar();
+    expect(document.body.textContent).toContain('No se pudo guardar');
+    expect(kgs('e1')).toEqual(['80', '80', '80', '80']);
+  });
+});
