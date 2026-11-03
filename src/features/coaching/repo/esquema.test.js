@@ -29,12 +29,19 @@ const SUPABASE_MINIMO = `
   grant execute on all functions in schema public to anon, authenticated;
 `;
 
+const MIGRACION_REALTIME = readFileSync(
+  new URL('../../../../supabase/migrations/20261102000000_realtime_entrenamiento.sql', import.meta.url),
+  'utf8',
+);
+
 let db;
 
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(SUPABASE_MINIMO);
+  await db.exec('create publication supabase_realtime'); // la que trae Supabase (empieza sin tablas)
   await db.exec(MIGRACION);
+  await db.exec(MIGRACION_REALTIME);
   await db.exec('grant select, insert, update, delete on all tables in schema public to anon, authenticated');
 }, 60_000); // arrancar Postgres en memoria (WASM) puede tardar con la máquina cargada
 
@@ -283,5 +290,31 @@ describe('esquema de entrenamiento: permisos (RLS)', () => {
     for (const tabla of ['training_cycles', 'training_sessions', 'training_set_logs']) {
       expect((await como(null, `select 1 from public.${tabla}`)).rows).toHaveLength(0);
     }
+  });
+});
+
+describe('realtime del entrenamiento', () => {
+  const enPublicacion = async () =>
+    (
+      await db.query(
+        "select tablename from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' order by tablename",
+      )
+    ).rows.map((f) => f.tablename);
+
+  it('las series y las sesiones quedan en la publicación de Realtime (las demás tablas no)', async () => {
+    expect(await enPublicacion()).toEqual(['training_sessions', 'training_set_logs']);
+  });
+
+  it('la migración se puede aplicar de nuevo sin duplicar nada', async () => {
+    await db.exec(MIGRACION_REALTIME);
+    expect(await enPublicacion()).toEqual(['training_sessions', 'training_set_logs']);
+  });
+
+  it('si el proyecto no tiene Realtime (sin publicación) no falla', async () => {
+    await db.exec('drop publication supabase_realtime');
+    await expect(db.exec(MIGRACION_REALTIME)).resolves.not.toThrow();
+    await db.exec('create publication supabase_realtime');
+    await db.exec(MIGRACION_REALTIME); // vuelve a quedar como antes
+    expect(await enPublicacion()).toEqual(['training_sessions', 'training_set_logs']);
   });
 });
