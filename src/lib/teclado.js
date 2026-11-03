@@ -16,19 +16,35 @@ const ESPERA_AL_SALIR_MS = 100; // el foco pasa de un campo a otro: sin esto el 
  * @returns {() => void} función para dejar de escuchar
  */
 export function iniciarTeclado({ esTactil = () => window.matchMedia?.('(pointer: coarse)').matches ?? false } = {}) {
+  /** El menú se esconde si y solo si hay un campo de texto enfocado: se calcula siempre desde ahí, nunca "pegado". */
+  const sincronizar = () => {
+    document.body.classList.toggle(CLASE, esTactil() && esCampoDeTexto(document.activeElement));
+  };
+  let espera = null;
+  const sincronizarEnBreve = () => {
+    clearTimeout(espera);
+    espera = setTimeout(sincronizar, ESPERA_AL_SALIR_MS);
+  };
+
   const alEnfocar = (evento) => {
     if (esTactil() && esCampoDeTexto(evento.target)) document.body.classList.add(CLASE);
   };
-  const alDesenfocar = () => {
-    setTimeout(() => {
-      if (!esCampoDeTexto(document.activeElement)) document.body.classList.remove(CLASE);
-    }, ESPERA_AL_SALIR_MS);
-  };
+  // Si se borra un campo enfocado (por ejemplo al entrar, que reemplaza el formulario) el navegador no avisa
+  // que perdió el foco: por eso también se revisa cuando cambia la pantalla y cuando se toca.
+  const observador = new MutationObserver(sincronizarEnBreve);
+  observador.observe(document.body, { childList: true, subtree: true });
+
   document.addEventListener('focusin', alEnfocar);
-  document.addEventListener('focusout', alDesenfocar);
+  document.addEventListener('focusout', sincronizarEnBreve);
+  document.addEventListener('pointerdown', sincronizarEnBreve);
+  document.addEventListener('touchstart', sincronizarEnBreve, { passive: true });
   return () => {
+    clearTimeout(espera);
+    observador.disconnect();
     document.removeEventListener('focusin', alEnfocar);
-    document.removeEventListener('focusout', alDesenfocar);
+    document.removeEventListener('focusout', sincronizarEnBreve);
+    document.removeEventListener('pointerdown', sincronizarEnBreve);
+    document.removeEventListener('touchstart', sincronizarEnBreve);
     document.body.classList.remove(CLASE);
   };
 }

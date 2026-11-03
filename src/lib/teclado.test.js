@@ -72,13 +72,24 @@ describe('pie de página y teclado del celular', () => {
     expect(tecladoAbierto()).toBe(false);
   });
 
-  it('si se cierra la pantalla con un campo enfocado el menú no se queda escondido', () => {
+  it('si se cierra la pantalla con un campo enfocado el menú no se queda escondido, aunque el navegador no avise', async () => {
     enfocar('texto');
-    document.getElementById('texto').remove();
-    vi.advanceTimersByTime(200);
-    // el foco volvió al <body>: no hay campo enfocado
-    document.dispatchEvent(new Event('focusout'));
-    vi.advanceTimersByTime(200);
+    document.getElementById('texto').remove(); // al borrar un campo enfocado no se dispara ningún focusout
+    await vi.advanceTimersByTimeAsync(300);
     expect(tecladoAbierto()).toBe(false);
+  });
+
+  it('si la clase quedó pegada, un toque en cualquier lado la corrige', async () => {
+    document.body.classList.add('teclado-abierto'); // por ejemplo, de una sesión anterior
+    document.getElementById('boton').dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(tecladoAbierto()).toBe(false);
+  });
+
+  it('mientras el campo sigue enfocado, los cambios de la pantalla no muestran el menú', async () => {
+    enfocar('texto');
+    document.body.appendChild(document.createElement('div'));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(tecladoAbierto()).toBe(true);
   });
 });
