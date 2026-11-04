@@ -431,6 +431,68 @@ describe('alumnos: comidas del plan', () => {
   });
 });
 
+describe('alumnos: aclaraciones para el alumno', () => {
+  const notas = () => $('[data-notas]');
+
+  it('hay una sección plegable con un cuadro de texto para las aclaraciones', async () => {
+    await abrirAlumno(SIMON);
+    expect($('[data-seccion="aclaraciones"] [data-click="nutricionSeccion"]')).not.toBeNull();
+    expect(notas().maxLength).toBe(2000);
+  });
+
+  it('al salir del cuadro se guardan con el plan, y al reabrir al alumno están', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(notas(), 'Tomar 2 litros de agua por día.');
+    expect(planGuardado(SIMON.id).notas).toBe('Tomar 2 litros de agua por día.');
+
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    expect(notas().value).toBe('Tomar 2 litros de agua por día.');
+  });
+
+  it('guardar las comidas o los parámetros no pierde las aclaraciones', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(notas(), 'Sin gluten.');
+    $('[data-click="comidaNueva"]').click();
+    expect(planGuardado(SIMON.id).notas).toBe('Sin gluten.');
+    cambiar(form().edad, '30');
+    expect(planGuardado(SIMON.id).notas).toBe('Sin gluten.');
+  });
+
+  it('guardar las aclaraciones no pierde las comidas', async () => {
+    await abrirAlumno(SIMON);
+    $('[data-click="comidaNueva"]').click();
+    cambiar(notas(), 'Hola');
+    expect(planGuardado(SIMON.id).comidas).toHaveLength(1);
+  });
+
+  it('cada alumno tiene las suyas', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(notas(), 'Solo de Simón');
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    $(`[data-click="nutricionAlumno"][data-id="${ALDY.id}"]`).click();
+    expect(notas().value).toBe('');
+  });
+
+  it('si el navegador no deja guardar lo avisa', async () => {
+    await abrirAlumno(SIMON);
+    almacen.setItem = () => {
+      throw new Error('sin espacio');
+    };
+    cambiar(notas(), 'x');
+    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+  });
+
+  it('un texto con HTML no se interpreta', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(notas(), '<img src=x onerror=alert(1)>');
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    expect($('img')).toBeNull();
+    expect(notas().value).toBe('<img src=x onerror=alert(1)>');
+  });
+});
+
 describe('alumnos: secciones plegables', () => {
   const cuerpo = (id) => $(`[data-seccion="${id}"] [data-seccion-cuerpo]`);
   const boton = (id) => $(`[data-seccion="${id}"] [data-click="nutricionSeccion"]`);

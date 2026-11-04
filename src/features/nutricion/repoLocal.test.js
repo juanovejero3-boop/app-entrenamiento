@@ -60,8 +60,31 @@ describe('repo local de nutrición: plan de cada alumno', () => {
 
   it('lo que se guarda se vuelve a leer igual', () => {
     const repo = repoCon(almacenFalso());
-    repo.guardarPlan('u1', { ...plan, comidas: [] });
-    expect(repo.cargarPlan('u1')).toEqual({ ...plan, comidas: [] });
+    repo.guardarPlan('u1', { ...plan, comidas: [], notas: '' });
+    expect(repo.cargarPlan('u1')).toEqual({ ...plan, comidas: [], notas: '' });
+  });
+
+  describe('aclaraciones (texto libre del coach para el alumno)', () => {
+    it('se guardan y se leen con el plan', () => {
+      const repo = repoCon(almacenFalso());
+      repo.guardarPlan('u1', { ...plan, comidas: [], notas: 'Tomar 2 litros de agua.\nNo saltear el desayuno.' });
+      expect(repo.cargarPlan('u1').notas).toBe('Tomar 2 litros de agua.\nNo saltear el desayuno.');
+    });
+
+    it('un plan guardado antes de que existieran las aclaraciones las devuelve vacías', () => {
+      const guardado = JSON.stringify({ parametros: plan.parametros, comidas: [] });
+      expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1').notas).toBe('');
+    });
+
+    it('lo que no es un texto vuelve a vacío', () => {
+      const guardado = JSON.stringify({ parametros: plan.parametros, notas: { a: 1 } });
+      expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1').notas).toBe('');
+    });
+
+    it('se cortan a 2000 caracteres', () => {
+      const guardado = JSON.stringify({ parametros: plan.parametros, notas: 'a'.repeat(5000) });
+      expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1').notas).toHaveLength(2000);
+    });
   });
 
   it('cada alumno tiene el suyo', () => {

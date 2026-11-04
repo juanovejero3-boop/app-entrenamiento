@@ -7,7 +7,14 @@ import { normalizarParametros } from './objetivos.js';
 export const CLAVE_ALIMENTOS = 'pp:v1:nutricion:alimentos';
 export const claveDelPlan = (alumnoId) => `pp:v1:nutricion:plan:${alumnoId}`;
 
-/** @typedef {{ parametros: import('./objetivos.js').Parametros, comidas: import('./comidas.js').Comida[] }} PlanDeNutricion */
+export const MAX_NOTAS = 2000;
+
+/**
+ * @typedef {{
+ *   parametros: import('./objetivos.js').Parametros, comidas: import('./comidas.js').Comida[],
+ *   notas: string
+ * }} PlanDeNutricion  notas: las aclaraciones del coach para el alumno
+ */
 
 /**
  * @param {() => Pick<Storage, 'getItem' | 'setItem'>} [obtenerAlmacen]  se pide recién al usarlo: en algunos
@@ -50,7 +57,11 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
       try {
         const dato = JSON.parse(obtenerAlmacen().getItem(claveDelPlan(alumnoId)));
         if (typeof dato !== 'object' || dato === null || Array.isArray(dato)) return null;
-        return { parametros: normalizarParametros(dato.parametros), comidas: normalizarComidas(dato.comidas) };
+        return {
+          parametros: normalizarParametros(dato.parametros),
+          comidas: normalizarComidas(dato.comidas),
+          notas: typeof dato.notas === 'string' ? dato.notas.slice(0, MAX_NOTAS) : '',
+        };
       } catch {
         return null;
       }

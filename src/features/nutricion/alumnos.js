@@ -7,7 +7,7 @@ import { toast } from '../../lib/ui.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
 import { actualizarObjetivosDeComidas, montarComidas } from './comidasVista.js';
 import { ACTIVIDADES, calcularObjetivos, parametrosIniciales, validarParametros } from './objetivos.js';
-import { repoNutricion } from './repoLocal.js';
+import { MAX_NOTAS, repoNutricion } from './repoLocal.js';
 
 const ALUMNOS_POR_PAGINA = 3; // igual que las otras listas de alumnos
 
@@ -160,12 +160,19 @@ function dibujarFicha() {
       ${seccion('objetivos', 'Objetivos', '<div data-resultados></div>')}
       ${seccion('comidas', 'Comidas', '<div data-comidas></div>')}
       ${seccion('linea', 'Línea de tiempo', '<div data-linea></div>')}
+      ${seccion(
+        'aclaraciones',
+        'Aclaraciones para el alumno',
+        `<textarea data-notas data-change="nutricionGuardar" maxlength="${MAX_NOTAS}" rows="4" placeholder="Ej: tomar 2 litros de agua por día, no saltear el desayuno…" class="${claseInput}"></textarea>
+        <p class="text-[11px] text-gray-500 mt-1">El alumno las ve al final de su plan de alimentación.</p>`,
+      )}
     </div>
   `;
-  // Los selects se fijan por código (en vez de con `selected` en el HTML) para que siempre queden en el valor guardado
+  // Los selects y el texto se fijan por código (en vez de dejarlos en el HTML) para que siempre queden en lo guardado
   const campos = content.querySelector('[data-plan-form]').elements;
   campos.sexo.value = p.sexo;
   campos.actividad.value = String(p.actividad);
+  content.querySelector('[data-notas]').value = plan?.notas ?? '';
   montarComidas({
     contenedor: content.querySelector('[data-comidas]'),
     lineaDeTiempo: content.querySelector('[data-linea]'),
@@ -265,10 +272,11 @@ function volver() {
   dibujar();
 }
 
-/** Guarda el plan del alumno (parámetros y comidas juntos, para que guardar uno no pise al otro). */
+/** Guarda el plan del alumno (parámetros, comidas y aclaraciones juntos, para que guardar uno no pise a los otros). */
 function guardarPlan(comidas) {
   try {
-    actual.repo.guardarPlan(actual.alumno.id, { parametros: leerParametros(), comidas });
+    const notas = actual.content.querySelector('[data-notas]').value;
+    actual.repo.guardarPlan(actual.alumno.id, { parametros: leerParametros(), comidas, notas });
     return true;
   } catch (error) {
     toast(error.message, false);
