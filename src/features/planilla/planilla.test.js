@@ -3,6 +3,10 @@ import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
 import { clienteDePrueba, repo } from '../coaching/repo/index.js';
 import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
 import { state } from '../../state.js';
+import { alimentosIniciales } from '../nutricion/alimentos.js';
+import { agregarItem, crearComida } from '../nutricion/comidas.js';
+import { parametrosIniciales } from '../nutricion/objetivos.js';
+import { repoNutricion } from '../nutricion/repoLocal.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
 
 // El motor de PDF no se usa acá, pero la vista del alumno lo importa
@@ -294,5 +298,145 @@ describe('Planilla del coach: su propio plan', () => {
     expect($('[data-en-vivo]')).toBeNull();
     expect(clienteDePrueba.canalesActivos()).toBe(0);
     expect([...content.querySelectorAll('[data-change="alumnoSerie"]')].some((i) => i.disabled)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Plan de alimentación: el alumno lo ve desde su Planilla y el coach, en modo lectura, desde la ficha
+// ---------------------------------------------------------------------------
+
+/** Le arma al usuario un plan de alimentación con un desayuno (en el navegador, como lo guarda el coach). */
+function sembrarAlimentacion(usuarioId, { notas = 'Tomar agua.' } = {}) {
+  const pollo = alimentosIniciales().find((a) => a.nombre === 'Pechuga de Pollo');
+  const desayuno = crearComida({ nombre: 'Desayuno', hora: '08:00' });
+  const comidas = agregarItem([desayuno], desayuno.id, desayuno.opciones[0].id, pollo, 1);
+  const parametros = { ...parametrosIniciales({}), edad: 28, peso: 75, altura: 175 };
+  repoNutricion.guardarPlan(usuarioId, { parametros, comidas, notas });
+}
+const botonAlimentacion = () => $('[data-click="planillaVerAlimentacion"]');
+
+describe('Planilla del alumno: mi plan de alimentación', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    state.currentUser = { id: ALUMNO.id, email: ALUMNO.email };
+    state.userProfile = { ...PERFIL_ALUMNO, nutrition_url: 'https://docs.google.com/nutricion' };
+  });
+  afterEach(() => localStorage.clear());
+
+  it('sin plan de alimentación en la app, la tarjeta queda como siempre (con el link a Sheets)', async () => {
+    await renderTabEntrenamiento(content);
+    expect(botonAlimentacion()).toBeNull();
+    expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
+  });
+
+  it('con plan, aparece «Ver mi plan de alimentación» y el link a Sheets sigue como alternativa', async () => {
+    sembrarAlimentacion(ALUMNO.id);
+    await renderTabEntrenamiento(content);
+    expect(botonAlimentacion().textContent).toMatch(/ver mi plan de alimentaci/i);
+    expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
+  });
+
+  it('sin link a Sheets, no queda el cartel «Pronto te cargaremos...» cuando ya hay plan', async () => {
+    state.userProfile = { ...PERFIL_ALUMNO, nutrition_url: null };
+    sembrarAlimentacion(ALUMNO.id);
+    await renderTabEntrenamiento(content);
+    expect(botonAlimentacion()).not.toBeNull();
+    expect(content.textContent).not.toContain('Pronto te cargaremos tu plan de nutrición');
+  });
+
+  it('un plan sin ninguna comida cargada no cambia la tarjeta', async () => {
+    repoNutricion.guardarPlan(ALUMNO.id, {
+      parametros: parametrosIniciales({}),
+      comidas: [crearComida({ nombre: 'Vacía' })],
+      notas: '',
+    });
+    await renderTabEntrenamiento(content);
+    expect(botonAlimentacion()).toBeNull();
+  });
+
+  it('el plan de otro usuario no la activa', async () => {
+    sembrarAlimentacion('otro-alumno');
+    await renderTabEntrenamiento(content);
+    expect(botonAlimentacion()).toBeNull();
+  });
+
+  it('tocarlo abre su plan, con sus comidas y aclaraciones, sin cartel de modo lectura', async () => {
+    sembrarAlimentacion(ALUMNO.id);
+    await renderTabEntrenamiento(content);
+    botonAlimentacion().click();
+
+    expect(content.querySelector('h2').textContent).toContain('Mi plan de alimentación');
+    expect(content.textContent).toContain('Desayuno');
+    expect(content.textContent).toContain('Tomar agua.');
+    expect(content.textContent).not.toMatch(/modo lectura/i);
+  });
+
+  it('«Volver» regresa a la Planilla', async () => {
+    sembrarAlimentacion(ALUMNO.id);
+    await renderTabEntrenamiento(content);
+    botonAlimentacion().click();
+    $('[data-click="alimentacionVolver"]').click();
+    await vi.waitFor(() => expect(content.textContent).toContain('Planilla de Entrenamiento'));
+    expect(botonAlimentacion()).not.toBeNull();
+  });
+
+  it('un alumno no puede ver el plan de otro aunque cambie el id del botón', async () => {
+    sembrarAlimentacion(ALUMNO.id, { notas: 'Plan propio' });
+    sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
+    await renderTabEntrenamiento(content);
+    botonAlimentacion().dataset.id = 'otro-alumno';
+    botonAlimentacion().click();
+    expect(content.textContent).toContain('Mi plan de alimentación');
+    expect(content.textContent).not.toContain('Plan ajeno');
+  });
+});
+
+describe('Planilla del coach: el plan de alimentación del alumno, en modo lectura', () => {
+  const OTRO = { ...PERFIL_ALUMNO, nutrition_url: 'https://docs.google.com/nutricion' };
+  beforeEach(() => {
+    localStorage.clear();
+    state.currentUser = { id: COACH.id, email: COACH.email };
+    state.userProfile = COACH;
+    state.adminAllUsers = [OTRO];
+  });
+  afterEach(() => localStorage.clear());
+
+  async function abrirFicha() {
+    await renderTabEntrenamiento(content);
+    $(`[data-click="adminPlanillaSeleccionar"][data-id="${OTRO.id}"]`).click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
+  }
+
+  it('la ficha tiene «Ver plan de alimentación» aunque el alumno todavía no tenga plan, y el link a Sheets sigue', async () => {
+    await abrirFicha();
+    expect(botonAlimentacion().textContent).toMatch(/ver plan de alimentaci/i);
+    expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
+  });
+
+  it('tocarlo muestra exactamente el plan del alumno, en modo lectura y con su nombre', async () => {
+    sembrarAlimentacion(OTRO.id);
+    await abrirFicha();
+    botonAlimentacion().click();
+
+    expect(content.querySelector('h2').textContent).toContain('Franco Soria');
+    expect(content.querySelector('[data-modo-lectura]')).not.toBeNull();
+    expect(content.textContent).toContain('Desayuno');
+    expect(content.textContent).toContain('Tomar agua.');
+    expect(content.querySelectorAll('input, textarea, select')).toHaveLength(0); // solo mirar
+  });
+
+  it('si el alumno no tiene plan, lo dice', async () => {
+    await abrirFicha();
+    botonAlimentacion().click();
+    expect(content.textContent).toContain('Este alumno todavía no tiene un plan de alimentación');
+  });
+
+  it('«Volver» regresa a la ficha del mismo alumno', async () => {
+    sembrarAlimentacion(OTRO.id);
+    await abrirFicha();
+    botonAlimentacion().click();
+    $('[data-click="alimentacionVolver"]').click();
+    await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
+    expect(content.textContent).toContain('Franco Soria');
   });
 });

@@ -8,6 +8,12 @@ import { cantidadParaMostrar, macrosDeItem, macrosDeOpcion, ordenadasPorHora } f
 import { calcularObjetivos } from './objetivos.js';
 import { repoNutricion } from './repoLocal.js';
 
+/** ¿El alumno ya tiene algo cargado en su plan de alimentación? (si no, no hay nada para mostrarle) */
+export function tienePlanDeAlimentacion(repo, alumnoId) {
+  const plan = alumnoId ? repo.cargarPlan(alumnoId) : null;
+  return Boolean(plan?.comidas.some((c) => opcionesConAlimentos(c).length));
+}
+
 /** Qué hacer al tocar «Volver»; lo define quien abre la pantalla. */
 let alVolverActual = null;
 

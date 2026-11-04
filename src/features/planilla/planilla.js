@@ -7,6 +7,8 @@ import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
 import { abrirPlanesDelAlumno } from '../coaching/alumno/planesDelAlumno.js';
 import { abrirCiclosDelAlumno } from '../coaching/ciclos/ciclosDelAlumno.js';
+import { abrirPlanDeAlimentacion, tienePlanDeAlimentacion } from '../nutricion/planDeAlimentacion.js';
+import { repoNutricion } from '../nutricion/repoLocal.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
@@ -67,13 +69,22 @@ export async function renderTabEntrenamiento(content) {
         <p class="text-xs text-gray-500 text-center">Pronto te cargaremos tu entrenamiento.</p>
       `;
 
-    const nutricionCard = nutritionUrl
+    // Si el entrenador ya le armó un plan de alimentación en la app, se abre desde acá; el link a Sheets (si
+    // lo hay) queda como alternativa. Si no, la tarjeta es la de siempre.
+    const nutricionCard = tienePlanDeAlimentacion(repoNutricion, state.userProfile?.id)
       ? `
+        <button data-click="planillaVerAlimentacion" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
+          <i class="fa-solid fa-utensils mr-2"></i> VER MI PLAN DE ALIMENTACIÓN
+        </button>
+        ${nutritionUrl ? `<a href="${nutritionUrl}" target="_blank" class="block text-center text-xs text-gray-400 underline">Ver también la planilla de Google Sheets</a>` : ''}
+      `
+      : nutritionUrl
+        ? `
         <a href="${nutritionUrl}" target="_blank" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
           <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
         </a>
       `
-      : `
+        : `
         <button disabled class="block w-full text-center bg-cyberCarbon text-gray-600 font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-gray-800 cursor-not-allowed">
           <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
         </button>
@@ -303,6 +314,9 @@ function renderAdminPlanillaAlumno(u) {
         <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
           <i class="fa-solid fa-utensils mr-2"></i> Plan de Nutrición
         </h3>
+        <button data-click="planillaVerAlimentacion" data-id="${escapeAttr(u.id)}" class="block w-full text-center neon-glow-button text-white font-black text-sm py-4 rounded-2xl uppercase tracking-wider shadow-lg">
+          <i class="fa-solid fa-eye mr-2"></i> Ver plan de alimentación (solo lectura)
+        </button>
         ${nutricionCard}
       </div>
 
@@ -372,6 +386,18 @@ registrarAcciones({
   adminPlanillaActivar: (el) => adminPlanillaActivar(el.dataset.id),
   adminPlanillaCerrarPestana: (el) => adminPlanillaCerrarPestana(el.dataset.id),
   adminPlanillaMostrarBuscador: () => adminPlanillaMostrarBuscador(),
+  // El alumno abre su propio plan (nunca el de otro: se ignora el id del botón); el coach, el del alumno de la
+  // ficha y en modo lectura. La pantalla es la misma, así el coach ve exactamente lo que ve el alumno.
+  planillaVerAlimentacion: (el) => {
+    const content = document.getElementById('app-content');
+    const esAdmin = state.userProfile?.role === 'admin';
+    const alumno = esAdmin ? state.adminAllUsers.find((x) => x.id === el.dataset.id) : state.userProfile;
+    if (!alumno) return;
+    abrirPlanDeAlimentacion(content, alumno, {
+      soloLectura: esAdmin,
+      alVolver: esAdmin ? () => adminPlanillaActivar(alumno.id) : () => renderTabEntrenamiento(content),
+    });
+  },
   planillaAbrirCiclos: (el) => {
     const u = state.adminAllUsers.find((x) => x.id === el.dataset.id);
     if (!u) return;
