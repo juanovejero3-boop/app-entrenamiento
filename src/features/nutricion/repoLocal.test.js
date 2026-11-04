@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { alimentosIniciales, crearAlimento } from './alimentos.js';
-import { CLAVE_ALIMENTOS, crearRepoNutricionLocal } from './repoLocal.js';
+import { CLAVE_ALIMENTOS, claveDelPlan, crearRepoNutricionLocal } from './repoLocal.js';
 
 /** Un localStorage de mentira, en memoria. */
 function almacenFalso(inicial = {}) {
@@ -13,6 +13,73 @@ function almacenFalso(inicial = {}) {
 }
 const repoCon = (almacen) => crearRepoNutricionLocal(() => almacen);
 const palta = () => crearAlimento({ categoria: 'fats', nombre: 'Palta', porcion: '60 g' });
+
+describe('repo local de nutrición: plan de cada alumno', () => {
+  const plan = {
+    parametros: {
+      sexo: 'F',
+      edad: 30,
+      peso: 60,
+      altura: 165,
+      actividad: 1.375,
+      ajuste: 90,
+      proteinaGKg: 2,
+      grasaPct: 28,
+    },
+  };
+
+  it('un alumno sin plan devuelve null', () => {
+    expect(repoCon(almacenFalso()).cargarPlan('u1')).toBeNull();
+  });
+
+  it('lo que se guarda se vuelve a leer igual', () => {
+    const repo = repoCon(almacenFalso());
+    repo.guardarPlan('u1', plan);
+    expect(repo.cargarPlan('u1')).toEqual(plan);
+  });
+
+  it('cada alumno tiene el suyo', () => {
+    const repo = repoCon(almacenFalso());
+    repo.guardarPlan('u1', plan);
+    expect(repo.cargarPlan('u2')).toBeNull();
+    repo.guardarPlan('u2', { parametros: { ...plan.parametros, peso: 80 } });
+    expect(repo.cargarPlan('u1').parametros.peso).toBe(60);
+    expect(repo.cargarPlan('u2').parametros.peso).toBe(80);
+  });
+
+  it('usa una clave por alumno y no toca la de los alimentos', () => {
+    const almacen = almacenFalso();
+    repoCon(almacen).guardarPlan('u1', plan);
+    expect([...almacen.datos.keys()]).toEqual(['pp:v1:nutricion:plan:u1']);
+  });
+
+  it('si lo guardado está roto o no es un plan devuelve null', () => {
+    expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: '{no es json' })).cargarPlan('u1')).toBeNull();
+    expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: '7' })).cargarPlan('u1')).toBeNull();
+  });
+
+  it('sanea los parámetros guardados', () => {
+    const guardado = JSON.stringify({ parametros: { ...plan.parametros, peso: null, hack: 1 } });
+    const leido = repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1');
+    expect(leido.parametros.peso).toBe('');
+    expect(leido.parametros).not.toHaveProperty('hack');
+  });
+
+  it('si el navegador no deja acceder al almacenamiento no se rompe', () => {
+    const repo = crearRepoNutricionLocal(() => {
+      throw new Error('bloqueado');
+    });
+    expect(repo.cargarPlan('u1')).toBeNull();
+  });
+
+  it('si no se puede guardar lo avisa con un error que se puede mostrar', () => {
+    const lleno = almacenFalso();
+    lleno.setItem = () => {
+      throw new Error('QuotaExceededError');
+    };
+    expect(() => repoCon(lleno).guardarPlan('u1', plan)).toThrow(/no se pudo guardar/i);
+  });
+});
 
 describe('repo local de nutrición: alimentos', () => {
   it('la primera vez arranca con la base del coach y la guarda, para que los ids no cambien al recargar', () => {

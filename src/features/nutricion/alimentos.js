@@ -3,6 +3,7 @@
 //
 // Una categoría tiene macros fijos por porción (así armaba las comidas el prototipo del coach) y cada
 // alimento es una porción equivalente de esa categoría: «Pechuga de pollo → 100 g».
+import { plano } from '../../lib/texto.js';
 
 /**
  * @typedef {{ id: string, nombre: string, macros: { kcal: number, p: number, c: number, f: number } }} Categoria
@@ -25,14 +26,6 @@ export const CATEGORIAS = [
 export const categoriaDe = (id) => CATEGORIAS.find((c) => c.id === id);
 
 const nuevoId = () => crypto.randomUUID();
-
-/** Minúsculas y sin tildes, para comparar y buscar. */
-const plano = (texto) =>
-  String(texto ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim();
 
 /**
  * @param {{ categoria: string, nombre: string, porcion: string, gluten?: boolean, lacteo?: boolean }} datos
