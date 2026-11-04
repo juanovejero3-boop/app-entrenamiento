@@ -55,11 +55,71 @@ describe('alumnos: buscador', () => {
     expect(content.textContent).toContain('aldy@ejemplo.com');
   });
 
-  it('muestra solo los primeros y avisa que hay más para buscar', async () => {
-    alumnos = Array.from({ length: 12 }, (_, i) => ({ id: `a${i}`, name: `Alumno ${i}`, email: `a${i}@ej.com` }));
-    await abrir();
-    expect($$('[data-click="nutricionAlumno"]')).toHaveLength(8);
-    expect(content.textContent).toContain('8 de 12');
+  describe('paginación de a 3, como las otras listas', () => {
+    const muchos = (n = 8) =>
+      Array.from({ length: n }, (_, i) => ({ id: `a${i}`, name: `Alumno ${i}`, email: `a${i}@ej.com` }));
+    const pagina = () => $('[data-pagina]')?.textContent.replace(/\s+/g, ' ').trim();
+    const cambiarPagina = (dir) => $(`[data-click="nutricionCambiarPagina"][data-dir="${dir}"]`).click();
+
+    it('muestra 3 alumnos por página y en qué página está', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      expect(nombres()).toEqual(['Alumno 0', 'Alumno 1', 'Alumno 2']);
+      expect(pagina()).toBe('Página 1 de 3');
+    });
+
+    it('Siguiente y Anterior pasan de página', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      cambiarPagina(1);
+      expect(nombres()).toEqual(['Alumno 3', 'Alumno 4', 'Alumno 5']);
+      expect(pagina()).toBe('Página 2 de 3');
+      cambiarPagina(1);
+      expect(nombres()).toEqual(['Alumno 6', 'Alumno 7']); // la última, con los que quedan
+      cambiarPagina(-1);
+      expect(pagina()).toBe('Página 2 de 3');
+    });
+
+    it('en los extremos el botón correspondiente está deshabilitado', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      expect($('[data-click="nutricionCambiarPagina"][data-dir="-1"]').disabled).toBe(true);
+      cambiarPagina(1);
+      cambiarPagina(1);
+      expect($('[data-click="nutricionCambiarPagina"][data-dir="1"]').disabled).toBe(true);
+    });
+
+    it('con 3 alumnos o menos no hay paginación', async () => {
+      await abrir();
+      expect($('[data-pagina]')).toBeNull();
+    });
+
+    it('buscar vuelve a la primera página y encuentra alumnos de cualquier página', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      cambiarPagina(1);
+      escribir($('[data-alumno-filtro]'), 'Alumno 7');
+      expect(nombres()).toEqual(['Alumno 7']);
+      expect($('[data-pagina]')).toBeNull();
+
+      escribir($('[data-alumno-filtro]'), 'Alumno');
+      expect(pagina()).toBe('Página 1 de 3');
+    });
+
+    it('al volver de la calculadora conserva la página en la que estaba', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      cambiarPagina(1);
+      $('[data-click="nutricionAlumno"][data-id="a4"]').click();
+      $('[data-click="nutricionVolverAlumnos"]').click();
+      expect(pagina()).toBe('Página 2 de 3');
+    });
+
+    it('cuenta los alumnos que coinciden', async () => {
+      alumnos = muchos(8);
+      await abrir();
+      expect($('[data-alumnos-cantidad]').textContent).toContain('8 alumnos');
+    });
   });
 
   it('filtra por nombre o correo, sin importar mayúsculas ni tildes, sin perder el foco', async () => {
@@ -73,13 +133,6 @@ describe('alumnos: buscador', () => {
 
     escribir(campo, 'sin-nombre@');
     expect(nombres()).toEqual(['sin-nombre@ejemplo.com']);
-  });
-
-  it('el filtro encuentra alumnos que están más allá de los primeros', async () => {
-    alumnos = Array.from({ length: 12 }, (_, i) => ({ id: `a${i}`, name: `Alumno ${i}`, email: `a${i}@ej.com` }));
-    await abrir();
-    escribir($('[data-alumno-filtro]'), 'Alumno 11');
-    expect(nombres()).toEqual(['Alumno 11']);
   });
 
   it('sin coincidencias lo dice', async () => {

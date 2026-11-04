@@ -8,12 +8,12 @@ import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
 import { ACTIVIDADES, calcularObjetivos, parametrosIniciales, validarParametros } from './objetivos.js';
 import { repoNutricion } from './repoLocal.js';
 
-const ALUMNOS_VISIBLES = 8;
+const ALUMNOS_POR_PAGINA = 3; // igual que las otras listas de alumnos
 
 /**
  * @type {{
  *   content: HTMLElement, repo: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[],
- *   filtro: string, alumno: { id: string, name?: string, email?: string } | null
+ *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null
  * } | null}
  */
 let actual = null;
@@ -23,7 +23,7 @@ let actual = null;
  * @param {{ repo?: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[] }} opciones
  */
 export function mostrarAlumnosDeNutricion(content, { repo = repoNutricion, alumnos }) {
-  actual = { content, repo, alumnos, filtro: '', alumno: null };
+  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null };
   dibujar();
 }
 
@@ -57,12 +57,24 @@ function dibujarLista() {
   const coinciden = alumnos.filter(
     (a) => !buscado || plano(`${nombreDelAlumno(a)} ${a.email ?? ''}`).includes(buscado),
   );
-  const visibles = coinciden.slice(0, ALUMNOS_VISIBLES);
+  const totalPaginas = Math.max(1, Math.ceil(coinciden.length / ALUMNOS_POR_PAGINA));
+  actual.pagina = Math.min(actual.pagina, totalPaginas - 1);
+  const desde = actual.pagina * ALUMNOS_POR_PAGINA;
+  const visibles = coinciden.slice(desde, desde + ALUMNOS_POR_PAGINA);
 
   content.querySelector('[data-alumnos-cantidad]').textContent =
-    coinciden.length > visibles.length
-      ? `Mostrando ${visibles.length} de ${coinciden.length} alumnos. Escribí para buscar a los demás.`
-      : `${coinciden.length} ${coinciden.length === 1 ? 'alumno' : 'alumnos'}`;
+    `${coinciden.length} ${coinciden.length === 1 ? 'alumno' : 'alumnos'}`;
+
+  const claseNavegar =
+    'px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition';
+  const paginacion =
+    coinciden.length > ALUMNOS_POR_PAGINA
+      ? `<div class="flex items-center justify-between pt-2">
+          <button data-click="nutricionCambiarPagina" data-dir="-1" ${actual.pagina === 0 ? 'disabled' : ''} class="${claseNavegar}">Anterior</button>
+          <span data-pagina class="text-[11px] text-gray-500">Página ${actual.pagina + 1} de ${totalPaginas}</span>
+          <button data-click="nutricionCambiarPagina" data-dir="1" ${actual.pagina >= totalPaginas - 1 ? 'disabled' : ''} class="${claseNavegar}">Siguiente</button>
+        </div>`
+      : '';
 
   content.querySelector('[data-alumnos-lista]').innerHTML = visibles.length
     ? visibles
@@ -77,7 +89,7 @@ function dibujarLista() {
           <i class="fa-solid fa-chevron-right text-gray-500"></i>
         </button>`,
         )
-        .join('')
+        .join('') + paginacion
     : `<div class="bg-cyberCard p-5 rounded-xl border border-gray-800 text-center text-sm text-gray-400">${
         alumnos.length ? 'Ningún alumno coincide con la búsqueda.' : 'Todavía no hay alumnos.'
       }</div>`;
@@ -214,6 +226,12 @@ function dibujarResultados(parametros) {
 
 function buscar(texto) {
   actual.filtro = texto;
+  actual.pagina = 0; // una búsqueda nueva empieza por la primera página
+  dibujarLista();
+}
+
+function cambiarPagina(direccion) {
+  actual.pagina = Math.max(0, actual.pagina + direccion); // dibujarLista no deja pasarse de la última
   dibujarLista();
 }
 
@@ -251,6 +269,7 @@ function alternarSeccion(boton) {
 
 registrarAcciones({
   nutricionBuscarAlumno: (el) => buscar(el.value),
+  nutricionCambiarPagina: (el) => cambiarPagina(Number(el.dataset.dir)),
   nutricionAlumno: (el) => abrirAlumno(el.dataset.id),
   nutricionVolverAlumnos: () => volver(),
   nutricionCalcular: () => actualizarResultados(),
