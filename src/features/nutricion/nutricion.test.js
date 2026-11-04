@@ -107,6 +107,84 @@ describe('Nutrición del coach: biblioteca de alimentos', () => {
   });
 });
 
+describe('categorías plegables', () => {
+  const cuerpo = (id) => $(`[data-categoria="${id}"] [data-categoria-cuerpo]`);
+  const encabezado = (id) => $(`[data-categoria="${id}"] [data-click="categoriaToggle"]`);
+  const abiertas = () => $$('[data-categoria-cuerpo]').filter((c) => !c.hidden).length;
+
+  it('arranca todo plegado: se ve cada categoría con su cantidad de alimentos', async () => {
+    await abrir();
+    expect(abiertas()).toBe(0);
+    expect(encabezado('proteins').getAttribute('aria-expanded')).toBe('false');
+    expect(encabezado('proteins').textContent).toContain('Proteínas');
+    expect(encabezado('proteins').textContent).toContain('5'); // los alimentos de esa categoría
+  });
+
+  it('tocar la categoría la abre y volver a tocarla la pliega', async () => {
+    await abrir();
+    encabezado('proteins').click();
+    expect(cuerpo('proteins').hidden).toBe(false);
+    expect(encabezado('proteins').getAttribute('aria-expanded')).toBe('true');
+    expect(cuerpo('carbs').hidden).toBe(true); // las otras siguen plegadas
+
+    encabezado('proteins').click();
+    expect(cuerpo('proteins').hidden).toBe(true);
+    expect(encabezado('proteins').getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('"Abrir todo" y "Plegar todo"', async () => {
+    await abrir();
+    $('[data-click="categoriasTodas"][data-abrir="true"]').click();
+    expect(abiertas()).toBe($$('[data-categoria]').length);
+    $('[data-click="categoriasTodas"][data-abrir="false"]').click();
+    expect(abiertas()).toBe(0);
+  });
+
+  it('al buscar se abren las categorías con coincidencias, y al borrar la búsqueda vuelven a como estaban', async () => {
+    await abrir();
+    encabezado('carbs').click(); // el coach dejó abierta esta
+    escribir($('[data-nutricion-filtro]'), 'pollo');
+    expect(cuerpo('proteins').hidden).toBe(false);
+
+    escribir($('[data-nutricion-filtro]'), '');
+    expect(cuerpo('proteins').hidden).toBe(true);
+    expect(cuerpo('carbs').hidden).toBe(false);
+  });
+
+  it('lo que está abierto sigue abierto después de borrar un alimento', async () => {
+    await abrir();
+    encabezado('carbs').click();
+    fila('Papa (Cocida)').querySelector('[data-click="alimentoEliminar"]').click();
+    await responderConfirmacion(true);
+    expect(cuerpo('carbs').hidden).toBe(false);
+    expect(cuerpo('proteins').hidden).toBe(true);
+  });
+
+  it('al editar un alimento se abre su categoría para ver el formulario', async () => {
+    await abrir();
+    fila('Papa (Cocida)').querySelector('[data-click="alimentoEditar"]').click();
+    expect(cuerpo('carbs').hidden).toBe(false);
+    expect($('[data-alimento-form]')).not.toBeNull();
+  });
+
+  it('al guardar un alimento nuevo se abre su categoría, para que se vea dónde quedó', async () => {
+    await abrir();
+    $('[data-click="alimentoNuevo"]').click();
+    llenarFormulario({ nombre: 'Tofu', porcion: '100 g', categoria: 'proteins' });
+    guardar();
+    expect(cuerpo('proteins').hidden).toBe(false);
+    expect(cuerpo('carbs').hidden).toBe(true);
+  });
+
+  it('el alimento editado que pasa a otra categoría deja abierta la nueva', async () => {
+    await abrir();
+    fila('Whey Protein').querySelector('[data-click="alimentoEditar"]').click();
+    llenarFormulario({ categoria: 'mixed_pc' });
+    guardar();
+    expect(cuerpo('mixed_pc').hidden).toBe(false);
+  });
+});
+
 describe('buscar', () => {
   it('filtra mientras se escribe, sin perder el foco del campo', async () => {
     await abrir();

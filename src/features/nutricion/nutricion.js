@@ -20,7 +20,7 @@ import { repoNutricion } from './repoLocal.js';
 /**
  * @type {{
  *   content: HTMLElement, repo: ReturnType<typeof import('./repoLocal.js').crearRepoNutricionLocal>,
- *   alimentos: import('./alimentos.js').Alimento[], filtro: string,
+ *   alimentos: import('./alimentos.js').Alimento[], filtro: string, abiertas: Set<string>,
  *   formulario: { id: string | null, valores: ValoresDelFormulario, error: string | null } | null
  * } | null}
  */
@@ -35,7 +35,7 @@ export async function renderTabNutricion(content, { repo = repoNutricion } = {})
     switchTab('perfil');
     return;
   }
-  actual = { content, repo, alimentos: repo.cargarAlimentos(), filtro: '', formulario: null };
+  actual = { content, repo, alimentos: repo.cargarAlimentos(), filtro: '', abiertas: new Set(), formulario: null };
   dibujar();
 }
 
@@ -68,7 +68,13 @@ function dibujar() {
         </button>
       </div>
       <div data-nuevo>${actual.formulario?.id === null ? dibujarFormulario() : ''}</div>
-      <p data-cantidad class="text-[11px] text-gray-500"></p>
+      <div class="flex items-center justify-between gap-2">
+        <p data-cantidad class="text-[11px] text-gray-500"></p>
+        <div class="flex gap-2">
+          <button data-click="categoriasTodas" data-abrir="true" class="${claseNeutro}">Abrir todo</button>
+          <button data-click="categoriasTodas" data-abrir="false" class="${claseNeutro}">Plegar todo</button>
+        </div>
+      </div>
       <div data-lista class="space-y-4"></div>
     </div>
   `;
@@ -91,15 +97,24 @@ function dibujarLista() {
       }</div>`;
 }
 
+/** Una categoría está abierta si el coach la abrió o si se está buscando (así se ven las coincidencias). */
+const estaAbierta = (id) => actual.filtro.trim() !== '' || actual.abiertas.has(id);
+
 function dibujarGrupo({ categoria, alimentos }) {
   const { kcal, p, c, f } = categoria.macros;
+  const abierta = estaAbierta(categoria.id);
   return `
     <section data-categoria="${esc(categoria.id)}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
-      <header class="px-4 py-3 border-b border-gray-800">
-        <h3 class="font-bold text-neonRed uppercase tracking-wide text-sm">${esc(categoria.nombre)}</h3>
-        <p class="text-[11px] text-gray-400">${kcal} kcal · P ${p} · C ${c} · G ${f} por porción</p>
-      </header>
-      <div class="divide-y divide-gray-800">${alimentos.map(dibujarAlimento).join('')}</div>
+      <button data-click="categoriaToggle" data-id="${esc(categoria.id)}" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 text-left">
+        <div class="flex-1 min-w-0">
+          <h3 class="font-bold text-neonRed uppercase tracking-wide text-sm">${esc(categoria.nombre)}
+            <span class="text-gray-500 font-bold normal-case tracking-normal">(${alimentos.length})</span>
+          </h3>
+          <p class="text-[11px] text-gray-400">${kcal} kcal · P ${p} · C ${c} · G ${f} por porción</p>
+        </div>
+        <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform ${abierta ? 'rotate-180' : ''}"></i>
+      </button>
+      <div data-categoria-cuerpo ${abierta ? '' : 'hidden'} class="divide-y divide-gray-800 border-t border-gray-800">${alimentos.map(dibujarAlimento).join('')}</div>
     </section>
   `;
 }
@@ -194,9 +209,28 @@ function filtrar(texto) {
   dibujarLista();
 }
 
+/** Abre o pliega una categoría sin redibujar (se ve al instante y no se pierde nada de lo escrito). */
+function alternarCategoria(boton) {
+  const seccion = boton.closest('[data-categoria]');
+  const cuerpo = seccion.querySelector('[data-categoria-cuerpo]');
+  const abrir = cuerpo.hidden;
+  cuerpo.hidden = !abrir;
+  boton.setAttribute('aria-expanded', String(abrir));
+  seccion.querySelector('[data-chevron]').classList.toggle('rotate-180', abrir);
+  if (abrir) actual.abiertas.add(boton.dataset.id);
+  else actual.abiertas.delete(boton.dataset.id);
+}
+
+function abrirOPlegarTodo(abrir) {
+  recordarFormulario();
+  actual.abiertas = new Set(abrir ? CATEGORIAS.map((c) => c.id) : []);
+  dibujarLista();
+}
+
 function editar(id) {
   const a = actual.alimentos.find((x) => x.id === id);
   if (!a) return;
+  actual.abiertas.add(a.categoria); // para ver el formulario
   abrirFormulario(id, {
     nombre: a.nombre,
     porcion: a.porcion,
@@ -243,6 +277,7 @@ function guardar() {
   if (!persistir(nueva)) return;
   actual.formulario = null;
   actual.filtro = ''; // para que el alimento guardado se vea aunque hubiera una búsqueda
+  actual.abiertas.add(candidato.categoria); // y en su categoría abierta
   dibujar();
   toast('Alimento guardado');
 }
@@ -268,4 +303,6 @@ registrarAcciones({
     guardar();
   },
   alimentoCancelar: () => cancelar(),
+  categoriaToggle: (el) => alternarCategoria(el),
+  categoriasTodas: (el) => abrirOPlegarTodo(el.dataset.abrir === 'true'),
 });
