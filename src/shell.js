@@ -4,21 +4,31 @@ import { setPublicBooking } from './features/reservas/reservas.js';
 import { switchTab } from './router.js';
 import { state } from './state.js';
 
+// Botones de la barra inferior que solo ve el admin, en el orden en que aparecen
+const BOTONES_ADMIN = [
+  { tab: 'nutricion', icono: 'fa-utensils', texto: 'Nutrición' },
+  { tab: 'admin', icono: 'fa-shield-halved', texto: 'Admin' },
+];
+
 export function renderApp() {
   setPublicBooking(false);
   const navBar = document.querySelector('nav');
   if (navBar) navBar.style.display = 'block';
 
   const navContainer = document.querySelector('nav .max-w-lg');
-  const btnAdmin = document.getElementById('btn-admin');
-  if (state.userProfile?.role === 'admin' && !btnAdmin) {
-    navContainer.innerHTML += `
-        <button id="btn-admin" data-click="switchTab" data-tab="admin" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-            <i class="fa-solid fa-shield-halved text-lg mb-1"></i> Admin
-        </button>
-    `;
-  } else if (state.userProfile?.role !== 'admin' && btnAdmin) {
-    btnAdmin.remove();
+  const esAdmin = state.userProfile?.role === 'admin';
+  for (const { tab, icono, texto } of BOTONES_ADMIN) {
+    const boton = document.getElementById(`btn-${tab}`);
+    if (esAdmin && !boton) {
+      navContainer.insertAdjacentHTML(
+        'beforeend',
+        `<button id="btn-${tab}" data-click="switchTab" data-tab="${tab}" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+            <i class="fa-solid ${icono} text-lg mb-1"></i> ${texto}
+        </button>`,
+      );
+    } else if (!esAdmin && boton) {
+      boton.remove();
+    }
   }
   // Si ya estamos en una tab de la app, no re-navegar (evita saltos al volver a la pestaña)
   if (state.currentTab) return;
