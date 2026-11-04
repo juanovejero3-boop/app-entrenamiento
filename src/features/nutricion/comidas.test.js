@@ -7,6 +7,7 @@ import {
   agregarItem,
   agregarOpcion,
   cantidadEquivalente,
+  cantidadParaMostrar,
   compararConObjetivos,
   crearComida,
   crearItem,
@@ -254,6 +255,22 @@ describe('cantidadEquivalente (cuánto es en gramos o ml)', () => {
       expect(cantidadEquivalente(porcion, 2)).toBeNull();
     },
   );
+});
+
+describe('cantidadParaMostrar (lo que ve el alumno)', () => {
+  it.each([
+    ['100g', 2, '200 g'], // medida simple: ya hecha la cuenta
+    ['100g', 1, '100 g'],
+    ['1 Rebanada', 1, '1 Rebanada'], // con una porción, tal cual
+    ['1 Rebanada', 2, '2 × 1 Rebanada'],
+    ['1 scoop (30g)', 1.5, '1,5 × 1 scoop (30g)'],
+    ['Libre', 1, 'Libre'],
+    ['libre', 3, 'Libre'],
+    ['', 2, '2 porciones'],
+    ['', 1, '1 porción'],
+  ])('«%s» por %s es «%s»', (porcion, porciones, esperado) => {
+    expect(cantidadParaMostrar(porcion, porciones)).toBe(esperado);
+  });
 });
 
 describe('ordenadasPorHora', () => {

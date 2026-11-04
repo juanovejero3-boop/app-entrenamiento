@@ -120,6 +120,19 @@ export function cantidadEquivalente(porcion, porciones) {
   return `${String(total).replace('.', ',')} ${medida[2].toLowerCase()}`;
 }
 
+/**
+ * La cantidad de un alimento como se le muestra al alumno: «200 g» cuando es una medida simple, «Libre», o la
+ * porción tal cual si es una sola («1 Rebanada») o «2 × 1 Rebanada».
+ */
+export function cantidadParaMostrar(porcion, porciones) {
+  const medida = String(porcion ?? '').trim();
+  const equivalente = cantidadEquivalente(medida, porciones);
+  if (equivalente) return equivalente;
+  if (/^libre$/i.test(medida)) return 'Libre';
+  if (!medida) return `${String(porciones).replace('.', ',')} ${porciones === 1 ? 'porción' : 'porciones'}`;
+  return porciones === 1 ? medida : `${String(porciones).replace('.', ',')} × ${medida}`;
+}
+
 // ---------------------------------------------------------------------------
 // Macros
 // ---------------------------------------------------------------------------
