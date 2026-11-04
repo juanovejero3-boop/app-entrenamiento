@@ -33,8 +33,9 @@ export function mostrarAlumnosDeNutricion(content, { repo = repoNutricion, alumn
 // Vista
 // ---------------------------------------------------------------------------
 
+// Campos de 16 px: así el celular no hace zoom al tocarlos
 const claseInput =
-  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2 text-sm text-white outline-none focus:border-neonRed';
+  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2.5 text-base text-white outline-none focus:border-neonRed';
 
 function dibujar() {
   if (actual.alumno) dibujarFicha();
@@ -68,7 +69,7 @@ function dibujarLista() {
     `${coinciden.length} ${coinciden.length === 1 ? 'alumno' : 'alumnos'}`;
 
   const claseNavegar =
-    'px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition';
+    'min-h-10 px-4 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-30 disabled:hover:text-gray-300 disabled:hover:border-gray-700 transition';
   const paginacion =
     coinciden.length > ALUMNOS_POR_PAGINA
       ? `<div class="flex items-center justify-between pt-2">
@@ -112,7 +113,7 @@ function dibujarFicha() {
   ).join('');
   const seccion = (id, titulo, cuerpo) => `
     <section data-seccion="${id}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
-      <button type="button" data-click="nutricionSeccion" aria-expanded="true" class="w-full flex items-center gap-3 px-4 py-3 text-left">
+      <button type="button" data-click="nutricionSeccion" aria-expanded="true" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
         <h3 class="flex-1 font-bold text-neonRed uppercase tracking-wide text-sm">${titulo}</h3>
         <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform rotate-180"></i>
       </button>
@@ -122,7 +123,7 @@ function dibujarFicha() {
   content.innerHTML = `
     <div class="space-y-4">
       <div class="flex items-center gap-3">
-        <button data-click="nutricionVolverAlumnos" class="text-gray-400 hover:text-neonRed" title="Volver a los alumnos">
+        <button data-click="nutricionVolverAlumnos" class="w-10 h-10 shrink-0 inline-flex items-center justify-center text-gray-400 hover:text-neonRed" title="Volver a los alumnos" aria-label="Volver a los alumnos">
           <i class="fa-solid fa-arrow-left"></i>
         </button>
         <div class="flex-1 min-w-0">
@@ -133,7 +134,7 @@ function dibujarFicha() {
       ${seccion(
         'parametros',
         'Parámetros',
-        `<form data-plan-form data-submit="nutricionEnviar" class="grid grid-cols-2 gap-3">
+        `<form data-plan-form data-submit="nutricionEnviar" class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <label class="block">
             <span class="text-[10px] text-gray-400 uppercase font-bold">Sexo</span>
             <select name="sexo" data-input="nutricionCalcular" data-change="nutricionGuardar" class="${claseInput}">

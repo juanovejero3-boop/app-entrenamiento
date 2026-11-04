@@ -35,12 +35,14 @@ export function mostrarBibliotecaDeAlimentos(content, { repo = repoNutricion } =
 // Vista
 // ---------------------------------------------------------------------------
 
+// Los botones miden al menos 40 px de alto para tocarlos bien con el dedo, y los campos usan 16 px para que el
+// celular no haga zoom al tocarlos
 const claseBoton =
-  'text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border transition whitespace-nowrap';
+  'min-h-10 min-w-10 inline-flex items-center justify-center text-[11px] font-bold uppercase tracking-wider px-3 rounded-lg border transition whitespace-nowrap';
 const claseNeutro = `${claseBoton} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed`;
 const clasePeligro = `${claseBoton} border-red-900 text-red-400 hover:bg-red-950`;
 const claseInput =
-  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2 text-sm text-white outline-none focus:border-neonRed';
+  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2.5 text-base text-white outline-none focus:border-neonRed';
 
 function dibujar() {
   const { content, filtro } = actual;
@@ -90,7 +92,7 @@ function dibujarGrupo({ categoria, alimentos }) {
   const abierta = estaAbierta(categoria.id);
   return `
     <section data-categoria="${esc(categoria.id)}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
-      <button data-click="categoriaToggle" data-id="${esc(categoria.id)}" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 text-left">
+      <button data-click="categoriaToggle" data-id="${esc(categoria.id)}" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
         <div class="flex-1 min-w-0">
           <h3 class="font-bold text-neonRed uppercase tracking-wide text-sm">${esc(categoria.nombre)}
             <span class="text-gray-500 font-bold normal-case tracking-normal">(${alimentos.length})</span>
@@ -131,7 +133,7 @@ function dibujarFormulario() {
     (c) => `<option value="${esc(c.id)}" ${c.id === valores.categoria ? 'selected' : ''}>${esc(c.nombre)}</option>`,
   ).join('');
   const casilla = (nombre, texto, marcada) =>
-    `<label class="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" name="${nombre}" ${marcada ? 'checked' : ''}> ${texto}</label>`;
+    `<label class="flex items-center gap-2 min-h-10 text-sm text-gray-300"><input type="checkbox" name="${nombre}" ${marcada ? 'checked' : ''} class="w-5 h-5 accent-neonRed"> ${texto}</label>`;
   return `
     <form data-alimento-form data-submit="alimentoGuardar" class="bg-cyberCard p-4 rounded-xl border border-dashed border-neonRed/60 space-y-3">
       <p class="text-[10px] text-gray-400 uppercase font-bold">${id ? 'Editar alimento' : 'Nuevo alimento'}</p>

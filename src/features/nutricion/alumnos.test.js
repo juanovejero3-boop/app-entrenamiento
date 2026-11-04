@@ -330,11 +330,11 @@ describe('alumnos: comidas del plan', () => {
   };
   const nuevaComida = () => $('[data-click="comidaNueva"]').click();
   const consumo = (clave) => $(`[data-consumo="${clave}"]`)?.textContent.replace(/\s+/g, ' ').trim();
+  /** Busca «pollo», lo agrega con un toque y le pone las porciones indicadas. */
   function agregarPollo(porciones = 1) {
-    const pollo = repo.cargarAlimentos().find((a) => a.nombre === 'Pechuga de Pollo');
-    $('[data-opcion] [data-agregar-alimento]').value = pollo.id;
-    $('[data-opcion] [data-agregar-porciones]').value = String(porciones);
-    $('[data-opcion] [data-click="itemAgregar"]').click();
+    escribir($('[data-opcion] [data-buscar-alimento]'), 'pollo');
+    $('[data-opcion] [data-click="alimentoElegir"]').click();
+    if (porciones !== 1) cambiar($('[data-opcion] [data-change="itemPorciones"]'), String(porciones));
   }
 
   it('la ficha tiene las secciones Comidas y Línea de tiempo, plegables', async () => {
@@ -399,7 +399,8 @@ describe('alumnos: comidas del plan', () => {
     ]);
     await abrirAlumno(SIMON);
     nuevaComida();
-    expect($('[data-agregar-alimento]').textContent).toContain('Aceite de coco');
+    escribir($('[data-buscar-alimento]'), 'coco');
+    expect($('[data-click="alimentoElegir"]').textContent).toContain('Aceite de coco');
   });
 
   it('cada alumno tiene sus propias comidas', async () => {
@@ -424,9 +425,8 @@ describe('alumnos: comidas del plan', () => {
     await abrirAlumno(SIMON);
     nuevaComida();
     $('[data-click="comidaToggle"]').click();
-    const hora = $('[data-comida-hora]');
-    hora.value = '09:30';
-    hora.dispatchEvent(new Event('change', { bubbles: true }));
+    cambiar($('[data-hora-h]'), '09');
+    cambiar($('[data-hora-m]'), '30');
     expect($('[data-seccion="linea"]').textContent).toContain('09:30');
   });
 });

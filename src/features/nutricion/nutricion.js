@@ -52,7 +52,7 @@ export async function renderTabNutricion(content, { repo = repoNutricion, subpes
       <div role="tablist" class="bg-cyberCard p-1 rounded-xl border border-gray-800 flex">
         ${SUBPESTANAS.map(
           (s) =>
-            `<button role="tab" data-click="nutricionSubtab" data-subtab="${s.id}" class="flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition"></button>`,
+            `<button role="tab" data-click="nutricionSubtab" data-subtab="${s.id}" class="flex-1 min-h-11 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition"></button>`,
         ).join('')}
       </div>
       <div data-nutricion-contenido></div>
@@ -68,7 +68,7 @@ function mostrarSubpestana() {
     const s = SUBPESTANAS.find((x) => x.id === boton.dataset.subtab);
     const activa = s.id === subpestana;
     boton.setAttribute('aria-selected', String(activa));
-    boton.className = `flex-1 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${activa ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}`;
+    boton.className = `flex-1 min-h-11 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${activa ? 'bg-neonRed text-white' : 'text-gray-400 hover:text-neonRed'}`;
     boton.textContent = s.texto;
   }
   SUBPESTANAS.find((s) => s.id === subpestana).mostrar(content.querySelector('[data-nutricion-contenido]'), repo);

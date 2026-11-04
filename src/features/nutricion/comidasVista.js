@@ -1,16 +1,20 @@
 // Armado de las comidas de un alumno (la vista del coach): un tablero con lo que suma el plan contra los
 // objetivos del alumno, las comidas con sus opciones y alimentos, y la línea de tiempo del día.
+// Pensada primero para el celular: botones grandes, hora de 24 horas con selectores, y alimentos que se buscan
+// escribiendo y se agregan con un toque.
 // El que la usa (alumnos.js) es quien guarda: cada cambio se le pasa a `alCambiar`, y si no se pudo guardar
 // (devuelve false) la pantalla queda como estaba.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
-import { CATEGORIAS } from './alimentos.js';
+import { plano } from '../../lib/texto.js';
+import { categoriaDe } from './alimentos.js';
 import {
   actualizarComida,
   actualizarPorciones,
   agregarComida,
   agregarItem,
   agregarOpcion,
+  cantidadEquivalente,
   compararConObjetivos,
   crearComida,
   macrosDeOpcion,
@@ -54,27 +58,36 @@ export function actualizarObjetivosDeComidas(objetivos) {
 // Vista
 // ---------------------------------------------------------------------------
 
+// Los botones miden al menos 40 px de alto para tocarlos bien con el dedo
 const claseBoton =
-  'text-[10px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border transition whitespace-nowrap';
+  'min-h-10 inline-flex items-center justify-center text-[11px] font-bold uppercase tracking-wider px-3 rounded-lg border transition whitespace-nowrap';
 const claseNeutro = `${claseBoton} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed`;
 const clasePeligro = `${claseBoton} border-red-900 text-red-400 hover:bg-red-950`;
+const claseIcono =
+  'w-10 h-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-gray-700 text-gray-300 hover:border-neonRed hover:text-neonRed disabled:opacity-30 disabled:hover:border-gray-700 disabled:hover:text-gray-300 transition';
+// 16 px en los campos: así el celular no hace zoom al tocarlos
 const claseInput =
-  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2 text-sm text-white outline-none focus:border-neonRed';
+  'w-full bg-cyberDark border border-gray-700 rounded-lg p-2.5 text-base text-white outline-none focus:border-neonRed';
+
+const MAX_RESULTADOS = 8;
+const MAX_PORCIONES = 50;
+const PASO_PORCIONES = 0.5;
 
 const redondeados = (m) => ({ kcal: Math.round(m.kcal), p: Math.round(m.p), c: Math.round(m.c), f: Math.round(m.f) });
 const resumen = (m) => {
   const r = redondeados(m);
   return `${r.kcal} kcal · P ${r.p} · C ${r.c} · G ${r.f}`;
 };
+const coma = (numero) => String(numero).replace('.', ',');
 
-function dibujar() {
+function dibujar({ enfocar = null } = {}) {
   const { contenedor, linea, comidas } = vista;
   contenedor.innerHTML = `
     <div class="space-y-4">
       <div data-consumo-panel>${dibujarConsumo()}</div>
       <div class="flex items-center justify-between gap-2">
         <p class="text-[11px] text-gray-500">${comidas.length} ${comidas.length === 1 ? 'comida' : 'comidas'}</p>
-        <button data-click="comidaNueva" class="neon-glow-button text-white font-black text-xs rounded-lg uppercase tracking-wider px-3 py-2">
+        <button data-click="comidaNueva" class="${claseBoton} border-transparent neon-glow-button text-white font-black">
           <i class="fa-solid fa-plus mr-1"></i>Agregar comida
         </button>
       </div>
@@ -85,7 +98,10 @@ function dibujar() {
       }
     </div>
   `;
+  // Los selects de la hora se fijan por código (en vez de con `selected` en el HTML) para que siempre queden en el valor guardado
+  for (const comida of comidas) fijarHora(comida);
   linea.innerHTML = dibujarLinea();
+  if (enfocar) contenedor.querySelector(`[data-opcion="${enfocar}"] [data-buscar-alimento]`)?.focus();
 }
 
 const COLORES = { bajo: 'bg-amber-500', ok: 'bg-emerald-500', alto: 'bg-red-500' };
@@ -124,10 +140,12 @@ function dibujarConsumo() {
   return `
     <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
       <p class="text-[10px] text-gray-400 uppercase font-bold">Lo que suma el plan contra el objetivo</p>
-      ${fila('kcal', 'Calorías', 'kcal')}
-      ${fila('p', 'Proteína', 'g')}
-      ${fila('c', 'Carbohidratos', 'g')}
-      ${fila('f', 'Grasas', 'g')}
+      <div class="grid gap-3 md:grid-cols-2">
+        ${fila('kcal', 'Calorías', 'kcal')}
+        ${fila('p', 'Proteína', 'g')}
+        ${fila('c', 'Carbohidratos', 'g')}
+        ${fila('f', 'Grasas', 'g')}
+      </div>
     </div>`;
 }
 
@@ -137,7 +155,7 @@ function dibujarComida(comida) {
   const primera = comida.opciones[0];
   return `
     <section data-comida="${id}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
-      <button data-click="comidaToggle" data-id="${id}" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 text-left">
+      <button data-click="comidaToggle" data-id="${id}" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
         <div class="flex-1 min-w-0">
           <h4 class="font-bold text-white text-sm truncate">${esc(comida.nombre)}${comida.hora ? ` <span class="text-neonRed font-bold">· ${esc(comida.hora)}</span>` : ''}</h4>
           <p class="text-[11px] text-gray-400">${resumen(macrosDeOpcion(primera))}</p>
@@ -145,15 +163,15 @@ function dibujarComida(comida) {
         <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform ${abierta ? 'rotate-180' : ''}"></i>
       </button>
       <div data-comida-cuerpo ${abierta ? '' : 'hidden'} class="p-4 space-y-4 border-t border-gray-800">
-        <div class="grid grid-cols-3 gap-3">
-          <label class="block col-span-2">
-            <span class="text-[10px] text-gray-400 uppercase font-bold">Nombre</span>
-            <input data-comida-nombre data-change="comidaEditar" data-campo="nombre" data-id="${id}" maxlength="60" value="${esc(comida.nombre)}" class="${claseInput}">
-          </label>
+        <div class="grid gap-3 sm:grid-cols-2">
           <label class="block">
-            <span class="text-[10px] text-gray-400 uppercase font-bold">Hora</span>
-            <input data-comida-hora data-change="comidaEditar" data-campo="hora" data-id="${id}" type="time" value="${esc(comida.hora)}" class="${claseInput}">
+            <span class="text-[10px] text-gray-400 uppercase font-bold">Nombre</span>
+            <input data-comida-nombre data-change="comidaEditar" data-id="${id}" maxlength="60" value="${esc(comida.nombre)}" class="${claseInput}">
           </label>
+          <div>
+            <span class="text-[10px] text-gray-400 uppercase font-bold">Hora (24 h)</span>
+            ${dibujarHora(comida)}
+          </div>
         </div>
         ${comida.opciones.length > 1 ? '<p class="text-[11px] text-gray-500">Las opciones son alternativas entre sí: el total del día cuenta la primera opción.</p>' : ''}
         ${comida.opciones.map((opcion, i) => dibujarOpcion(comida, opcion, i)).join('')}
@@ -165,55 +183,117 @@ function dibujarComida(comida) {
     </section>`;
 }
 
-/** El selector de alimentos de la biblioteca, agrupados por categoría. */
-function dibujarSelector() {
-  const grupos = CATEGORIAS.map((categoria) => {
-    const alimentos = vista.alimentos
-      .filter((a) => a.categoria === categoria.id)
-      .sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
-    return alimentos.length
-      ? `<optgroup label="${esc(categoria.nombre)}">${alimentos.map((a) => `<option value="${esc(a.id)}">${esc(a.nombre)} → ${esc(a.porcion)}</option>`).join('')}</optgroup>`
-      : '';
-  }).join('');
-  return `<select data-agregar-alimento ${vista.alimentos.length ? '' : 'disabled'} class="${claseInput}">
-      <option value="">${vista.alimentos.length ? 'Elegí un alimento…' : 'No hay alimentos'}</option>${grupos}
-    </select>`;
+const dosDigitos = (n) => String(n).padStart(2, '0');
+
+/** La hora en formato de 24 horas: dos selectores (hora de 00 a 23 y minutos de a 5), sin AM ni PM. */
+function dibujarHora(comida) {
+  const id = esc(comida.id);
+  const minuto = comida.hora.split(':')[1];
+  const minutos = Array.from({ length: 12 }, (_, i) => dosDigitos(i * 5));
+  if (minuto && !minutos.includes(minuto)) minutos.push(minuto); // una hora que ya estaba guardada con otros minutos
+  minutos.sort();
+  const opciones = (valores) => valores.map((v) => `<option value="${v}">${v}</option>`).join('');
+  return `
+    <div data-comida-hora class="flex items-center gap-2">
+      <select data-hora-h data-change="comidaHora" data-id="${id}" aria-label="Hora" class="${claseInput}">
+        <option value="">--</option>${opciones(Array.from({ length: 24 }, (_, i) => dosDigitos(i)))}
+      </select>
+      <span class="font-bold text-gray-400">:</span>
+      <select data-hora-m data-change="comidaHora" data-id="${id}" aria-label="Minutos" class="${claseInput}">${opciones(minutos)}</select>
+    </div>`;
+}
+
+function fijarHora(comida) {
+  const grupo = vista.contenedor.querySelector(`[data-comida="${CSS.escape(comida.id)}"] [data-comida-hora]`);
+  if (!grupo) return;
+  const [h = '', m = '00'] = comida.hora ? comida.hora.split(':') : [];
+  grupo.querySelector('[data-hora-h]').value = h;
+  grupo.querySelector('[data-hora-m]').value = m;
+  grupo.querySelector('[data-hora-m]').disabled = !h; // sin hora no hay minutos que elegir
+}
+
+/** Alimentos de la biblioteca que coinciden con lo escrito (nombre, porción o categoría), sin importar tildes. */
+function buscarAlimentos(texto) {
+  const buscado = plano(texto);
+  if (!buscado) return [];
+  return vista.alimentos
+    .filter((a) => plano(`${a.nombre} ${a.porcion} ${categoriaDe(a.categoria)?.nombre ?? ''}`).includes(buscado))
+    .sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
+}
+
+/** El buscador de alimentos de una opción: se escribe, aparecen los resultados y con un toque se agrega. */
+function dibujarBuscador(comida, opcion) {
+  const id = esc(comida.id);
+  const hayAlimentos = vista.alimentos.length > 0;
+  return `
+    <form data-buscador data-submit="alimentoEnter" data-id="${id}" data-opcion-id="${esc(opcion.id)}" autocomplete="off" class="space-y-2">
+      <div class="relative">
+        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
+        <input data-buscar-alimento data-input="alimentoBuscar" type="search" enterkeyhint="done" placeholder="Buscar alimento para agregar…" ${hayAlimentos ? '' : 'disabled'} class="${claseInput} pl-9">
+      </div>
+      <div data-resultados class="space-y-1.5"></div>
+      ${hayAlimentos ? '' : '<p class="text-[11px] text-amber-300">La biblioteca de alimentos está vacía: cargá alimentos en la subpestaña Alimentos.</p>'}
+    </form>`;
+}
+
+function dibujarResultados(buscador, texto) {
+  const coinciden = buscarAlimentos(texto);
+  const visibles = coinciden.slice(0, MAX_RESULTADOS);
+  const { id, opcionId } = buscador.dataset;
+  buscador.querySelector('[data-resultados]').innerHTML = !texto.trim()
+    ? ''
+    : coinciden.length
+      ? visibles
+          .map(
+            (a) => `
+      <button type="button" data-click="alimentoElegir" data-id="${esc(id)}" data-opcion-id="${esc(opcionId)}" data-alimento-id="${esc(a.id)}" class="w-full min-h-12 flex items-center gap-3 text-left px-3 py-2 bg-cyberDark rounded-lg border border-gray-800 hover:border-neonRed transition">
+        <div class="flex-1 min-w-0">
+          <p data-resultado-nombre class="text-sm font-bold text-white break-words">${esc(a.nombre)}</p>
+          <p class="text-[11px] text-gray-400">${esc(a.porcion)} · ${esc(categoriaDe(a.categoria)?.nombre ?? '')}</p>
+        </div>
+        <i class="fa-solid fa-plus text-neonRed"></i>
+      </button>`,
+          )
+          .join('') +
+        (coinciden.length > visibles.length
+          ? `<p data-mas-resultados class="text-[11px] text-gray-500 px-1">Hay ${coinciden.length - visibles.length} más: seguí escribiendo para encontrar el que buscás.</p>`
+          : '')
+      : `<p class="text-xs text-gray-400 px-1">No hay ningún alimento que coincida con «${esc(texto.trim())}».</p>`;
+}
+
+function dibujarItem(comida, opcion, item) {
+  const id = esc(comida.id);
+  const datos = `data-id="${id}" data-opcion-id="${esc(opcion.id)}" data-item-id="${esc(item.id)}"`;
+  const equivalencia = cantidadEquivalente(item.porcion, item.porciones);
+  return `
+    <div data-item="${esc(item.id)}" class="space-y-1.5 py-1">
+      <div class="flex items-center gap-2">
+        <p class="flex-1 min-w-0 text-sm font-bold text-white break-words">${esc(item.nombre)}</p>
+        <button data-click="itemQuitar" ${datos} class="${claseIcono}" title="Quitar" aria-label="Quitar ${esc(item.nombre)}"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="flex items-center gap-2">
+        <button data-click="itemMenos" ${datos} ${item.porciones <= PASO_PORCIONES ? 'disabled' : ''} class="${claseIcono}" aria-label="Menos porciones"><i class="fa-solid fa-minus"></i></button>
+        <input type="number" inputmode="decimal" min="0" max="${MAX_PORCIONES}" step="${PASO_PORCIONES}" value="${item.porciones}" data-change="itemPorciones" ${datos} aria-label="Porciones" class="w-16 h-10 bg-cyberDark border border-gray-700 rounded-lg text-base text-white text-center outline-none focus:border-neonRed">
+        <button data-click="itemMas" ${datos} ${item.porciones >= MAX_PORCIONES ? 'disabled' : ''} class="${claseIcono}" aria-label="Más porciones"><i class="fa-solid fa-plus"></i></button>
+        <span class="text-xs text-gray-300">${item.porciones === 1 ? 'porción' : 'porciones'}</span>
+      </div>
+      <p class="text-[11px] text-gray-400">${equivalencia ? `${coma(item.porciones)} ${item.porciones === 1 ? 'porción' : 'porciones'} = ${esc(equivalencia)}` : `${coma(item.porciones)} × ${esc(item.porcion)}`}</p>
+    </div>`;
 }
 
 function dibujarOpcion(comida, opcion, indice) {
   const id = esc(comida.id);
-  const opcionId = esc(opcion.id);
-  const items = opcion.items
-    .map(
-      (item) => `
-      <div data-item="${esc(item.id)}" class="flex items-center gap-2">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm text-white break-words">${esc(item.nombre)}</p>
-          <p class="text-[11px] text-gray-400">${esc(item.porcion)}</p>
-        </div>
-        <input type="number" min="0" max="50" step="0.5" value="${item.porciones}" data-change="itemPorciones" data-id="${id}" data-opcion-id="${opcionId}" data-item-id="${esc(item.id)}" aria-label="Porciones" class="w-16 bg-cyberDark border border-gray-700 rounded-lg p-1.5 text-sm text-white text-center outline-none focus:border-neonRed">
-        <button data-click="itemQuitar" data-id="${id}" data-opcion-id="${opcionId}" data-item-id="${esc(item.id)}" class="text-gray-500 hover:text-red-400 px-1" title="Quitar"><i class="fa-solid fa-xmark"></i></button>
-      </div>`,
-    )
-    .join('');
   return `
-    <div data-opcion="${opcionId}" class="bg-cyberDark/60 rounded-lg border border-gray-800 p-3 space-y-3">
+    <div data-opcion="${esc(opcion.id)}" class="bg-cyberDark/60 rounded-lg border border-gray-800 p-3 space-y-3">
       <div class="flex items-center justify-between gap-2">
         <div>
           <p class="text-[10px] text-gray-400 uppercase font-bold">Opción ${indice + 1}</p>
           <p data-opcion-macros class="text-[11px] text-gray-300">${resumen(macrosDeOpcion(opcion))}</p>
         </div>
-        ${comida.opciones.length > 1 ? `<button data-click="opcionEliminar" data-id="${id}" data-opcion-id="${opcionId}" class="${clasePeligro}" title="Eliminar opción"><i class="fa-solid fa-trash"></i></button>` : ''}
+        ${comida.opciones.length > 1 ? `<button data-click="opcionEliminar" data-id="${id}" data-opcion-id="${esc(opcion.id)}" class="${claseIcono} border-red-900 text-red-400" title="Eliminar opción" aria-label="Eliminar opción"><i class="fa-solid fa-trash"></i></button>` : ''}
       </div>
-      ${items || '<p class="text-[11px] text-gray-500">Sin alimentos todavía.</p>'}
-      <div class="space-y-2">
-        ${dibujarSelector()}
-        <div class="flex gap-2">
-          <input data-agregar-porciones type="number" min="0.5" max="50" step="0.5" value="1" aria-label="Porciones a agregar" class="w-16 bg-cyberDark border border-gray-700 rounded-lg p-1.5 text-sm text-white text-center outline-none focus:border-neonRed">
-          <button data-click="itemAgregar" data-id="${id}" data-opcion-id="${opcionId}" class="${claseNeutro} flex-1" ${vista.alimentos.length ? '' : 'disabled'}>Agregar</button>
-        </div>
-      </div>
-      ${vista.alimentos.length ? '' : '<p class="text-[11px] text-amber-300">La biblioteca de alimentos está vacía: cargá alimentos en la subpestaña Alimentos.</p>'}
+      ${opcion.items.map((item) => dibujarItem(comida, opcion, item)).join('') || '<p class="text-[11px] text-gray-500">Sin alimentos todavía.</p>'}
+      ${dibujarBuscador(comida, opcion)}
     </div>`;
 }
 
@@ -253,12 +333,12 @@ function dibujarLinea() {
 // Acciones
 // ---------------------------------------------------------------------------
 
-/** Pide guardar las comidas nuevas; solo si se pudo, la pantalla las muestra. */
-function aplicar(nuevas, { abrir = null } = {}) {
+/** Pide guardar las comidas nuevas; solo si se pudo, la pantalla las muestra. `enfocar`: opción cuyo buscador recupera el foco. */
+function aplicar(nuevas, { abrir = null, enfocar = null } = {}) {
   if (vista.alCambiar(nuevas) === false) return false;
   vista.comidas = nuevas;
   if (abrir) vista.abiertas.add(abrir);
-  dibujar();
+  dibujar({ enfocar });
   return true;
 }
 
@@ -278,8 +358,11 @@ function nuevaComida() {
   aplicar(agregarComida(vista.comidas, comida), { abrir: comida.id });
 }
 
-function editarComida(el) {
-  aplicar(actualizarComida(vista.comidas, el.dataset.id, { [el.dataset.campo]: el.value }));
+function cambiarHora(el) {
+  const grupo = el.closest('[data-comida-hora]');
+  const h = grupo.querySelector('[data-hora-h]').value;
+  const m = grupo.querySelector('[data-hora-m]').value || '00';
+  aplicar(actualizarComida(vista.comidas, el.dataset.id, { hora: h ? `${h}:${m}` : '' }));
 }
 
 async function eliminarComida(id) {
@@ -293,28 +376,60 @@ async function eliminarComida(id) {
 async function eliminarOpcion(comidaId, opcionId) {
   const opcion = vista.comidas.find((c) => c.id === comidaId)?.opciones.find((o) => o.id === opcionId);
   if (!opcion) return;
-  if (opcion.items.length && !(await window.confirm('¿Eliminar esta opción con sus alimentos? No se puede deshacer.')))
+  if (
+    opcion.items.length &&
+    !(await window.confirm('¿Eliminar esta opción con sus alimentos? No se puede deshacer.'))
+  ) {
     return;
+  }
   aplicar(quitarOpcion(vista.comidas, comidaId, opcionId));
 }
 
-function agregarAlimentoDesde(boton) {
-  const opcionEl = boton.closest('[data-opcion]');
-  const alimento = vista.alimentos.find((a) => a.id === opcionEl.querySelector('[data-agregar-alimento]').value);
-  const porciones = Number(opcionEl.querySelector('[data-agregar-porciones]').value);
-  if (!alimento || !(porciones > 0)) return;
-  aplicar(agregarItem(vista.comidas, boton.dataset.id, boton.dataset.opcionId, alimento, porciones));
+/** Agrega un alimento a una opción con 1 porción (después se ajusta con − y +). */
+function agregarAlimentoElegido(comidaId, opcionId, alimento) {
+  aplicar(agregarItem(vista.comidas, comidaId, opcionId, alimento, 1), { enfocar: opcionId });
+}
+
+/** Enter en el buscador agrega el primer resultado. */
+function agregarPrimerResultado(buscador, evento) {
+  evento.preventDefault();
+  const [primero] = buscarAlimentos(buscador.querySelector('[data-buscar-alimento]').value);
+  if (primero) agregarAlimentoElegido(buscador.dataset.id, buscador.dataset.opcionId, primero);
+}
+
+const itemDe = (el) =>
+  vista.comidas
+    .find((c) => c.id === el.dataset.id)
+    ?.opciones.find((o) => o.id === el.dataset.opcionId)
+    ?.items.find((i) => i.id === el.dataset.itemId);
+
+/** Suma o resta media porción, sin pasarse de los límites. */
+function moverPorciones(el, paso) {
+  const item = itemDe(el);
+  if (!item) return;
+  const nuevas = Math.min(MAX_PORCIONES, Math.max(PASO_PORCIONES, item.porciones + paso));
+  aplicar(actualizarPorciones(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId, nuevas));
 }
 
 registrarAcciones({
   comidaNueva: () => nuevaComida(),
   comidaToggle: (el) => alternarComida(el),
-  comidaEditar: (el) => editarComida(el),
+  comidaEditar: (el) => aplicar(actualizarComida(vista.comidas, el.dataset.id, { nombre: el.value })),
+  comidaHora: (el) => cambiarHora(el),
   comidaEliminar: (el) => eliminarComida(el.dataset.id),
   opcionNueva: (el) => aplicar(agregarOpcion(vista.comidas, el.dataset.id)),
   opcionEliminar: (el) => eliminarOpcion(el.dataset.id, el.dataset.opcionId),
-  itemAgregar: (el) => agregarAlimentoDesde(el),
+  alimentoBuscar: (el) => dibujarResultados(el.closest('[data-buscador]'), el.value),
+  alimentoElegir: (el) =>
+    agregarAlimentoElegido(
+      el.dataset.id,
+      el.dataset.opcionId,
+      vista.alimentos.find((a) => a.id === el.dataset.alimentoId),
+    ),
+  alimentoEnter: (el, e) => agregarPrimerResultado(el, e),
   itemPorciones: (el) =>
     aplicar(actualizarPorciones(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId, el.value)),
+  itemMas: (el) => moverPorciones(el, PASO_PORCIONES),
+  itemMenos: (el) => moverPorciones(el, -PASO_PORCIONES),
   itemQuitar: (el) => aplicar(quitarItem(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId)),
 });

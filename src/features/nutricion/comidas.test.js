@@ -6,6 +6,7 @@ import {
   agregarComida,
   agregarItem,
   agregarOpcion,
+  cantidadEquivalente,
   compararConObjetivos,
   crearComida,
   crearItem,
@@ -233,6 +234,26 @@ describe('compararConObjetivos', () => {
     expect(r.c.pct).toBeNull();
     expect(r.c.estado).toBe('ok'); // sin objetivo no hay desvío
   });
+});
+
+describe('cantidadEquivalente (cuánto es en gramos o ml)', () => {
+  it.each([
+    ['100g', 2, '200 g'],
+    ['120g', 1.5, '180 g'],
+    ['200ml', 0.5, '100 ml'],
+    ['10ml', 3, '30 ml'],
+    ['75g', 0.5, '37,5 g'],
+    ['100 g', 1, '100 g'],
+  ])('«%s» por %s porciones es %s', (porcion, porciones, esperado) => {
+    expect(cantidadEquivalente(porcion, porciones)).toBe(esperado);
+  });
+
+  it.each(['1 scoop (30g)', '1 Rebanada', '2 unidades', 'Libre', '', '1 taza'])(
+    'si la porción no es una medida simple («%s») no inventa una equivalencia',
+    (porcion) => {
+      expect(cantidadEquivalente(porcion, 2)).toBeNull();
+    },
+  );
 });
 
 describe('ordenadasPorHora', () => {

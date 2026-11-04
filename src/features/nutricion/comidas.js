@@ -108,6 +108,18 @@ export const quitarItem = (comidas, comidaId, opcionId, itemId) =>
 export const ordenadasPorHora = (comidas) =>
   [...comidas].sort((a, b) => (a.hora || '99:99').localeCompare(b.hora || '99:99'));
 
+/**
+ * Cuánto es una cantidad de porciones en gramos o mililitros («100g» × 2 = «200 g»), para que se entienda qué
+ * significa el número. Solo para medidas simples; con otras («1 Rebanada», «1 scoop (30g)») devuelve null.
+ * @returns {string | null}
+ */
+export function cantidadEquivalente(porcion, porciones) {
+  const medida = /^(\d+(?:[.,]\d+)?)\s*(g|ml)$/i.exec(String(porcion).trim());
+  if (!medida) return null;
+  const total = Math.round(Number(medida[1].replace(',', '.')) * porciones * 10) / 10;
+  return `${String(total).replace('.', ',')} ${medida[2].toLowerCase()}`;
+}
+
 // ---------------------------------------------------------------------------
 // Macros
 // ---------------------------------------------------------------------------
