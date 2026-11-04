@@ -322,6 +322,115 @@ describe('alumnos: se guarda en el navegador', () => {
   });
 });
 
+describe('alumnos: comidas del plan', () => {
+  const completar = () => {
+    escribir(form().edad, '28');
+    escribir(form().peso, '75');
+    escribir(form().altura, '175');
+  };
+  const nuevaComida = () => $('[data-click="comidaNueva"]').click();
+  const consumo = (clave) => $(`[data-consumo="${clave}"]`)?.textContent.replace(/\s+/g, ' ').trim();
+  function agregarPollo(porciones = 1) {
+    const pollo = repo.cargarAlimentos().find((a) => a.nombre === 'Pechuga de Pollo');
+    $('[data-opcion] [data-agregar-alimento]').value = pollo.id;
+    $('[data-opcion] [data-agregar-porciones]').value = String(porciones);
+    $('[data-opcion] [data-click="itemAgregar"]').click();
+  }
+
+  it('la ficha tiene las secciones Comidas y Línea de tiempo, plegables', async () => {
+    await abrirAlumno(SIMON);
+    expect($('[data-seccion="comidas"] [data-click="nutricionSeccion"]')).not.toBeNull();
+    expect($('[data-seccion="linea"] [data-click="nutricionSeccion"]')).not.toBeNull();
+    $('[data-seccion="comidas"] [data-click="nutricionSeccion"]').click();
+    expect($('[data-seccion="comidas"] [data-seccion-cuerpo]').hidden).toBe(true);
+  });
+
+  it('el tablero usa los objetivos que calcula la fórmula: se actualiza mientras se completan los parámetros', async () => {
+    await abrirAlumno(SIMON);
+    expect(content.textContent).toContain('Completá los parámetros del alumno');
+    completar();
+    expect(consumo('kcal')).toContain('0 / 2649');
+    expect(consumo('p')).toContain('0 / 165');
+
+    escribir(form().ajuste, '85');
+    expect(consumo('kcal')).toContain('0 / 2251');
+
+    escribir(form().edad, ''); // vuelve a faltar un dato
+    expect($('[data-consumo]')).toBeNull();
+  });
+
+  it('las comidas se guardan en el plan del alumno y vuelven al reabrirlo', async () => {
+    await abrirAlumno(SIMON);
+    completar();
+    nuevaComida();
+    agregarPollo(2);
+    expect(consumo('kcal')).toContain('240 / 2649');
+
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    expect($('[data-comida]').textContent).toContain('Comida 1');
+    expect(consumo('kcal')).toContain('240 / 2649');
+    expect(planGuardado(SIMON.id).comidas[0].opciones[0].items[0]).toMatchObject({
+      nombre: 'Pechuga de Pollo',
+      porciones: 2,
+    });
+  });
+
+  it('guardar las comidas no pierde los parámetros, y guardar los parámetros no pierde las comidas', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(form().edad, '28');
+    nuevaComida();
+    expect(planGuardado(SIMON.id).parametros.edad).toBe('28');
+
+    cambiar(form().peso, '75');
+    expect(planGuardado(SIMON.id).comidas).toHaveLength(1);
+  });
+
+  it('con solo una comida cargada el alumno ya figura con plan', async () => {
+    await abrirAlumno(SIMON);
+    nuevaComida();
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    expect($(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).textContent).toContain('Con plan');
+  });
+
+  it('el selector trae los alimentos de la biblioteca del coach', async () => {
+    repo.guardarAlimentos([
+      { id: 'x1', categoria: 'fats', nombre: 'Aceite de coco', porcion: '10 ml', gluten: false, lacteo: false },
+    ]);
+    await abrirAlumno(SIMON);
+    nuevaComida();
+    expect($('[data-agregar-alimento]').textContent).toContain('Aceite de coco');
+  });
+
+  it('cada alumno tiene sus propias comidas', async () => {
+    await abrirAlumno(SIMON);
+    nuevaComida();
+    $('[data-click="nutricionVolverAlumnos"]').click();
+    $(`[data-click="nutricionAlumno"][data-id="${ALDY.id}"]`).click();
+    expect($$('[data-comida]')).toHaveLength(0);
+  });
+
+  it('si el navegador no deja guardar, avisa y la comida no aparece', async () => {
+    await abrirAlumno(SIMON);
+    almacen.setItem = () => {
+      throw new Error('sin espacio');
+    };
+    nuevaComida();
+    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+    expect($$('[data-comida]')).toHaveLength(0);
+  });
+
+  it('la línea de tiempo muestra las comidas con horario', async () => {
+    await abrirAlumno(SIMON);
+    nuevaComida();
+    $('[data-click="comidaToggle"]').click();
+    const hora = $('[data-comida-hora]');
+    hora.value = '09:30';
+    hora.dispatchEvent(new Event('change', { bubbles: true }));
+    expect($('[data-seccion="linea"]').textContent).toContain('09:30');
+  });
+});
+
 describe('alumnos: secciones plegables', () => {
   const cuerpo = (id) => $(`[data-seccion="${id}"] [data-seccion-cuerpo]`);
   const boton = (id) => $(`[data-seccion="${id}"] [data-click="nutricionSeccion"]`);

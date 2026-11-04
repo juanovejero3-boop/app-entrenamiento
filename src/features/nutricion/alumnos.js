@@ -5,6 +5,7 @@ import { escapeAttr as esc } from '../../lib/dom.js';
 import { plano } from '../../lib/texto.js';
 import { toast } from '../../lib/ui.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
+import { actualizarObjetivosDeComidas, montarComidas } from './comidasVista.js';
 import { ACTIVIDADES, calcularObjetivos, parametrosIniciales, validarParametros } from './objetivos.js';
 import { repoNutricion } from './repoLocal.js';
 
@@ -13,7 +14,8 @@ const ALUMNOS_POR_PAGINA = 3; // igual que las otras listas de alumnos
 /**
  * @type {{
  *   content: HTMLElement, repo: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[],
- *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null
+ *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null,
+ *   comidas: import('./comidas.js').Comida[]
  * } | null}
  */
 let actual = null;
@@ -23,7 +25,7 @@ let actual = null;
  * @param {{ repo?: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[] }} opciones
  */
 export function mostrarAlumnosDeNutricion(content, { repo = repoNutricion, alumnos }) {
-  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null };
+  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null, comidas: [] };
   dibujar();
 }
 
@@ -97,7 +99,9 @@ function dibujarLista() {
 
 function dibujarFicha() {
   const { content, alumno, repo } = actual;
-  const p = repo.cargarPlan(alumno.id)?.parametros ?? parametrosIniciales(alumno);
+  const plan = repo.cargarPlan(alumno.id);
+  const p = plan?.parametros ?? parametrosIniciales(alumno);
+  actual.comidas = plan?.comidas ?? [];
   const campo = (nombre, etiqueta, atributos = '') => `
     <label class="block">
       <span class="text-[10px] text-gray-400 uppercase font-bold">${etiqueta}</span>
@@ -153,12 +157,22 @@ function dibujarFicha() {
         </form>`,
       )}
       ${seccion('objetivos', 'Objetivos', '<div data-resultados></div>')}
+      ${seccion('comidas', 'Comidas', '<div data-comidas></div>')}
+      ${seccion('linea', 'Línea de tiempo', '<div data-linea></div>')}
     </div>
   `;
   // Los selects se fijan por código (en vez de con `selected` en el HTML) para que siempre queden en el valor guardado
   const campos = content.querySelector('[data-plan-form]').elements;
   campos.sexo.value = p.sexo;
   campos.actividad.value = String(p.actividad);
+  montarComidas({
+    contenedor: content.querySelector('[data-comidas]'),
+    lineaDeTiempo: content.querySelector('[data-linea]'),
+    comidas: actual.comidas,
+    alimentos: repo.cargarAlimentos(),
+    objetivos: null, // se completa enseguida con los de la calculadora
+    alCambiar: guardarComidas,
+  });
   actualizarResultados();
 }
 
@@ -186,6 +200,9 @@ function actualizarResultados() {
   const parametros = leerParametros();
   content.querySelector('[data-ajuste-etiqueta]').textContent = etiquetaDelAjuste(Number(parametros.ajuste));
   content.querySelector('[data-resultados]').innerHTML = dibujarResultados(parametros);
+  // el tablero de las comidas compara contra estos mismos objetivos
+  const objetivos = calcularObjetivos(parametros);
+  actualizarObjetivosDeComidas(objetivos && { kcal: objetivos.kcal, p: objetivos.p, c: objetivos.c, f: objetivos.f });
 }
 
 function dibujarResultados(parametros) {
@@ -195,7 +212,7 @@ function dibujarResultados(parametros) {
   const macro = (clave, nombre, gramos, color) => `
     <div class="bg-cyberDark rounded-lg border border-gray-800 p-3 text-center">
       <p class="text-[10px] uppercase font-bold ${color}">${nombre}</p>
-      <p data-macro-${clave} class="text-sm font-black text-white">${gramos} g · ${r.porcentajes[clave]}%</p>
+      <p data-macro-${clave} class="text-sm font-black text-white">${gramos} g <span class="block text-[11px] font-bold text-gray-400">${r.porcentajes[clave]}%</span></p>
     </div>`;
   return `
     <div class="space-y-3">
@@ -247,14 +264,28 @@ function volver() {
   dibujar();
 }
 
-/** Al confirmar un cambio (salir del campo) se guarda el plan del alumno. */
-function guardar() {
-  actualizarResultados();
+/** Guarda el plan del alumno (parámetros y comidas juntos, para que guardar uno no pise al otro). */
+function guardarPlan(comidas) {
   try {
-    actual.repo.guardarPlan(actual.alumno.id, { parametros: leerParametros() });
+    actual.repo.guardarPlan(actual.alumno.id, { parametros: leerParametros(), comidas });
+    return true;
   } catch (error) {
     toast(error.message, false);
+    return false;
   }
+}
+
+/** Al confirmar un cambio en los parámetros (salir del campo) se guarda el plan. */
+function guardar() {
+  actualizarResultados();
+  guardarPlan(actual.comidas);
+}
+
+/** Cada cambio en las comidas se guarda al instante; si no se pudo, la pantalla de comidas no lo muestra. */
+function guardarComidas(comidas) {
+  if (!guardarPlan(comidas)) return false;
+  actual.comidas = comidas;
+  return true;
 }
 
 /** Abre o pliega una sección sin redibujar (no se pierde lo escrito). */
