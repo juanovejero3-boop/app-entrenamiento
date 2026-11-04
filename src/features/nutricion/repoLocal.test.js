@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { alimentosIniciales, crearAlimento } from './alimentos.js';
+import { agregarItem, crearComida } from './comidas.js';
 import { CLAVE_ALIMENTOS, claveDelPlan, crearRepoNutricionLocal } from './repoLocal.js';
 
 /** Un localStorage de mentira, en memoria. */
@@ -28,14 +29,39 @@ describe('repo local de nutrición: plan de cada alumno', () => {
     },
   };
 
+  it('guarda y devuelve también las comidas del plan', () => {
+    const repo = repoCon(almacenFalso());
+    const comida = crearComida({ nombre: 'Almuerzo', hora: '13:00' });
+    const comidas = agregarItem([comida], comida.id, comida.opciones[0].id, palta(), 2);
+    repo.guardarPlan('u1', { ...plan, comidas });
+    expect(repo.cargarPlan('u1').comidas).toEqual(comidas);
+  });
+
+  it('un plan guardado antes de que existieran las comidas las devuelve vacías', () => {
+    const guardado = JSON.stringify({ parametros: plan.parametros });
+    expect(repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1').comidas).toEqual([]);
+  });
+
+  it('sanea las comidas guardadas', () => {
+    const guardado = JSON.stringify({
+      parametros: plan.parametros,
+      comidas: [
+        { nombre: 'Cena', hora: 'mal', opciones: [{ items: [{ categoria: 'nada', nombre: 'x', porciones: 1 }] }] },
+      ],
+    });
+    const [cena] = repoCon(almacenFalso({ [claveDelPlan('u1')]: guardado })).cargarPlan('u1').comidas;
+    expect(cena).toMatchObject({ nombre: 'Cena', hora: '' });
+    expect(cena.opciones[0].items).toEqual([]);
+  });
+
   it('un alumno sin plan devuelve null', () => {
     expect(repoCon(almacenFalso()).cargarPlan('u1')).toBeNull();
   });
 
   it('lo que se guarda se vuelve a leer igual', () => {
     const repo = repoCon(almacenFalso());
-    repo.guardarPlan('u1', plan);
-    expect(repo.cargarPlan('u1')).toEqual(plan);
+    repo.guardarPlan('u1', { ...plan, comidas: [] });
+    expect(repo.cargarPlan('u1')).toEqual({ ...plan, comidas: [] });
   });
 
   it('cada alumno tiene el suyo', () => {

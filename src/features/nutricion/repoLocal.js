@@ -1,12 +1,13 @@
 // Repo de nutrición guardado en el navegador del coach (localStorage). Es el prototipo: la pantalla usa solo
 // esta interfaz (`cargarAlimentos` / `guardarAlimentos`), así que pasar a Supabase es cambiar el repo.
 import { alimentosIniciales, normalizarAlimentos } from './alimentos.js';
+import { normalizarComidas } from './comidas.js';
 import { normalizarParametros } from './objetivos.js';
 
 export const CLAVE_ALIMENTOS = 'pp:v1:nutricion:alimentos';
 export const claveDelPlan = (alumnoId) => `pp:v1:nutricion:plan:${alumnoId}`;
 
-/** @typedef {{ parametros: import('./objetivos.js').Parametros }} PlanDeNutricion */
+/** @typedef {{ parametros: import('./objetivos.js').Parametros, comidas: import('./comidas.js').Comida[] }} PlanDeNutricion */
 
 /**
  * @param {() => Pick<Storage, 'getItem' | 'setItem'>} [obtenerAlmacen]  se pide recién al usarlo: en algunos
@@ -49,7 +50,7 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
       try {
         const dato = JSON.parse(obtenerAlmacen().getItem(claveDelPlan(alumnoId)));
         if (typeof dato !== 'object' || dato === null || Array.isArray(dato)) return null;
-        return { parametros: normalizarParametros(dato.parametros) };
+        return { parametros: normalizarParametros(dato.parametros), comidas: normalizarComidas(dato.comidas) };
       } catch {
         return null;
       }
