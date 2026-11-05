@@ -24,6 +24,7 @@ import {
   seriesCambiadas,
 } from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
+import { conUnidadDeTiempo, esTiempo, sinUnidadDeTiempo } from './tiempo.js';
 
 /**
  * @typedef {{
@@ -402,6 +403,15 @@ function crearVista(vista) {
     return { texto: `${hechas}/${total}${omitidasTexto}`, completo: hechas === total };
   }
 
+  /** Reps de la serie. Si son segundos se escribe solo el número (el teclado del celular no tiene comillas) y la unidad se ve fija. */
+  function campoReps(ej, serie, pos, dis, n) {
+    const tiempo = esTiempo(ej.reps);
+    const campo = `<input data-change="alumnoSerie" ${pos} data-campo="reps" ${tiempo ? 'data-tiempo ' : ''}type="text" inputmode="${tiempo ? 'decimal' : 'numeric'}" placeholder="${esc(tiempo ? sinUnidadDeTiempo(ej.reps) : ej.reps || '-')}" value="${esc(tiempo ? sinUnidadDeTiempo(serie.reps) : serie.reps)}" ${dis} class="${claseInput}${tiempo ? ' pr-7' : ''}" aria-label="${tiempo ? 'Segundos' : 'Repeticiones'} de la serie ${n}">`;
+    return tiempo
+      ? `<div class="relative">${campo}<span data-unidad-tiempo class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none">seg</span></div>`
+      : campo;
+  }
+
   function dibujarSeries(ej) {
     const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
     const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => {
@@ -412,14 +422,14 @@ function crearVista(vista) {
       <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
         <span class="text-center text-xs font-bold text-gray-500">${n}</span>
         <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}" aria-label="Kg de la serie ${n}">
-        <input data-change="alumnoSerie" ${pos} data-campo="reps" type="text" inputmode="numeric" placeholder="${esc(ej.reps || '-')}" value="${esc(serie.reps)}" ${dis} class="${claseInput}" aria-label="Repeticiones de la serie ${n}">
+        ${campoReps(ej, serie, pos, dis, n)}
         <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
         <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>
       </div>`;
     }).join('');
     return `
     <div class="space-y-2">
-      <div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>Reps</span><span>Listo</span><span>No</span></div>
+      <div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>
       ${filas}
     </div>
   `;
@@ -745,7 +755,10 @@ function crearVista(vista) {
     iniciarEnVivo,
     ejercicio: (el) => alternarEjercicio(el.dataset.e),
     ejerciciosTodos: () => alternarTodos(),
-    serie: (el) => anotarSerie(el.dataset.e, Number(el.dataset.n), { [el.dataset.campo]: el.value }),
+    serie: (el) =>
+      anotarSerie(el.dataset.e, Number(el.dataset.n), {
+        [el.dataset.campo]: 'tiempo' in el.dataset ? conUnidadDeTiempo(el.value) : el.value,
+      }),
     check: (el) => alternarEstado(el, 'done'),
     omitir: (el) => alternarEstado(el, 'skipped'),
     terminar: terminarDia,
