@@ -6,6 +6,7 @@ import { escapeAttr as esc } from '../../lib/dom.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
 import { cantidadParaMostrar, macrosDeItem, macrosDeOpcion, ordenadasPorHora } from './comidas.js';
 import { calcularObjetivos } from './objetivos.js';
+import { mostrarPdfAlimentacion } from './mostrarPdf.js';
 import { repoNutricion } from './repoLocal.js';
 
 /** ¿El alumno ya tiene algo cargado en su plan de alimentación? (si no, no hay nada para mostrarle) */
@@ -16,6 +17,8 @@ export function tienePlanDeAlimentacion(repo, alumnoId) {
 
 /** Qué hacer al tocar «Volver»; lo define quien abre la pantalla. */
 let alVolverActual = null;
+/** Baja en PDF el plan que se está mirando; null si no hay nada para bajar. */
+let pdfActual = null;
 
 /**
  * Muestra el plan de alimentación del alumno dentro de `content`.
@@ -24,12 +27,17 @@ let alVolverActual = null;
  * @param {{ repo?: typeof repoNutricion, alVolver: () => void, soloLectura?: boolean }} opciones
  *   soloLectura: lo mira el coach (muestra un cartel con el nombre del alumno); el contenido es el mismo
  */
-export function abrirPlanDeAlimentacion(content, alumno, { repo = repoNutricion, alVolver, soloLectura = false }) {
+export function abrirPlanDeAlimentacion(
+  content,
+  alumno,
+  { repo = repoNutricion, alVolver, soloLectura = false, pdf = mostrarPdfAlimentacion },
+) {
   alVolverActual = alVolver;
   const plan = repo.cargarPlan(alumno.id);
   // Solo las comidas que tienen algo cargado, en orden de horario
   const comidas = plan ? ordenadasPorHora(plan.comidas).filter((c) => opcionesConAlimentos(c).length) : [];
   const nombre = nombreDelAlumno(alumno);
+  pdfActual = comidas.length ? () => pdf(plan, alumno) : null;
 
   content.innerHTML = `
     <div class="space-y-4 pb-24">
@@ -38,6 +46,7 @@ export function abrirPlanDeAlimentacion(content, alumno, { repo = repoNutricion,
           <i class="fa-solid fa-arrow-left"></i>
         </button>
         <h2 class="flex-1 min-w-0 text-lg font-black text-white uppercase tracking-wide">${soloLectura ? `Plan de alimentación de ${esc(nombre)}` : 'Mi plan de alimentación'}</h2>
+        ${comidas.length ? `<button data-click="alimentacionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>` : ''}
       </div>
       ${soloLectura ? `<p data-modo-lectura class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 text-xs text-sky-200"><i class="fa-solid fa-eye mr-1"></i><b class="uppercase tracking-wide">Modo lectura</b> · así lo ve ${esc(nombre)}.</p>` : ''}
       ${comidas.length ? dibujarPlan(plan, comidas) : dibujarVacio(soloLectura)}
@@ -182,6 +191,7 @@ function elegirOpcion(boton) {
 
 registrarAcciones({
   alimentacionVolver: () => alVolverActual?.(),
+  alimentacionPdf: () => pdfActual?.(),
   alimentacionToggle: (el) => alternar(el),
   alimentacionOpcion: (el) => elegirOpcion(el),
 });

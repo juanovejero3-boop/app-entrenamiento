@@ -172,7 +172,7 @@ describe('plan de alimentación: lo que ve el alumno', () => {
     await abrir();
     expect($$('input, textarea, select')).toHaveLength(0);
     const acciones = $$('[data-click]').map((b) => b.dataset.click);
-    expect(new Set(acciones)).toEqual(new Set(['alimentacionVolver', 'alimentacionToggle']));
+    expect(new Set(acciones)).toEqual(new Set(['alimentacionVolver', 'alimentacionToggle', 'alimentacionPdf']));
   });
 
   it('el HTML de los nombres y de las aclaraciones no se interpreta', async () => {
@@ -295,5 +295,34 @@ describe('plan de alimentación: lo que ve el coach (mismo contenido, en modo le
     await abrir({ soloLectura: true });
     $('[data-click="alimentacionVolver"]').click();
     expect(alVolver).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('plan de alimentación: PDF', () => {
+  const planConComida = () => guardarPlan({ comidas: [comida('Almuerzo', '13:00', [POLLO, 2])], notas: 'Hidratarse.' });
+
+  it('el alumno baja su plan en PDF con un botón', async () => {
+    planConComida();
+    const pdf = vi.fn();
+    await abrir({ pdf });
+    $('[data-click="alimentacionPdf"]').click();
+    expect(pdf).toHaveBeenCalledTimes(1);
+    const [plan, alumno] = pdf.mock.calls[0];
+    expect(alumno).toEqual(FRANCO);
+    expect(plan.comidas[0].nombre).toBe('Almuerzo');
+    expect(plan.notas).toBe('Hidratarse.');
+  });
+
+  it('el coach también puede bajarlo desde el modo lectura', async () => {
+    planConComida();
+    const pdf = vi.fn();
+    await abrir({ pdf, soloLectura: true });
+    $('[data-click="alimentacionPdf"]').click();
+    expect(pdf).toHaveBeenCalledTimes(1);
+  });
+
+  it('sin comidas no hay nada para bajar: no se ofrece el botón', async () => {
+    await abrir();
+    expect($('[data-click="alimentacionPdf"]')).toBeNull();
   });
 });
