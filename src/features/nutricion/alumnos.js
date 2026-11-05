@@ -3,29 +3,40 @@
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import { plano } from '../../lib/texto.js';
-import { toast } from '../../lib/ui.js';
+import { mostrarProcesando, ocultarProcesando, toast } from '../../lib/ui.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
+import { cantidadParaMostrar, compararConObjetivos, macrosDelDia, ordenadasPorHora } from './comidas.js';
 import { actualizarObjetivosDeComidas, montarComidas } from './comidasVista.js';
+import { sugerirComidas } from './ia.js';
+import { mostrarPdfAlimentacion } from './mostrarPdf.js';
 import { ACTIVIDADES, calcularObjetivos, parametrosIniciales, validarParametros } from './objetivos.js';
 import { MAX_NOTAS, repoNutricion } from './repoLocal.js';
 
 const ALUMNOS_POR_PAGINA = 3; // igual que las otras listas de alumnos
+const MAX_INDICACIONES = 500;
 
 /**
  * @type {{
  *   content: HTMLElement, repo: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[],
  *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null,
- *   comidas: import('./comidas.js').Comida[]
+ *   comidas: import('./comidas.js').Comida[], sugerir: typeof sugerirComidas, pdf: typeof mostrarPdfAlimentacion,
+ *   sugerencia: { comidas: import('./comidas.js').Comida[], avisos: string[] } | null
  * } | null}
  */
 let actual = null;
 
 /**
  * @param {HTMLElement} content
- * @param {{ repo?: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[] }} opciones
+ * @param {{
+ *   repo?: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[],
+ *   sugerir?: typeof sugerirComidas, pdf?: typeof mostrarPdfAlimentacion
+ * }} opciones  sugerir y pdf se pueden reemplazar en los tests
  */
-export function mostrarAlumnosDeNutricion(content, { repo = repoNutricion, alumnos }) {
-  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null, comidas: [] };
+export function mostrarAlumnosDeNutricion(
+  content,
+  { repo = repoNutricion, alumnos, sugerir = sugerirComidas, pdf = mostrarPdfAlimentacion },
+) {
+  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null, comidas: [], sugerir, pdf, sugerencia: null };
   dibujar();
 }
 
@@ -103,6 +114,7 @@ function dibujarFicha() {
   const plan = repo.cargarPlan(alumno.id);
   const p = plan?.parametros ?? parametrosIniciales(alumno);
   actual.comidas = plan?.comidas ?? [];
+  actual.sugerencia = null;
   const campo = (nombre, etiqueta, atributos = '') => `
     <label class="block">
       <span class="text-[10px] text-gray-400 uppercase font-bold">${etiqueta}</span>
@@ -111,13 +123,13 @@ function dibujarFicha() {
   const opcionesActividad = ACTIVIDADES.map(
     (a) => `<option value="${a.valor}">${a.valor} - ${esc(a.nombre)}</option>`,
   ).join('');
-  const seccion = (id, titulo, cuerpo) => `
+  const seccion = (id, titulo, cuerpo, abierta = true) => `
     <section data-seccion="${id}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
-      <button type="button" data-click="nutricionSeccion" aria-expanded="true" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
+      <button type="button" data-click="nutricionSeccion" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
         <h3 class="flex-1 font-bold text-neonRed uppercase tracking-wide text-sm">${titulo}</h3>
-        <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform rotate-180"></i>
+        <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform ${abierta ? 'rotate-180' : ''}"></i>
       </button>
-      <div data-seccion-cuerpo class="p-4 border-t border-gray-800">${cuerpo}</div>
+      <div data-seccion-cuerpo ${abierta ? '' : 'hidden'} class="p-4 border-t border-gray-800">${cuerpo}</div>
     </section>`;
 
   content.innerHTML = `
@@ -130,6 +142,7 @@ function dibujarFicha() {
           <h3 class="text-lg font-black text-white uppercase tracking-wide truncate">${esc(nombreDelAlumno(alumno))}</h3>
           <p class="text-xs text-gray-400 truncate">Objetivos de nutrición</p>
         </div>
+        <button data-click="nutricionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
       </div>
       ${seccion(
         'parametros',
@@ -158,6 +171,30 @@ function dibujarFicha() {
         </form>`,
       )}
       ${seccion('objetivos', 'Objetivos', '<div data-resultados></div>')}
+      ${seccion(
+        'ia',
+        'Sugerir comidas con IA',
+        `<div class="space-y-3">
+          <p class="text-xs text-gray-400">La IA propone comidas con los alimentos de tu biblioteca y el sistema ajusta las cantidades a los objetivos. Primero ves una vista previa: nada se guarda hasta que lo apliques.</p>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-[10px] text-gray-400 uppercase font-bold">Comidas por día</span>
+              <select data-ia-comidas class="${claseInput}">${[2, 3, 4, 5, 6].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+            </label>
+            <label class="block">
+              <span class="text-[10px] text-gray-400 uppercase font-bold">Opciones por comida</span>
+              <select data-ia-opciones class="${claseInput}">${[1, 2, 3].map((n) => `<option value="${n}">${n}</option>`).join('')}</select>
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-[10px] text-gray-400 uppercase font-bold">Indicaciones (opcional)</span>
+            <textarea data-ia-indicaciones maxlength="${MAX_INDICACIONES}" rows="3" placeholder="Ej: Entrena a las 18 hs. No come lácteos. Le gustan las milanesas al horno." class="${claseInput}"></textarea>
+          </label>
+          <button data-click="nutricionIASugerir" class="w-full min-h-11 neon-glow-button text-white rounded-lg text-xs font-bold uppercase tracking-wider"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Sugerir comidas</button>
+          <div data-ia-vista></div>
+        </div>`,
+        false,
+      )}
       ${seccion('comidas', 'Comidas', '<div data-comidas></div>')}
       ${seccion('linea', 'Línea de tiempo', '<div data-linea></div>')}
       ${seccion(
@@ -173,6 +210,8 @@ function dibujarFicha() {
   campos.sexo.value = p.sexo;
   campos.actividad.value = String(p.actividad);
   content.querySelector('[data-notas]').value = plan?.notas ?? '';
+  content.querySelector('[data-ia-comidas]').value = '4';
+  content.querySelector('[data-ia-opciones]').value = '2';
   montarComidas({
     contenedor: content.querySelector('[data-comidas]'),
     lineaDeTiempo: content.querySelector('[data-linea]'),
@@ -307,7 +346,109 @@ function alternarSeccion(boton) {
   seccion.querySelector('[data-chevron]').classList.toggle('rotate-180', abrir);
 }
 
+// ---------------------------------------------------------------------------
+// Asistente de IA y PDF
+// ---------------------------------------------------------------------------
+
+const ESTADOS = { bajo: 'text-amber-300', ok: 'text-emerald-300', alto: 'text-amber-300' };
+
+function dibujarSugerencia() {
+  const vista = actual.content.querySelector('[data-ia-vista]');
+  const { comidas, avisos } = actual.sugerencia ?? {};
+  if (!comidas) {
+    vista.innerHTML = '';
+    return;
+  }
+  const r = calcularObjetivos(leerParametros());
+  const total = macrosDelDia(comidas);
+  const comparacion = compararConObjetivos(total, r && { kcal: r.kcal, p: r.p, c: r.c, f: r.f });
+  const dibujarOpcion = (opcion, numero, varias) => `
+    <div class="space-y-1">
+      ${varias ? `<p class="text-[10px] uppercase font-bold text-gray-400">Opción ${numero}</p>` : ''}
+      <ul class="text-xs text-gray-200 space-y-0.5">${opcion.items
+        .map(
+          (i) =>
+            `<li data-ia-alimento>${esc(i.nombre)} — <b class="text-neonRed">${esc(cantidadParaMostrar(i.porcion, i.porciones))}</b></li>`,
+        )
+        .join('')}</ul>
+    </div>`;
+  vista.innerHTML = `
+    <div data-ia-sugerencia class="space-y-3 border-t border-gray-800 pt-3">
+      <p class="text-[10px] uppercase font-bold text-amber-300"><i class="fa-solid fa-eye mr-1"></i>Vista previa · todavía no se guardó</p>
+      ${ordenadasPorHora(comidas)
+        .map(
+          (c) => `
+        <div data-ia-comida class="bg-cyberDark rounded-lg border border-gray-800 p-3 space-y-2">
+          <p class="text-sm font-bold text-white">${c.hora ? `<span class="text-neonRed">${esc(c.hora)}</span> · ` : ''}<span data-ia-comida-nombre>${esc(c.nombre)}</span></p>
+          ${c.opciones.map((o, i) => dibujarOpcion(o, i + 1, c.opciones.length > 1)).join('')}
+        </div>`,
+        )
+        .join('')}
+      <p data-ia-total class="text-xs text-gray-300">Total del día (opción 1): <b class="text-white">${total.kcal} kcal</b> · P ${total.p} g · C ${total.c} g · G ${total.f} g${
+        comparacion
+          ? ` <span class="${ESTADOS[comparacion.kcal.estado]}">(objetivo ${comparacion.kcal.objetivo} kcal)</span>`
+          : ''
+      }</p>
+      ${avisos.length ? `<ul data-ia-avisos class="text-[11px] text-amber-300 list-disc pl-4">${avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}
+      ${actual.comidas.length ? `<p data-ia-reemplaza class="text-[11px] text-amber-300">Al aplicar se reemplaza lo que ya tiene cargado (${actual.comidas.length} ${actual.comidas.length === 1 ? 'comida' : 'comidas'}).</p>` : ''}
+      <div class="flex gap-2">
+        <button data-click="nutricionIADescartar" class="flex-1 min-h-11 rounded-lg text-xs font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:border-neonRed hover:text-neonRed transition">Descartar</button>
+        <button data-click="nutricionIAAplicar" class="flex-1 min-h-11 neon-glow-button text-white rounded-lg text-xs font-bold uppercase tracking-wider">Aplicar al plan</button>
+      </div>
+    </div>`;
+}
+
+async function sugerirConIA() {
+  const { content, alumno, repo } = actual;
+  const r = calcularObjetivos(leerParametros());
+  if (!r) {
+    toast('Completá los parámetros del alumno para que la IA conozca sus objetivos.', false);
+    return;
+  }
+  mostrarProcesando('Consultando a la IA...');
+  try {
+    const sugerencia = await actual.sugerir({
+      alimentos: repo.cargarAlimentos(),
+      objetivos: { kcal: r.kcal, p: r.p, c: r.c, f: r.f },
+      cantidadComidas: Number(content.querySelector('[data-ia-comidas]').value),
+      cantidadOpciones: Number(content.querySelector('[data-ia-opciones]').value),
+      indicaciones: content.querySelector('[data-ia-indicaciones]').value,
+    });
+    if (actual?.alumno?.id !== alumno.id) return; // el coach ya salió de esta ficha
+    actual.sugerencia = sugerencia;
+    dibujarSugerencia();
+  } catch (error) {
+    toast(error.message, false);
+  } finally {
+    ocultarProcesando();
+  }
+}
+
+function aplicarSugerencia() {
+  if (!actual.sugerencia || !guardarComidas(actual.sugerencia.comidas)) return;
+  dibujarFicha(); // vuelve a dibujar las comidas, el tablero y la línea de tiempo con lo aplicado
+  toast('Comidas aplicadas al plan.');
+}
+
+function descartarSugerencia() {
+  actual.sugerencia = null;
+  dibujarSugerencia();
+}
+
+function bajarPdf() {
+  const plan = actual.repo.cargarPlan(actual.alumno.id);
+  if (!plan?.comidas.some((c) => c.opciones.some((o) => o.items.length))) {
+    toast('Armá al menos una comida con alimentos para bajar el PDF.', false);
+    return;
+  }
+  actual.pdf(plan, actual.alumno);
+}
+
 registrarAcciones({
+  nutricionIASugerir: () => sugerirConIA(),
+  nutricionIAAplicar: () => aplicarSugerencia(),
+  nutricionIADescartar: () => descartarSugerencia(),
+  nutricionPdf: () => bajarPdf(),
   nutricionBuscarAlumno: (el) => buscar(el.value),
   nutricionCambiarPagina: (el) => cambiarPagina(Number(el.dataset.dir)),
   nutricionAlumno: (el) => abrirAlumno(el.dataset.id),
