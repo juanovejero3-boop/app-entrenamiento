@@ -25,6 +25,7 @@ import {
 } from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
 import { conUnidadDeTiempo, esTiempo, sinUnidadDeTiempo } from './tiempo.js';
+import { textoUltimaMarca, ultimaMarca } from './ultimaMarca.js';
 
 /**
  * @typedef {{
@@ -351,6 +352,12 @@ function crearVista(vista) {
   `;
   }
 
+  /** Lo que hizo la última vez que entrenó este ejercicio en el ciclo (o que todavía no hay marcas). */
+  function dibujarUltimaMarca(ej) {
+    const marca = ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej);
+    return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-xs rounded-lg bg-black border border-gray-700 px-2.5 py-1.5 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-neonRed not-italic"></i>${marca ? '<b class="uppercase tracking-wide text-[10px] text-gray-400">Última marca</b><br>' : ''}${esc(textoUltimaMarca(marca))}</p>`;
+  }
+
   function dibujarEjercicio(ej, etiqueta) {
     const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
     const video = vista.videos.get(ej.name.trim().toLowerCase());
@@ -377,6 +384,7 @@ function crearVista(vista) {
         ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
       </div>
       <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
+        ${dibujarUltimaMarca(ej)}
         ${ej.notes ? `<p class="text-xs text-gray-400">${esc(ej.notes)}</p>` : ''}
         ${dibujarSeries(ej)}
       </div>
