@@ -15,6 +15,8 @@ let adminPlanillaActivo = null;
 let adminPlanillaPagina = 0;
 /** La pestaña del alumno que está abierta (Entrenamiento o Nutrición): se recuerda al volver de otra pantalla. */
 let subpestanaAlumno = 'entrenamiento';
+/** Lo mismo para la ficha de un alumno que mira el coach. */
+let subpestanaFicha = 'entrenamiento';
 const ALUMNOS_PLANILLA_POR_PAGINA = 3;
 
 // Sección "Mi plan de entrenamiento": la usan el alumno y también el coach si tiene un plan asignado
@@ -50,10 +52,12 @@ const clasePestanaAlumno = (activa) =>
     activa ? 'bg-neonRed border-neonRed text-white' : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
   }`;
 
-function dibujarSubpestanas() {
+/** @param {'alumno' | 'ficha'} ambito  la Planilla del propio alumno o la ficha de un alumno que mira el coach */
+function dibujarSubpestanas(ambito = 'alumno') {
+  const elegida = ambito === 'ficha' ? subpestanaFicha : subpestanaAlumno;
   return `<div role="tablist" class="grid grid-cols-2 gap-2">${SUBPESTANAS_ALUMNO.map(
     ({ id, icono, texto }) =>
-      `<button role="tab" data-click="planillaSubpestana" data-tab="${id}" aria-selected="${id === subpestanaAlumno}" class="${clasePestanaAlumno(id === subpestanaAlumno)}"><i class="fa-solid ${icono} mr-1.5"></i>${texto}</button>`,
+      `<button role="tab" data-click="planillaSubpestana" data-tab="${id}" data-ambito="${ambito}" aria-selected="${id === elegida}" class="${clasePestanaAlumno(id === elegida)}"><i class="fa-solid ${icono} mr-1.5"></i>${texto}</button>`,
   ).join('')}</div>`;
 }
 
@@ -61,7 +65,8 @@ function dibujarSubpestanas() {
 function mostrarSubpestana(el) {
   const elegida = el.dataset.tab;
   if (!SUBPESTANAS_ALUMNO.some((t) => t.id === elegida)) return;
-  subpestanaAlumno = elegida;
+  if (el.dataset.ambito === 'ficha') subpestanaFicha = elegida;
+  else subpestanaAlumno = elegida;
   const contenedor = el.closest('[role="tablist"]').parentElement;
   for (const boton of contenedor.querySelectorAll('[data-click="planillaSubpestana"]')) {
     const activa = boton.dataset.tab === elegida;
@@ -343,38 +348,44 @@ function renderAdminPlanillaAlumno(u) {
         </div>
       </div>
 
-      <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-          <i class="fa-solid fa-dumbbell mr-2"></i> Planilla de Entrenamiento
-        </h3>
-        ${entrenamientoCard}
+      ${dibujarSubpestanas('ficha')}
+
+      <div data-panel="entrenamiento" role="tabpanel" ${subpestanaFicha === 'entrenamiento' ? '' : 'hidden'} class="space-y-4">
+        <div class="bg-cyberCard p-4 rounded-xl border border-dashed border-neonRed/60 space-y-3">
+          <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-layer-group mr-2"></i> Plan de entrenamiento (en la app)
+          </h3>
+          <p class="text-[11px] text-gray-400">Los ciclos del alumno: armá uno nuevo, mostralo cuando esté listo y consultá los anteriores.</p>
+          <button data-click="planillaAbrirCiclos" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
+            <i class="fa-solid fa-pen-ruler mr-2"></i> Ciclos de entrenamiento
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-dumbbell mr-2"></i> Entrenamiento ${u.id === state.userProfile?.id ? '(el tuyo: podés completarlo)' : 'del alumno'}
+          </h3>
+          <div data-entrenamiento-alumno></div>
+        </div>
+
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+          <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-dumbbell mr-2"></i> Planilla de Entrenamiento
+          </h3>
+          ${entrenamientoCard}
+        </div>
       </div>
 
-      <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-          <i class="fa-solid fa-utensils mr-2"></i> Plan de Nutrición
-        </h3>
-        <button data-click="planillaVerAlimentacion" data-id="${escapeAttr(u.id)}" class="block w-full text-center neon-glow-button text-white font-black text-sm py-4 rounded-2xl uppercase tracking-wider shadow-lg">
-          <i class="fa-solid fa-eye mr-2"></i> Ver plan de alimentación (solo lectura)
-        </button>
-        ${nutricionCard}
-      </div>
-
-      <div class="bg-cyberCard p-4 rounded-xl border border-dashed border-neonRed/60 space-y-3">
-        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-          <i class="fa-solid fa-layer-group mr-2"></i> Plan de entrenamiento (en la app)
-        </h3>
-        <p class="text-[11px] text-gray-400">Los ciclos del alumno: armá uno nuevo, mostralo cuando esté listo y consultá los anteriores.</p>
-        <button data-click="planillaAbrirCiclos" data-id="${escapeAttr(u.id)}" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-sm py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
-          <i class="fa-solid fa-pen-ruler mr-2"></i> Ciclos de entrenamiento
-        </button>
-      </div>
-
-      <div class="space-y-2">
-        <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-          <i class="fa-solid fa-dumbbell mr-2"></i> Entrenamiento ${u.id === state.userProfile?.id ? '(el tuyo: podés completarlo)' : 'del alumno'}
-        </h3>
-        <div data-entrenamiento-alumno></div>
+      <div data-panel="nutricion" role="tabpanel" ${subpestanaFicha === 'nutricion' ? '' : 'hidden'} class="space-y-4">
+        <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+          <h3 class="font-bold text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+            <i class="fa-solid fa-utensils mr-2"></i> Plan de Nutrición
+          </h3>
+          <button data-click="planillaVerAlimentacion" data-id="${escapeAttr(u.id)}" class="block w-full text-center neon-glow-button text-white font-black text-sm py-4 rounded-2xl uppercase tracking-wider shadow-lg">
+            <i class="fa-solid fa-eye mr-2"></i> Ver plan de alimentación (solo lectura)
+          </button>
+          ${nutricionCard}
+        </div>
       </div>
     </div>
   `;
@@ -418,6 +429,7 @@ export function resetPlanillaPestanas() {
   adminPlanillaAbiertos = [];
   adminPlanillaActivo = null;
   subpestanaAlumno = 'entrenamiento';
+  subpestanaFicha = 'entrenamiento';
 }
 
 registrarAcciones({
