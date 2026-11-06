@@ -24,28 +24,20 @@ const cabecera = (id) => tarjeta(id).querySelector('[data-ej-cabecera]');
 const columnas = (id) => tarjeta(id).querySelector('[data-ej-columnas]');
 const abrir = (id) => tarjeta(id).querySelector('button[data-click="alumnoEjercicio"]').click();
 
-describe('vista del alumno: cabecera fija de cada ejercicio', () => {
-  it('el nombre, el resumen y los títulos de las columnas están en una cabecera que se pega al scrollear', () => {
+describe('vista del alumno: cabecera de cada ejercicio', () => {
+  it('reúne el nombre, el avance, los datos, la última marca y los títulos de las columnas', () => {
     abrir('e1');
     const c = cabecera('e1');
-    expect(c.classList.contains('sticky')).toBe(true);
     expect(c.textContent).toContain('Press banca');
     expect(c.querySelector('[data-ej-resumen]')).not.toBeNull();
+    expect(c.querySelector('[data-insignia]')).not.toBeNull();
+    expect(c.querySelector('[data-ultima-marca]')).not.toBeNull();
     expect(columnas('e1').textContent).toMatch(/Serie\s*Kg\s*Reps\s*Listo\s*No/);
   });
 
-  it('se pega justo debajo de la barra fija de semanas, días y progreso', () => {
-    expect(cabecera('e1').getAttribute('style')).toContain('var(--barra-fija-h');
-    expect(content.style.getPropertyValue('--barra-fija-h')).toMatch(/^\d+px$/);
-    expect($('[data-barra-fija]').classList.contains('sticky')).toBe(true);
-  });
-
-  it('cada ejercicio tiene la suya: con varios desplegados no se pisan entre sí', () => {
-    abrir('e1');
-    abrir('e2');
-    expect(cabecera('e1')).not.toBe(cabecera('e2'));
-    expect(tarjeta('e1').contains(cabecera('e1'))).toBe(true);
-    expect(tarjeta('e2').contains(cabecera('e2'))).toBe(true);
+  it('no es fija: se va con el scroll como el resto de la tarjeta', () => {
+    expect(cabecera('e1').classList.contains('sticky')).toBe(false);
+    expect(cabecera('e1').getAttribute('style') ?? '').not.toContain('barra-fija-h');
   });
 
   it('las columnas solo se ven con el ejercicio desplegado', () => {
@@ -72,17 +64,14 @@ describe('vista del alumno: cabecera fija de cada ejercicio', () => {
     expect(columnas('e1').hidden).toBe(false);
   });
 
-  it('las insignias van arriba de los títulos de las columnas, dentro de la parte fija', () => {
-    const c = cabecera('e1');
-    const insignia = c.querySelector('[data-insignia]');
-    expect(insignia).not.toBeNull();
+  it('las insignias van arriba de los títulos de las columnas', () => {
+    const insignia = cabecera('e1').querySelector('[data-insignia]');
     expect(insignia.compareDocumentPosition(columnas('e1')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('la última marca también va en la parte fija, arriba de los títulos de las columnas', () => {
+  it('la última marca va arriba de los títulos de las columnas', () => {
     abrir('e1');
     const marca = cabecera('e1').querySelector('[data-ultima-marca]');
-    expect(marca).not.toBeNull();
     expect(
       marca.compareDocumentPosition(columnas('e1').querySelector('.grid')) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -91,6 +80,17 @@ describe('vista del alumno: cabecera fija de cada ejercicio', () => {
   it('la última marca solo se ve con el ejercicio desplegado (con el plegado no ocupa lugar)', () => {
     expect(columnas('e1').hidden).toBe(true);
     expect(columnas('e1').contains(cabecera('e1').querySelector('[data-ultima-marca]'))).toBe(true);
+  });
+});
+
+describe('vista del alumno: barra fija de semanas y días', () => {
+  it('sigue siendo una sola barra pegada al tope, con las semanas, los días y el avance', () => {
+    const barra = $('[data-barra-fija]');
+    expect(barra.classList.contains('sticky')).toBe(true);
+    expect(barra.querySelectorAll('[data-click="alumnoSemana"]')).toHaveLength(2);
+    expect(barra.querySelectorAll('[data-click="alumnoDia"]')).toHaveLength(2);
+    expect(barra.querySelector('[data-progreso]')).not.toBeNull();
+    expect(barra.querySelector('[data-semana-actual]')).toBeNull(); // sin la etiqueta «S1» de la versión chica
   });
 });
 

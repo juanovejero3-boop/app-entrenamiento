@@ -824,20 +824,14 @@ describe('vista del alumno: día no entrenado', () => {
 describe('vista del alumno: barra fija de semanas y días', () => {
   beforeEach(() => guardarPlan());
 
-  it('los días y el avance van en una barra chica que queda pegada al tope al scrollear', async () => {
+  it('las semanas y los días van en una barra que queda pegada al tope al scrollear', async () => {
     await abrir();
     const barra = $('[data-barra-fija]');
 
     expect(barra.className).toContain('sticky');
     expect(barra.className).toContain('top-0');
+    expect(barra.querySelectorAll('[data-click="alumnoSemana"]')).toHaveLength(2);
     expect(barra.querySelectorAll('[data-click="alumnoDia"]')).toHaveLength(2);
-    expect(barra.querySelector('[data-semana-actual]').textContent).toBe('S1'); // en qué semana está
-  });
-
-  it('los chips de las semanas no van en la barra fija: se van con el scroll para que ocupe poco', async () => {
-    await abrir();
-    expect($$('[data-semanas] [data-click="alumnoSemana"]')).toHaveLength(2);
-    expect($('[data-barra-fija] [data-click="alumnoSemana"]')).toBeNull();
   });
 
   it('el contador de series del día va en la barra, así se ve siempre', async () => {
@@ -886,10 +880,8 @@ describe('vista del alumno: barra fija de semanas y días', () => {
     expect($('[data-barra-fija] [data-click="alumnoDia"][aria-current="true"]').dataset.d).toBe('1');
 
     $('[data-click="alumnoSemana"][data-w="1"]').click(); // la semana 2 del plan de prueba no tiene días
-    expect($('[data-semanas] [data-click="alumnoSemana"][aria-current="true"]').dataset.w).toBe('1');
-    expect($$('[data-barra-fija]')).toHaveLength(0); // sin días no hay nada que dejar fijo
-    $('[data-click="alumnoSemana"][data-w="0"]').click();
-    expect($('[data-barra-fija] [data-semana-actual]').textContent).toBe('S1');
+    expect($$('[data-barra-fija]')).toHaveLength(1);
+    expect($('[data-barra-fija] [data-click="alumnoSemana"][aria-current="true"]').dataset.w).toBe('1');
   });
 
   it('en modo lectura del coach también está', async () => {

@@ -223,9 +223,3 @@
     cursor: pointer;
   }
 }
-
-/* Plan del alumno: con el teclado abierto en un celular chico, la cabecera fija del ejercicio se suelta para dejar
-   lugar donde escribir (ver escribirSinTapar.js). Va fuera de @layer para ganarle a la utilidad `sticky`. */
-[data-area-chica] [data-ej-cabecera] {
-  position: static;
-}
