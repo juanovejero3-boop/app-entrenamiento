@@ -585,7 +585,7 @@ function crearVista(vista) {
     if (nombre) {
       return `
       <div data-serie="${esc(ej.id)}-${n}" class="space-y-0.5 pl-2 border-l-4 border-neonRed">
-        <p data-fila-nombre title="${esc(nombre)}" class="text-[11px] font-bold leading-tight text-neonRed line-clamp-2 break-words">${esc(nombreCorto(nombre))}</p>
+        <p data-fila-nombre title="${esc(nombre)}" class="text-[11px] font-bold leading-tight text-white line-clamp-2 break-words">${esc(nombreCorto(nombre))}</p>
         <div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 items-center">${campos}
         </div>
       </div>`;

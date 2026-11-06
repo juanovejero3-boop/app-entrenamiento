@@ -86,7 +86,7 @@ describe('superseries: una sola tarjeta', () => {
     expect(cuerpo().hidden).toBe(true);
   });
 
-  it('todo va en el rojo de la app: ni colores propios ni estilos de color sueltos', async () => {
+  it('el rojo de la app es el único color: la barra y el borde son rojos, el nombre es blanco y no hay estilos de color sueltos', async () => {
     await abrir();
     cabecera().click();
     expect(tarjeta().className).toContain('border-neonRed');
@@ -95,7 +95,7 @@ describe('superseries: una sola tarjeta', () => {
       expect(barra.getAttribute('style')).toBeNull();
     }
     for (const nombre of $$('[data-fila-nombre]')) {
-      expect(nombre.className).toContain('text-neonRed');
+      expect(nombre.className).toContain('text-white'); // el nombre en blanco se lee mejor; el rojo va en la barra
       expect(nombre.getAttribute('style')).toBeNull();
     }
   });
