@@ -159,10 +159,11 @@ function crearVista(vista) {
   const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
   const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
   const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
+  /** El nombre sin la lista de músculos que suele venir después del guion («Curl de bíceps - Bíceps» → «Curl de bíceps»). */
+  const nombreCorto = (nombre) => nombre.split(' - ')[0].trim() || nombre;
+
   // Las filas de una superserie no llevan el número de serie: se identifican por el nombre del ejercicio
   const COLUMNAS_SUPERSERIE = 'grid-cols-[1fr_1fr_2.25rem_2.25rem]';
-  // Un color por ejercicio dentro de la superserie
-  const COLORES_DE_EJERCICIO = ['#38bdf8', '#fb923c', '#a3e635', '#f472b6', '#a78bfa', '#2dd4bf'];
   const claseInput =
     'w-full bg-black border border-gray-600 rounded-lg py-2 text-center text-base text-white placeholder:text-gray-300 outline-none focus:border-neonRed disabled:opacity-60';
 
@@ -399,18 +400,16 @@ function crearVista(vista) {
    * @param {{ ej: object }[]} miembros
    */
   function dibujarSuperserie(grupo, miembros) {
-    const color = GRUPOS_SUPERSERIE[grupo] ?? '#9ca3af';
-    const colorDe = (i) => COLORES_DE_EJERCICIO[i % COLORES_DE_EJERCICIO.length];
     const ids = miembros.map(({ ej }) => ej.id);
     const abierto = vista.abiertos.has(ids[0]);
     const { texto, completo } = resumenDeGrupo(miembros.map(({ ej }) => ej));
     const rondas = Math.max(...miembros.map(({ ej }) => cantidadDeSeries(ej)));
     const leyenda = miembros
-      .map(({ ej }, i) => {
+      .map(({ ej }) => {
         const video = vista.videos.get(ej.name.trim().toLowerCase());
         return `
         <div data-ss-ejercicio="${esc(ej.id)}" class="flex items-start gap-2">
-          <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" class="flex-1 min-w-0 text-left space-y-1 pl-2 border-l-4" style="border-color: ${colorDe(i)}">
+          <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" class="flex-1 min-w-0 text-left space-y-1 pl-2 border-l-4 border-neonRed">
             <span class="block font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
             <span class="flex flex-wrap gap-1">${insigniasDe(ej)
               .map(
@@ -428,27 +427,26 @@ function crearVista(vista) {
       ({ ej }) => ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej) !== null,
     );
     const marcas = hayMarcas
-      ? miembros.map(({ ej }) => dibujarUltimaMarca(ej, ej.name)).join('')
+      ? miembros.map(({ ej }) => dibujarUltimaMarca(ej, nombreCorto(ej.name))).join('')
       : dibujarUltimaMarca(miembros[0].ej);
     const notas = miembros
       .filter(({ ej }) => ej.notes)
       .map(
         ({ ej }) =>
-          `<p class="text-xs text-gray-400"><b class="text-gray-300">${esc(ej.name)}</b> · ${esc(ej.notes)}</p>`,
+          `<p class="text-xs text-gray-400"><b class="text-gray-300">${esc(nombreCorto(ej.name))}</b> · ${esc(ej.notes)}</p>`,
       )
       .join('');
     const todosPorTiempo = miembros.every(({ ej }) => esTiempo(ej.reps));
     const columnas = `<div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Kg</span><span>${todosPorTiempo ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
     const filasDeRonda = (ronda) =>
       miembros
-        .map(({ ej }, i) => ({ ej, i }))
         .filter(({ ej }) => cantidadDeSeries(ej) >= ronda)
-        .map(({ ej, i }) => dibujarFila(ej, ronda, { nombre: ej.name || 'Ejercicio', color: colorDe(i) }))
+        .map(({ ej }) => dibujarFila(ej, ronda, { nombre: ej.name || 'Ejercicio' }))
         .join('');
     return `
-    <article data-superserie="${esc(grupo)}" data-ids="${esc(ids.join(' '))}" class="bg-cyberCard rounded-xl border border-dashed p-3 space-y-3" style="border-color: ${esc(color)}">
+    <article data-superserie="${esc(grupo)}" data-ids="${esc(ids.join(' '))}" class="bg-cyberCard rounded-xl border border-dashed border-neonRed p-3 space-y-3">
       <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" aria-expanded="${abierto}" class="w-full flex items-center gap-2 text-left">
-        <span class="shrink-0 w-8 text-center text-xs px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}"><i class="fa-solid fa-link"></i></span>
+        <span class="shrink-0 w-8 text-center text-xs px-1.5 py-1 rounded text-neonRed bg-neonRed/10 border border-neonRed"><i class="fa-solid fa-link"></i></span>
         <span class="flex-1 min-w-0 font-black text-white text-sm">Superserie · ${rondas} ${rondas === 1 ? 'ronda' : 'rondas'}</span>
         <span data-ej-resumen ${completo ? 'data-completo="true"' : ''} class="${claseResumen(completo)}">${esc(texto)}</span>
         <i data-ej-flecha class="fa-solid fa-chevron-down text-gray-300 transition ${abierto ? 'rotate-180' : ''}"></i>
@@ -570,10 +568,10 @@ function crearVista(vista) {
     `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
 
   /**
-   * Una fila de serie: kg, reps, hecha y no la hice. En una superserie se le pasa `nombre` y `color`: la fila lleva
-   * el nombre del ejercicio arriba y una barra de su color al costado.
+   * Una fila de serie: kg, reps, hecha y no la hice. En una superserie se le pasa `nombre`: la fila lleva
+   * el nombre del ejercicio arriba (hasta 2 líneas, sin la lista de músculos) y una barra roja al costado.
    */
-  function dibujarFila(ej, n, { nombre = '', color = '' } = {}) {
+  function dibujarFila(ej, n, { nombre = '' } = {}) {
     const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
     const serie = serieDe(vista.registro, ej.id, n);
     const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
@@ -586,8 +584,8 @@ function crearVista(vista) {
         <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>`;
     if (nombre) {
       return `
-      <div data-serie="${esc(ej.id)}-${n}" class="space-y-0.5 pl-2 border-l-4" style="border-color: ${esc(color)}">
-        <p data-fila-nombre class="text-[11px] font-bold truncate" style="color: ${esc(color)}">${esc(nombre)}</p>
+      <div data-serie="${esc(ej.id)}-${n}" class="space-y-0.5 pl-2 border-l-4 border-neonRed">
+        <p data-fila-nombre title="${esc(nombre)}" class="text-[11px] font-bold leading-tight text-neonRed line-clamp-2 break-words">${esc(nombreCorto(nombre))}</p>
         <div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 items-center">${campos}
         </div>
       </div>`;

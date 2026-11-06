@@ -86,10 +86,18 @@ describe('superseries: una sola tarjeta', () => {
     expect(cuerpo().hidden).toBe(true);
   });
 
-  it('cada ejercicio tiene su propio color en la leyenda', async () => {
+  it('todo va en el rojo de la app: ni colores propios ni estilos de color sueltos', async () => {
     await abrir();
-    const colores = $$('[data-ss-ejercicio] [data-click="alumnoEjercicio"]').map((b) => b.style.borderColor);
-    expect(new Set(colores).size).toBe(2);
+    cabecera().click();
+    expect(tarjeta().className).toContain('border-neonRed');
+    for (const barra of $$('[data-ss-ejercicio] [data-click="alumnoEjercicio"]')) {
+      expect(barra.className).toContain('border-neonRed');
+      expect(barra.getAttribute('style')).toBeNull();
+    }
+    for (const nombre of $$('[data-fila-nombre]')) {
+      expect(nombre.className).toContain('text-neonRed');
+      expect(nombre.getAttribute('style')).toBeNull();
+    }
   });
 
   it('un grupo con un solo ejercicio es una tarjeta común (con su etiqueta)', async () => {
@@ -131,15 +139,32 @@ describe('superseries: las series van por ronda', () => {
     expect(texto(ronda(2))).toContain('Ronda 2');
   });
 
-  it('cada fila lleva el nombre de su ejercicio, con su color, arriba de los campos', () => {
+  it('cada fila lleva el nombre de su ejercicio arriba de los campos, con una barra roja al costado', () => {
     const nombres = [...ronda(1).querySelectorAll('[data-fila-nombre]')].map((e) => e.textContent.trim());
     expect(nombres).toEqual(['Press banca', 'Remo con barra']);
-    const [a, b] = [...ronda(1).querySelectorAll('[data-fila-nombre]')];
-    expect(a.style.color).not.toBe(b.style.color);
-    // el color de la fila es el mismo que el del ejercicio en la leyenda
-    expect(ronda(1).querySelector('[data-serie="e1-1"]').style.borderColor).toBe(
-      $('[data-ss-ejercicio="e1"] [data-click="alumnoEjercicio"]').style.borderColor,
-    );
+    expect(ronda(1).querySelector('[data-serie="e1-1"]').className).toContain('border-neonRed');
+  });
+
+  it('un nombre largo se muestra sin la lista de músculos, en hasta 2 líneas, y el nombre completo queda al mantener apretado', async () => {
+    document.body.innerHTML = '';
+    content = document.createElement('div');
+    document.body.appendChild(content);
+    const plan = planCompleto();
+    const [e1] = plan.weeks[0].days[0].blocks[0].exercises;
+    e1.name = 'Peso muerto convencional (mayor flexión cadera) - Lumbares, aductores, glúteo';
+    await abrir(plan);
+    const fila = $('[data-serie="e1-1"] [data-fila-nombre]');
+    expect(fila.textContent.trim()).toBe('Peso muerto convencional (mayor flexión cadera)');
+    expect(fila.title).toBe(e1.name);
+    expect(fila.className).toContain('line-clamp-2'); // no corta con puntos suspensivos en una sola línea
+    expect(fila.className).not.toContain('truncate');
+    // la leyenda de arriba sí lleva el nombre completo
+    expect(texto($('[data-ss-ejercicio="e1"]'))).toContain('Lumbares, aductores, glúteo');
+  });
+
+  it('un nombre sin guion se muestra completo', async () => {
+    await abrir();
+    expect($('[data-serie="e2-1"] [data-fila-nombre]').textContent.trim()).toBe('Remo con barra');
   });
 
   it('las filas no repiten el número de serie: está el título de la ronda', () => {
