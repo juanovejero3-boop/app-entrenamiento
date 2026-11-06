@@ -907,7 +907,7 @@ describe('vista del alumno: ejercicios plegables', () => {
     expect(cuerpo('e1').hidden).toBe(true);
     expect(encabezado('e1').getAttribute('aria-expanded')).toBe('false');
     expect(encabezado('e1').textContent).toContain('Press banca');
-    expect(encabezado('e1').textContent).toContain('Reps 8-10');
+    expect(ejercicio('e1').textContent).toContain('Reps 8-10');
     expect(ejercicio('e1').querySelector('[data-insignia]')).not.toBeNull();
   });
 

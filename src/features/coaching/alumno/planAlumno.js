@@ -168,6 +168,21 @@ function crearVista(vista) {
       ${plan ? dibujarPlan() : dibujarSinPlan()}
     </div>
   `;
+    seguirAlturaDeLaBarraFija();
+  }
+
+  let observadorDeBarra = null;
+  /** Las cabeceras de los ejercicios se pegan debajo de la barra fija: se les pasa su altura por una variable CSS. */
+  function seguirAlturaDeLaBarraFija() {
+    observadorDeBarra?.disconnect();
+    observadorDeBarra = null;
+    const barra = vista.content.querySelector('[data-barra-fija]');
+    const medir = () => vista.content.style.setProperty('--barra-fija-h', `${barra?.offsetHeight ?? 0}px`);
+    medir();
+    if (barra && typeof ResizeObserver !== 'undefined') {
+      observadorDeBarra = new ResizeObserver(medir);
+      observadorDeBarra.observe(barra);
+    }
   }
 
   /** Botón Volver (si hay a dónde volver) y, en modo lectura del coach, el aviso de que no se puede anotar. */
@@ -371,18 +386,21 @@ function crearVista(vista) {
     const { texto, completo } = resumenDeEjercicio(ej);
     return `
     <article data-ejercicio="${esc(ej.id)}" class="bg-cyberCard rounded-xl border p-3 space-y-2 ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${esc(color)}"` : ''}>
+      <div data-ej-cabecera class="sticky z-20 bg-cyberCard -mx-3 -mt-3 px-3 pt-3 pb-1 rounded-t-xl" style="top: var(--barra-fija-h, 0px)">
       <div class="flex items-start gap-2">
         <button type="button" data-click="alumnoEjercicio" data-e="${esc(ej.id)}" aria-expanded="${abierto}" class="flex-1 min-w-0 flex items-start gap-2 text-left">
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(etiqueta)}</span>` : ''}
         <span class="flex-1 min-w-0 block">
           <span class="block font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
-          <span class="flex flex-wrap gap-1 mt-1">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</span>
         </span>
         <span data-ej-resumen ${completo ? 'data-completo="true"' : ''} class="${claseResumen(completo)}">${esc(texto)}</span>
         <i data-ej-flecha class="fa-solid fa-chevron-down text-gray-300 transition mt-1 ${abierto ? 'rotate-180' : ''}"></i>
         </button>
         ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
       </div>
+      <div data-ej-columnas ${abierto ? '' : 'hidden'} class="mt-2 pb-1 border-b border-gray-800">${dibujarColumnas(ej)}</div>
+      </div>
+      <button type="button" data-click="alumnoEjercicio" data-e="${esc(ej.id)}" tabindex="-1" class="w-full flex flex-wrap gap-1 text-left">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</button>
       <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
         ${dibujarUltimaMarca(ej)}
         ${ej.notes ? `<p class="text-xs text-gray-400">${esc(ej.notes)}</p>` : ''}
@@ -420,6 +438,10 @@ function crearVista(vista) {
       : campo;
   }
 
+  /** Los títulos de las columnas: van en la cabecera fija de la tarjeta, así se ven aunque haya muchas series. */
+  const dibujarColumnas = (ej) =>
+    `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
+
   function dibujarSeries(ej) {
     const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
     const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => {
@@ -436,10 +458,7 @@ function crearVista(vista) {
       </div>`;
     }).join('');
     return `
-    <div class="space-y-2">
-      <div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>
-      ${filas}
-    </div>
+    <div class="space-y-2">${filas}</div>
   `;
   }
 
@@ -491,6 +510,7 @@ function crearVista(vista) {
     const articulo = articuloDe(ejercicioId);
     if (!articulo) return;
     articulo.querySelector('[data-ej-cuerpo]').hidden = !abierto;
+    articulo.querySelector('[data-ej-columnas]').hidden = !abierto;
     articulo.querySelector('[data-click="alumnoEjercicio"]').setAttribute('aria-expanded', String(abierto));
     articulo.querySelector('[data-ej-flecha]')?.classList.toggle('rotate-180', abierto);
   }
