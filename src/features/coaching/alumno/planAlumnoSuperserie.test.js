@@ -57,18 +57,39 @@ describe('superseries: una sola tarjeta', () => {
     expect(texto(cabecera())).toContain('Superserie · 1 ronda');
   });
 
-  it('arriba se ven siempre los ejercicios que la forman, con su letra y sus datos, aunque esté plegada', async () => {
+  it('arriba se ven siempre los ejercicios que la forman, con su nombre y sus datos, aunque esté plegada', async () => {
     await abrir();
     expect(cuerpo().hidden).toBe(true);
     const leyenda = $$('[data-ss-ejercicio]').map((e) => texto(e));
     expect(leyenda).toHaveLength(2);
-    expect(leyenda[0]).toContain('A1');
     expect(leyenda[0]).toContain('Press banca');
     expect(leyenda[0]).toContain('Reps 8-10');
     expect(leyenda[0]).toContain('Descanso 2 min');
-    expect(leyenda[1]).toContain('A2');
     expect(leyenda[1]).toContain('Remo con barra');
     expect(leyenda[1]).toContain('RPE 8');
+  });
+
+  it('no usa códigos como A1 o A2: los ejercicios se identifican por su nombre y su color', async () => {
+    await abrir();
+    cabecera().click();
+    expect(texto(tarjeta())).not.toMatch(/\bA[12]\b/);
+    expect(tarjeta().querySelector('[data-etiqueta]')).toBeNull();
+  });
+
+  it('tocar el nombre de un ejercicio de la leyenda despliega la superserie, y volver a tocarlo la pliega', async () => {
+    await abrir();
+    const nombre = $('[data-ss-ejercicio="e2"] [data-click="alumnoEjercicio"]');
+    nombre.click();
+    expect(cuerpo().hidden).toBe(false);
+    expect(cabecera().getAttribute('aria-expanded')).toBe('true');
+    $('[data-ss-ejercicio="e1"] [data-click="alumnoEjercicio"]').click();
+    expect(cuerpo().hidden).toBe(true);
+  });
+
+  it('cada ejercicio tiene su propio color en la leyenda', async () => {
+    await abrir();
+    const colores = $$('[data-ss-ejercicio] [data-click="alumnoEjercicio"]').map((b) => b.style.borderColor);
+    expect(new Set(colores).size).toBe(2);
   });
 
   it('un grupo con un solo ejercicio es una tarjeta común (con su etiqueta)', async () => {
@@ -110,9 +131,19 @@ describe('superseries: las series van por ronda', () => {
     expect(texto(ronda(2))).toContain('Ronda 2');
   });
 
-  it('cada fila lleva la etiqueta de su ejercicio en vez del número de serie', () => {
-    const etiquetas = [...ronda(1).querySelectorAll('[data-etiqueta]')].map((e) => e.textContent.trim());
-    expect(etiquetas).toEqual(['A1', 'A2']);
+  it('cada fila lleva el nombre de su ejercicio, con su color, arriba de los campos', () => {
+    const nombres = [...ronda(1).querySelectorAll('[data-fila-nombre]')].map((e) => e.textContent.trim());
+    expect(nombres).toEqual(['Press banca', 'Remo con barra']);
+    const [a, b] = [...ronda(1).querySelectorAll('[data-fila-nombre]')];
+    expect(a.style.color).not.toBe(b.style.color);
+    // el color de la fila es el mismo que el del ejercicio en la leyenda
+    expect(ronda(1).querySelector('[data-serie="e1-1"]').style.borderColor).toBe(
+      $('[data-ss-ejercicio="e1"] [data-click="alumnoEjercicio"]').style.borderColor,
+    );
+  });
+
+  it('las filas no repiten el número de serie: está el título de la ronda', () => {
+    expect(ronda(1).querySelector('[data-serie="e1-1"] .text-gray-500')).toBeNull();
   });
 
   it('los títulos de las columnas están una sola vez', () => {
@@ -281,14 +312,14 @@ describe('superseries: plegar y desplegar', () => {
     expect(marcas[1]).toContain('usaste 40 kg en la serie 1');
   });
 
-  it('las notas de cada ejercicio se muestran con su letra', async () => {
+  it('las notas de cada ejercicio se muestran con su nombre', async () => {
     document.body.innerHTML = '';
     content = document.createElement('div');
     document.body.appendChild(content);
     const plan = planCompleto();
     plan.weeks[0].days[0].blocks[0].exercises[1].notes = 'Codos pegados';
     await abrir(plan);
-    expect(texto(cuerpo())).toContain('A2 · Codos pegados');
+    expect(texto(cuerpo())).toContain('Remo con barra · Codos pegados');
   });
 });
 

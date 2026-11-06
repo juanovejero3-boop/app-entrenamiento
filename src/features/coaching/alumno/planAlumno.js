@@ -159,6 +159,10 @@ function crearVista(vista) {
   const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
   const claseOmitir = (omitida) => `text-2xl transition ${omitida ? 'text-red-500' : 'text-gray-600'}`;
   const COLUMNAS = 'grid-cols-[1.75rem_1fr_1fr_2.25rem_2.25rem]';
+  // Las filas de una superserie no llevan el número de serie: se identifican por el nombre del ejercicio
+  const COLUMNAS_SUPERSERIE = 'grid-cols-[1fr_1fr_2.25rem_2.25rem]';
+  // Un color por ejercicio dentro de la superserie
+  const COLORES_DE_EJERCICIO = ['#38bdf8', '#fb923c', '#a3e635', '#f472b6', '#a78bfa', '#2dd4bf'];
   const claseInput =
     'w-full bg-black border border-gray-600 rounded-lg py-2 text-center text-base text-white placeholder:text-gray-300 outline-none focus:border-neonRed disabled:opacity-60';
 
@@ -378,9 +382,6 @@ function crearVista(vista) {
     return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-xs rounded-lg bg-black border border-gray-700 px-2.5 py-1 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-neonRed not-italic"></i>${marca ? `<b class="uppercase tracking-wide text-[10px] text-gray-400">${titulo}</b><br>` : etiqueta ? `<b class="not-italic text-gray-300">${esc(etiqueta)}</b> · ` : ''}${esc(textoUltimaMarca(marca))}</p>`;
   }
 
-  const chipDeLetra = (texto, color) =>
-    `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(texto)}</span>`;
-
   const insigniasDe = (ej) =>
     [
       ej.reps && `Reps ${ej.reps}`,
@@ -390,34 +391,35 @@ function crearVista(vista) {
     ].filter(Boolean);
 
   /**
-   * Una superserie en una sola tarjeta: arriba qué ejercicios la forman (siempre a la vista) y, desplegada, las series
-   * ordenadas por ronda (A1, A2, A3 de la ronda 1, después las de la ronda 2...) que es como se entrenan, así no hay
-   * que scrollear de un ejercicio al otro.
+   * Una superserie en una sola tarjeta: arriba qué ejercicios la forman (siempre a la vista; tocarlos la despliega) y,
+   * desplegada, las series ordenadas por ronda (todos los ejercicios de la ronda 1, después los de la 2...), que es
+   * como se entrenan, así no hay que scrollear de un ejercicio al otro. Cada ejercicio tiene su color y en cada fila
+   * se lee su nombre, para no tener que acordarse de códigos.
    * @param {string} grupo  letra de la superserie
-   * @param {{ ej: object, etiqueta: string }[]} miembros
+   * @param {{ ej: object }[]} miembros
    */
   function dibujarSuperserie(grupo, miembros) {
     const color = GRUPOS_SUPERSERIE[grupo] ?? '#9ca3af';
+    const colorDe = (i) => COLORES_DE_EJERCICIO[i % COLORES_DE_EJERCICIO.length];
     const ids = miembros.map(({ ej }) => ej.id);
     const abierto = vista.abiertos.has(ids[0]);
     const { texto, completo } = resumenDeGrupo(miembros.map(({ ej }) => ej));
     const rondas = Math.max(...miembros.map(({ ej }) => cantidadDeSeries(ej)));
     const leyenda = miembros
-      .map(({ ej, etiqueta }) => {
+      .map(({ ej }, i) => {
         const video = vista.videos.get(ej.name.trim().toLowerCase());
         return `
-        <div data-ss-ejercicio="${esc(ej.id)}" class="space-y-1">
-          <div class="flex items-center gap-2">
-            ${chipDeLetra(etiqueta, color)}
-            <span class="flex-1 min-w-0 font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
-            ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
-          </div>
-          <div class="flex flex-wrap gap-1 pl-10">${insigniasDe(ej)
-            .map(
-              (t) =>
-                `<span data-insignia class="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`,
-            )
-            .join('')}</div>
+        <div data-ss-ejercicio="${esc(ej.id)}" class="flex items-start gap-2">
+          <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" class="flex-1 min-w-0 text-left space-y-1 pl-2 border-l-4" style="border-color: ${colorDe(i)}">
+            <span class="block font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
+            <span class="flex flex-wrap gap-1">${insigniasDe(ej)
+              .map(
+                (t) =>
+                  `<span data-insignia class="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`,
+              )
+              .join('')}</span>
+          </button>
+          ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
         </div>`;
       })
       .join('');
@@ -426,26 +428,27 @@ function crearVista(vista) {
       ({ ej }) => ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej) !== null,
     );
     const marcas = hayMarcas
-      ? miembros.map(({ ej, etiqueta }) => dibujarUltimaMarca(ej, etiqueta)).join('')
+      ? miembros.map(({ ej }) => dibujarUltimaMarca(ej, ej.name)).join('')
       : dibujarUltimaMarca(miembros[0].ej);
     const notas = miembros
       .filter(({ ej }) => ej.notes)
       .map(
-        ({ ej, etiqueta }) =>
-          `<p class="text-xs text-gray-400"><b class="text-gray-300">${esc(etiqueta)}</b> · ${esc(ej.notes)}</p>`,
+        ({ ej }) =>
+          `<p class="text-xs text-gray-400"><b class="text-gray-300">${esc(ej.name)}</b> · ${esc(ej.notes)}</p>`,
       )
       .join('');
     const todosPorTiempo = miembros.every(({ ej }) => esTiempo(ej.reps));
-    const columnas = `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span></span><span>Kg</span><span>${todosPorTiempo ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
+    const columnas = `<div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Kg</span><span>${todosPorTiempo ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
     const filasDeRonda = (ronda) =>
       miembros
+        .map(({ ej }, i) => ({ ej, i }))
         .filter(({ ej }) => cantidadDeSeries(ej) >= ronda)
-        .map(({ ej, etiqueta }) => dibujarFila(ej, ronda, chipDeFila(etiqueta, color)))
+        .map(({ ej, i }) => dibujarFila(ej, ronda, { nombre: ej.name || 'Ejercicio', color: colorDe(i) }))
         .join('');
     return `
     <article data-superserie="${esc(grupo)}" data-ids="${esc(ids.join(' '))}" class="bg-cyberCard rounded-xl border border-dashed p-3 space-y-3" style="border-color: ${esc(color)}">
       <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" aria-expanded="${abierto}" class="w-full flex items-center gap-2 text-left">
-        ${chipDeLetra(grupo, color)}
+        <span class="shrink-0 w-8 text-center text-xs px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}"><i class="fa-solid fa-link"></i></span>
         <span class="flex-1 min-w-0 font-black text-white text-sm">Superserie · ${rondas} ${rondas === 1 ? 'ronda' : 'rondas'}</span>
         <span data-ej-resumen ${completo ? 'data-completo="true"' : ''} class="${claseResumen(completo)}">${esc(texto)}</span>
         <i data-ej-flecha class="fa-solid fa-chevron-down text-gray-300 transition ${abierto ? 'rotate-180' : ''}"></i>
@@ -471,10 +474,6 @@ function crearVista(vista) {
 
   const claseRonda = (completa) =>
     `rounded-lg border p-1.5 space-y-1 ${completa ? 'border-emerald-800 bg-emerald-950/20' : 'border-gray-800 bg-black/30'}`;
-
-  /** La etiqueta de la fila de una superserie (A1, A2...) con el color del grupo. */
-  const chipDeFila = (etiqueta, color) =>
-    `<span data-etiqueta class="text-center text-[11px] font-black rounded py-0.5" style="color: ${esc(color)}; background: ${esc(color)}22">${esc(etiqueta)}</span>`;
 
   /** Una ronda está completa cuando todas sus series están hechas u omitidas. */
   function rondaCompleta(miembros, ronda) {
@@ -558,9 +557,9 @@ function crearVista(vista) {
   }
 
   /** Reps de la serie. Si son segundos se escribe solo el número (el teclado del celular no tiene comillas) y la unidad se ve fija. */
-  function campoReps(ej, serie, pos, dis, n) {
+  function campoReps(ej, serie, pos, dis, n, extra = '') {
     const tiempo = esTiempo(ej.reps);
-    const campo = `<input data-change="alumnoSerie" ${pos} data-campo="reps" ${tiempo ? 'data-tiempo ' : ''}type="text" inputmode="${tiempo ? 'decimal' : 'numeric'}" placeholder="${esc(tiempo ? sinUnidadDeTiempo(ej.reps) : ej.reps || '-')}" value="${esc(tiempo ? sinUnidadDeTiempo(serie.reps) : serie.reps)}" ${dis} class="${claseInput}${tiempo ? ' pr-7' : ''}" aria-label="${tiempo ? 'Segundos' : 'Repeticiones'} de la serie ${n}">`;
+    const campo = `<input data-change="alumnoSerie" ${pos} data-campo="reps" ${tiempo ? 'data-tiempo ' : ''}type="text" inputmode="${tiempo ? 'decimal' : 'numeric'}" placeholder="${esc(tiempo ? sinUnidadDeTiempo(ej.reps) : ej.reps || '-')}" value="${esc(tiempo ? sinUnidadDeTiempo(serie.reps) : serie.reps)}" ${dis} class="${claseInput}${tiempo ? ' pr-7' : ''}${extra}" aria-label="${tiempo ? 'Segundos' : 'Repeticiones'} de la serie ${n}">`;
     return tiempo
       ? `<div class="relative">${campo}<span data-unidad-tiempo class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 pointer-events-none">seg</span></div>`
       : campo;
@@ -570,18 +569,32 @@ function crearVista(vista) {
   const dibujarColumnas = (ej) =>
     `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
 
-  /** Una fila de serie: kg, reps, hecha y no la hice. `primera` es lo que va en la primera columna (el número o la etiqueta A1). */
-  function dibujarFila(ej, n, primera = `<span class="text-center text-xs font-bold text-gray-500">${n}</span>`) {
+  /**
+   * Una fila de serie: kg, reps, hecha y no la hice. En una superserie se le pasa `nombre` y `color`: la fila lleva
+   * el nombre del ejercicio arriba y una barra de su color al costado.
+   */
+  function dibujarFila(ej, n, { nombre = '', color = '' } = {}) {
     const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
     const serie = serieDe(vista.registro, ej.id, n);
     const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
+    // En una superserie los campos son un poco más bajos: hay muchas filas y el nombre del ejercicio ya ocupa una línea
+    const compacto = nombre ? ' !py-1.5' : '';
+    const campos = `
+        <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}${compacto}" aria-label="Kg de la serie ${n}">
+        ${campoReps(ej, serie, pos, dis, n, compacto)}
+        <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
+        <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>`;
+    if (nombre) {
+      return `
+      <div data-serie="${esc(ej.id)}-${n}" class="space-y-0.5 pl-2 border-l-4" style="border-color: ${esc(color)}">
+        <p data-fila-nombre class="text-[11px] font-bold truncate" style="color: ${esc(color)}">${esc(nombre)}</p>
+        <div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 items-center">${campos}
+        </div>
+      </div>`;
+    }
     return `
       <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
-        ${primera}
-        <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}" aria-label="Kg de la serie ${n}">
-        ${campoReps(ej, serie, pos, dis, n)}
-        <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
-        <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>
+        <span class="text-center text-xs font-bold text-gray-500">${n}</span>${campos}
       </div>`;
   }
 
