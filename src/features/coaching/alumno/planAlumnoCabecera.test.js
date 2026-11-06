@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../../lib/ui.js';
 import { ALUMNO, planCompleto } from '../pdf/test-utils.js';
-import { sembrarPlan } from '../repo/test-utils.js';
+import { guardarSesionesDe, sembrarPlan } from '../repo/test-utils.js';
 import { abrirPlanAlumno } from './planAlumno.js';
 
 vi.mock('../pdf/generar.js', () => ({ generarPdfBlob: vi.fn(async () => new Blob(['%PDF-1.7'])) }));
@@ -70,5 +70,41 @@ describe('vista del alumno: cabecera fija de cada ejercicio', () => {
     expect(insignias).not.toBeNull();
     insignias.click();
     expect(columnas('e1').hidden).toBe(false);
+  });
+
+  it('las insignias van arriba de los títulos de las columnas, dentro de la parte fija', () => {
+    const c = cabecera('e1');
+    const insignia = c.querySelector('[data-insignia]');
+    expect(insignia).not.toBeNull();
+    expect(insignia.compareDocumentPosition(columnas('e1')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('la última marca no va en la parte fija: se va con el scroll', () => {
+    expect(cabecera('e1').querySelector('[data-ultima-marca]')).toBeNull();
+    expect(tarjeta('e1').querySelector('[data-ultima-marca]')).not.toBeNull();
+  });
+});
+
+describe('vista del alumno: fecha en la pestaña del día terminado', () => {
+  const abrirConSesiones = async (sesiones) => {
+    await guardarSesionesDe(ALUMNO.id, sesiones);
+    await abrirPlanAlumno(content, ALUMNO, { hoy: '2026-10-20' });
+  };
+  const fechaDelDia = (i) => $(`[data-click="alumnoDia"][data-d="${i}"] [data-dia-fecha]`);
+
+  it('un día terminado muestra debajo del nombre el día y el mes en que se entrenó', async () => {
+    await abrirConSesiones({ d1: { fecha: '2026-11-08', terminadaEn: '2026-11-08T21:00:00.000Z', estado: 'hecha' } });
+    expect(fechaDelDia(0).textContent).toBe('8/11');
+  });
+
+  it('un día que no se entrenó también muestra su fecha', async () => {
+    await abrirConSesiones({ d1: { fecha: '2026-10-21', terminadaEn: '2026-10-21T21:00:00.000Z', estado: 'omitida' } });
+    expect(fechaDelDia(0).textContent).toBe('21/10');
+  });
+
+  it('un día sin terminar no muestra fecha', async () => {
+    await abrirConSesiones({});
+    expect(fechaDelDia(0)).toBeNull();
+    expect(fechaDelDia(1)).toBeNull();
   });
 });
