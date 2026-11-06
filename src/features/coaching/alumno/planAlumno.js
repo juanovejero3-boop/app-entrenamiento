@@ -272,11 +272,11 @@ function crearVista(vista) {
                 const marca = !sesion
                   ? ''
                   : sesion.estado === 'omitida'
-                    ? '<i class="fa-solid fa-xmark ml-1 text-red-400"></i>'
-                    : '<i class="fa-solid fa-check ml-1"></i>';
+                    ? '<i class="fa-solid fa-xmark absolute left-full ml-1 top-1/2 -translate-y-1/2 text-red-400"></i>'
+                    : '<i class="fa-solid fa-check absolute left-full ml-1 top-1/2 -translate-y-1/2"></i>';
                 const estado =
                   sesion?.estado === 'omitida' ? 'data-no-entrenado="true"' : sesion ? 'data-hecho="true"' : '';
-                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}">${esc(dia.name)}${marca}${sesion ? `<span data-dia-fecha class="block text-[9px] font-normal normal-case opacity-80">${esc(diaYMes(sesion.fecha))}</span>` : ''}</button>`;
+                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}${sesion ? ' !px-5' : ''}"><span class="relative inline-block">${esc(dia.name)}${marca}</span>${sesion ? `<span data-dia-fecha class="block text-[9px] font-normal normal-case opacity-80">${esc(diaYMes(sesion.fecha))}</span>` : ''}</button>`;
               })
               .join('')}
           </div>${dibujarProgreso(semana.days[d])}`

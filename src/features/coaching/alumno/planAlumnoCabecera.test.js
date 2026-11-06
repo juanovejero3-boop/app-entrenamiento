@@ -102,6 +102,15 @@ describe('vista del alumno: fecha en la pestaña del día terminado', () => {
     expect(fechaDelDia(0).textContent).toBe('21/10');
   });
 
+  it('la fecha queda centrada respecto del nombre del día, sin contar el tilde (que va al costado)', async () => {
+    await abrirConSesiones({ d1: { fecha: '2026-11-02', terminadaEn: '2026-11-02T21:00:00.000Z', estado: 'hecha' } });
+    const chip = $('[data-click="alumnoDia"][data-d="0"]');
+    const nombre = chip.querySelector('span.relative');
+    expect(nombre.textContent).toContain('Lunes - Torso');
+    expect(nombre.querySelector('.fa-check').classList.contains('absolute')).toBe(true); // no ocupa lugar en el centrado
+    expect(nombre.contains(fechaDelDia(0))).toBe(false); // la fecha es una línea aparte, debajo
+  });
+
   it('un día sin terminar no muestra fecha', async () => {
     await abrirConSesiones({});
     expect(fechaDelDia(0)).toBeNull();
