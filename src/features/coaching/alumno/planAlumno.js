@@ -154,6 +154,13 @@ function crearVista(vista) {
         ? 'bg-neonRed border-neonRed text-white'
         : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
     }`;
+  // Los días van en la barra fija: más chicos que los chips de las semanas para ocupar poco lugar al scrollear
+  const claseChipDia = (activa) =>
+    `shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition ${
+      activa
+        ? 'bg-neonRed border-neonRed text-white'
+        : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
+    }`;
   const claseBotonChico =
     'text-[11px] font-bold uppercase tracking-wider px-3 py-2 rounded-lg border border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed transition';
   const claseCheck = (hecha) => `text-2xl transition ${hecha ? 'text-emerald-500' : 'text-gray-600'}`;
@@ -254,8 +261,7 @@ function crearVista(vista) {
       </div>
     </div>
 
-    <div data-barra-fija class="sticky top-0 z-30 bg-black py-2 space-y-2 border-b border-gray-800">
-    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+    <div data-semanas class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
       ${plan.weeks
         .map((s, i) => {
           const fechas = plan.startDate ? fechasDeSemana(plan.startDate, i) : '';
@@ -267,7 +273,9 @@ function crearVista(vista) {
     </div>
     ${
       semana.days.length
-        ? `<div class="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        ? `<div data-barra-fija class="sticky top-0 z-30 bg-black py-1.5 space-y-1 border-b border-gray-800">
+          <div class="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+            <span data-semana-actual title="${esc(semana.name)}" class="shrink-0 text-[10px] font-black uppercase tracking-wider text-neonRed pr-1">S${w + 1}</span>
             ${semana.days
               .map((dia, i) => {
                 const sesion = sesionDe(vista.sesiones, dia.id);
@@ -278,13 +286,12 @@ function crearVista(vista) {
                     : '<i class="fa-solid fa-check absolute left-full ml-1 top-1/2 -translate-y-1/2"></i>';
                 const estado =
                   sesion?.estado === 'omitida' ? 'data-no-entrenado="true"' : sesion ? 'data-hecho="true"' : '';
-                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChip(i === d)}${sesion ? ' !px-5' : ''}"><span class="relative inline-block">${esc(dia.name)}${marca}</span>${sesion ? `<span data-dia-fecha class="block text-[9px] font-normal normal-case opacity-80">${esc(diaYMes(sesion.fecha))}</span>` : ''}</button>`;
+                return `<button data-click="alumnoDia" data-d="${i}" ${i === d ? 'aria-current="true"' : ''} ${estado} class="${claseChipDia(i === d)}${sesion ? ' !px-4' : ''}"><span class="relative inline-block">${esc(dia.name)}${marca}</span>${sesion ? `<span data-dia-fecha class="block text-[9px] font-normal normal-case opacity-80">${esc(diaYMes(sesion.fecha))}</span>` : ''}</button>`;
               })
               .join('')}
-          </div>${dibujarProgreso(semana.days[d])}`
+          </div>${dibujarProgreso(semana.days[d])}</div>`
         : ''
     }
-    </div>
     ${meta ? `<p class="text-xs text-gray-400">${esc(meta)}</p>` : ''}
     ${semana.days.length ? dibujarDia(semana.days[d]) : '<p class="text-sm text-gray-500 italic">Sin días cargados.</p>'}
   `;
@@ -308,9 +315,9 @@ function crearVista(vista) {
     const { hechas, omitidas, total } = progresoDelDia(dia, vista.registro);
     const { verde, rojo } = anchosDeBarra(hechas, omitidas, total);
     return `
-      <div class="space-y-1">
-        <p data-progreso class="text-[11px] font-bold uppercase tracking-wider text-gray-300">${textoProgreso(hechas, omitidas, total)}</p>
-        <div class="h-1.5 bg-gray-800 rounded flex overflow-hidden">
+      <div class="flex items-center gap-2">
+        <p data-progreso class="shrink-0 text-[10px] font-bold uppercase tracking-wider text-gray-300">${textoProgreso(hechas, omitidas, total)}</p>
+        <div class="flex-1 h-1.5 bg-gray-800 rounded flex overflow-hidden">
           <div data-progreso-barra class="h-1.5 bg-emerald-500 transition-all" style="width: ${verde}%"></div>
           <div data-progreso-omitidas class="h-1.5 bg-red-500 transition-all" style="width: ${rojo}%"></div>
         </div>
@@ -377,7 +384,7 @@ function crearVista(vista) {
   /** Lo que hizo la última vez que entrenó este ejercicio en el ciclo (o que todavía no hay marcas). */
   function dibujarUltimaMarca(ej) {
     const marca = ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej);
-    return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-xs rounded-lg bg-black border border-gray-700 px-2.5 py-1 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-neonRed not-italic"></i>${marca ? '<b class="uppercase tracking-wide text-[10px] text-gray-400">Última marca</b><br>' : ''}${esc(textoUltimaMarca(marca))}</p>`;
+    return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-[11px] leading-snug rounded-lg bg-black border border-gray-700 px-2 py-1 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1 text-neonRed not-italic"></i>${esc(textoUltimaMarca(marca))}</p>`;
   }
 
   function dibujarEjercicio(ej, etiqueta) {
@@ -405,7 +412,7 @@ function crearVista(vista) {
         </button>
         ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
       </div>
-      <button type="button" data-click="alumnoEjercicio" data-e="${esc(ej.id)}" tabindex="-1" class="mt-2 w-full flex flex-wrap gap-1 text-left">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-2 py-1 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</button>
+      <button type="button" data-click="alumnoEjercicio" data-e="${esc(ej.id)}" tabindex="-1" class="mt-2 w-full flex flex-wrap gap-1 text-left">${insignias.map((t) => `<span data-insignia class="text-sm font-semibold px-1.5 py-0.5 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`).join('')}</button>
       <div data-ej-columnas ${abierto ? '' : 'hidden'} class="mt-2 pb-1 border-b border-gray-800 space-y-2">${dibujarUltimaMarca(ej)}${dibujarColumnas(ej)}</div>
       </div>
       <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
