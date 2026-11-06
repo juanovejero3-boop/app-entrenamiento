@@ -24,6 +24,7 @@ import {
   seriesCambiadas,
 } from './registro.js';
 import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
+import { vigilarTeclado } from './escribirSinTapar.js';
 import { conUnidadDeTiempo, esTiempo, sinUnidadDeTiempo } from './tiempo.js';
 import { textoUltimaMarca, ultimaMarca } from './ultimaMarca.js';
 
@@ -129,6 +130,7 @@ export async function abrirPlanAlumno(
     resaltadoMs,
   };
   content.dataset.planAlumno = 'true';
+  vigilarTeclado(content);
   const instancia = crearVista(vista);
   instancias.set(content, instancia);
   instancia.dibujar();
