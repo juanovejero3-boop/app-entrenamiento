@@ -13,6 +13,8 @@ import { repoNutricion } from '../nutricion/repoLocal.js';
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
 let adminPlanillaPagina = 0;
+/** La pestaña del alumno que está abierta (Entrenamiento o Nutrición): se recuerda al volver de otra pantalla. */
+let subpestanaAlumno = 'entrenamiento';
 const ALUMNOS_PLANILLA_POR_PAGINA = 3;
 
 // Sección "Mi plan de entrenamiento": la usan el alumno y también el coach si tiene un plan asignado
@@ -36,6 +38,37 @@ async function montarMiPlan(content) {
   }
   if (hayPlan) seccion.hidden = false;
   else seccion.remove();
+}
+
+const SUBPESTANAS_ALUMNO = [
+  { id: 'entrenamiento', icono: 'fa-dumbbell', texto: 'Entrenamiento' },
+  { id: 'nutricion', icono: 'fa-apple-whole', texto: 'Nutrición' },
+];
+
+const clasePestanaAlumno = (activa) =>
+  `min-h-11 rounded-xl text-xs font-black uppercase tracking-wider border transition ${
+    activa ? 'bg-neonRed border-neonRed text-white' : 'bg-cyberCard border-gray-700 text-gray-300 hover:border-neonRed'
+  }`;
+
+function dibujarSubpestanas() {
+  return `<div role="tablist" class="grid grid-cols-2 gap-2">${SUBPESTANAS_ALUMNO.map(
+    ({ id, icono, texto }) =>
+      `<button role="tab" data-click="planillaSubpestana" data-tab="${id}" aria-selected="${id === subpestanaAlumno}" class="${clasePestanaAlumno(id === subpestanaAlumno)}"><i class="fa-solid ${icono} mr-1.5"></i>${texto}</button>`,
+  ).join('')}</div>`;
+}
+
+/** Cambia la pestaña visible sin volver a dibujar nada (lo abierto en cada una queda como estaba). */
+function mostrarSubpestana(el) {
+  const elegida = el.dataset.tab;
+  if (!SUBPESTANAS_ALUMNO.some((t) => t.id === elegida)) return;
+  subpestanaAlumno = elegida;
+  const contenedor = el.closest('[role="tablist"]').parentElement;
+  for (const boton of contenedor.querySelectorAll('[data-click="planillaSubpestana"]')) {
+    const activa = boton.dataset.tab === elegida;
+    boton.setAttribute('aria-selected', String(activa));
+    boton.className = clasePestanaAlumno(activa);
+  }
+  for (const panel of contenedor.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== elegida;
 }
 
 export async function renderTabEntrenamiento(content) {
@@ -91,24 +124,31 @@ export async function renderTabEntrenamiento(content) {
         <p class="text-xs text-gray-500 text-center">Pronto te cargaremos tu plan de nutrición.</p>
       `;
 
+    // Dos pestañas: en cada una, primero lo que cargó el coach en la app y debajo los links a los Sheets.
+    // Los dos paneles se dibujan juntos y se alterna cuál se ve, así el plan no se recarga al cambiar de pestaña.
     content.innerHTML = `
         <div class="space-y-6 pb-10">
           ${renderUserHeader()}
-          <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
-            <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-              <i class="fa-solid fa-dumbbell text-neonRed mr-2"></i> Planilla de Entrenamiento
-            </h3>
-            ${entrenamientoCard}
+          ${dibujarSubpestanas()}
+
+          <div data-panel="entrenamiento" role="tabpanel" ${subpestanaAlumno === 'entrenamiento' ? '' : 'hidden'} class="space-y-6">
+            ${SECCION_MI_PLAN}
+            <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+              <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+                <i class="fa-solid fa-dumbbell text-neonRed mr-2"></i> Planilla de Entrenamiento
+              </h3>
+              ${entrenamientoCard}
+            </div>
           </div>
 
-          <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
-            <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
-              <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición
-            </h3>
-            ${nutricionCard}
+          <div data-panel="nutricion" role="tabpanel" ${subpestanaAlumno === 'nutricion' ? '' : 'hidden'} class="space-y-6">
+            <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+              <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+                <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición
+              </h3>
+              ${nutricionCard}
+            </div>
           </div>
-
-          ${SECCION_MI_PLAN}
         </div>
       `;
     await montarMiPlan(content);
@@ -377,9 +417,11 @@ function adminPlanillaMostrarBuscador() {
 export function resetPlanillaPestanas() {
   adminPlanillaAbiertos = [];
   adminPlanillaActivo = null;
+  subpestanaAlumno = 'entrenamiento';
 }
 
 registrarAcciones({
+  planillaSubpestana: (el) => mostrarSubpestana(el),
   adminPlanillaFiltrar: () => adminPlanillaFiltrar(),
   adminPlanillaSeleccionar: (el) => adminPlanillaSeleccionar(el.dataset.id),
   adminPlanillaCambiarPagina: (el) => adminPlanillaCambiarPagina(Number(el.dataset.dir)),
