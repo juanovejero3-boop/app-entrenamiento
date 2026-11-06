@@ -9,6 +9,7 @@
 const MARGEN = 8; // aire entre el campo y lo que lo rodea
 const ESPACIO_MINIMO = 200; // con menos de esto libre, la cabecera del ejercicio se suelta
 const ESPERA_MS = 350; // lo que tarda en aparecer el teclado
+const VENTANA_DEL_TECLADO_MS = 1200; // después de tocar un campo, el área visible puede seguir cambiando mientras sube el teclado
 const PASADAS = 3; // al scrollear, las cabeceras fijas se acomodan: se vuelve a medir
 
 /**
@@ -38,6 +39,7 @@ export function vigilarTeclado(content) {
   if (vigilados.has(content)) return;
   vigilados.add(content);
   let temporizador = null;
+  let ultimoFoco = -Infinity;
 
   const esCampo = (el) => el instanceof HTMLElement && el.matches('[data-serie] input') && content.contains(el);
 
@@ -76,8 +78,12 @@ export function vigilarTeclado(content) {
   };
 
   content.addEventListener('focusin', (e) => {
-    if (esCampo(e.target)) programar();
+    if (!esCampo(e.target)) return;
+    ultimoFoco = Date.now();
+    programar();
   });
+  // Si el alumno empieza a scrollear, no se le pelea: se cancela cualquier corrección pendiente
+  content.addEventListener('touchmove', () => clearTimeout(temporizador), { passive: true });
   content.addEventListener('focusout', () => {
     clearTimeout(temporizador);
     temporizador = setTimeout(() => {
@@ -85,8 +91,10 @@ export function vigilarTeclado(content) {
       if (!esCampo(document.activeElement)) delete content.dataset.areaChica;
     }, 100);
   });
-  // El teclado suele aparecer después del foco: al cambiar el área visible se vuelve a acomodar
+  // El teclado suele terminar de subir después del foco: en ese momento se vuelve a acomodar. Fuera de esa ventana
+  // no: al scrollear con el teclado abierto el navegador esconde y muestra su barra de direcciones y eso también
+  // cambia el área visible; corregir ahí le pelearía el scroll al alumno.
   window.visualViewport?.addEventListener('resize', () => {
-    if (esCampo(document.activeElement)) programar(100);
+    if (esCampo(document.activeElement) && Date.now() - ultimoFoco < VENTANA_DEL_TECLADO_MS) programar(100);
   });
 }

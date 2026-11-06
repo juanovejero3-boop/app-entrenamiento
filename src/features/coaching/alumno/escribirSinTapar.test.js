@@ -137,6 +137,30 @@ describe('vigilarTeclado: al tocar un campo de una serie lo deja a la vista', ()
     expect(window.scrollBy.mock.calls.length).toBeLessThanOrEqual(3);
   });
 
+  it('al scrollear con el teclado abierto no se le pelea: los cambios de tamaño de pantalla tardíos no mueven nada', () => {
+    const viewport = new EventTarget();
+    Object.assign(viewport, { offsetTop: 0, height: 440 });
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+    vigilarTeclado(content);
+    enfocar(campo, { top: 360, bottom: 404 });
+    window.scrollBy.mockClear();
+    vi.advanceTimersByTime(5000); // pasó un buen rato: el alumno está scrolleando
+    campo.getBoundingClientRect = () => ({ top: 100, bottom: 144 }); // el campo quedó tapado por el scroll del alumno
+    viewport.dispatchEvent(new Event('resize')); // el navegador esconde su barra de direcciones
+    vi.advanceTimersByTime(1000);
+    expect(window.scrollBy).not.toHaveBeenCalled();
+  });
+
+  it('si el alumno empieza a scrollear antes de que se acomode, se cancela la corrección', () => {
+    vigilarTeclado(content);
+    campo.getBoundingClientRect = () => ({ top: 209, bottom: 253 });
+    campo.focus();
+    vi.advanceTimersByTime(100); // todavía no se acomodó
+    content.dispatchEvent(new Event('touchmove', { bubbles: true }));
+    vi.advanceTimersByTime(1000);
+    expect(window.scrollBy).not.toHaveBeenCalled();
+  });
+
   it('usa el área que deja libre el teclado (visualViewport) cuando el navegador la informa', () => {
     const viewport = new EventTarget();
     Object.assign(viewport, { offsetTop: 0, height: 700 }); // sin teclado: mucho lugar
