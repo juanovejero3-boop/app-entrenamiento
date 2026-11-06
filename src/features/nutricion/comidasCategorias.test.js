@@ -158,6 +158,39 @@ describe('comidas: categorías en un diálogo', () => {
     expect(fila('Pechuga de Pollo').querySelector('[data-dialogo-cantidad]').hidden).toBe(true);
   });
 
+  describe('scroll del diálogo', () => {
+    it('la lista tiene su propio scroll y no arrastra la página de atrás', () => {
+      montar(comidaVacia());
+      abrirCategoria('proteins');
+      const lista = dialogo().querySelector('[data-dialogo-lista]');
+      expect(lista.className).toContain('overflow-y-auto');
+      expect(lista.className).toContain('overscroll-contain');
+    });
+
+    it('el diálogo mide como mucho el 85 % de lo realmente visible (dvh) y deja siempre a la vista el botón Listo', () => {
+      montar(comidaVacia());
+      abrirCategoria('proteins');
+      expect(dialogo().className).toContain('max-h-[85dvh]');
+      expect(dialogo().className).not.toContain('85vh');
+      const listo = [...dialogo().querySelectorAll('[data-click="categoriaCerrar"]')].at(-1);
+      expect(listo.closest('[data-dialogo-lista]')).toBeNull(); // fuera de la parte que scrollea
+    });
+
+    it('un degradé abajo de la lista avisa que hay más alimentos', () => {
+      montar(comidaVacia());
+      abrirCategoria('proteins');
+      expect(dialogo().querySelector('[data-dialogo-degrade]')).not.toBeNull();
+    });
+
+    it('la página de atrás no scrollea mientras el diálogo está abierto, y vuelve a hacerlo al cerrarlo', () => {
+      montar(comidaVacia());
+      abrirCategoria('proteins');
+      expect(document.body.style.overflow).toBe('hidden');
+      dialogo().querySelector('[data-click="categoriaCerrar"]').click();
+      expect(document.body.style.overflow).toBe('');
+    });
+  });
+
   it('los nombres se muestran como texto, no como HTML', () => {
     const raro = { ...POLLO, id: 'x', nombre: '<img src=x onerror=alert(1)>' };
     montar(comidaVacia(), { alimentos: [raro] });

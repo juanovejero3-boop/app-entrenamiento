@@ -338,13 +338,14 @@ function abrirDialogoDeCategoria({ comidaId, opcionId, categoriaId }) {
   const categoria = categoriaDe(categoriaId);
   if (!categoria) return;
   dialogo = { comidaId, opcionId, categoriaId };
+  document.body.style.overflow = 'hidden'; // la página de atrás no se mueve mientras se elige
   const { kcal, p, c, f } = categoria.macros;
   const alimentos = vista.alimentos
     .filter((a) => a.categoria === categoriaId)
     .sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
   const overlay = modalBase();
   overlay.innerHTML = `
-    <div data-dialogo-categoria role="dialog" aria-modal="true" aria-label="${esc(categoria.nombre)}" class="bg-cyberCard border border-gray-700 rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col shadow-2xl">
+    <div data-dialogo-categoria role="dialog" aria-modal="true" aria-label="${esc(categoria.nombre)}" class="bg-cyberCard border border-gray-700 rounded-2xl w-full max-w-md max-h-[85dvh] flex flex-col shadow-2xl">
       <div class="flex items-start gap-3 p-4 border-b border-gray-800">
         <div class="flex-1 min-w-0">
           <h4 class="font-black text-white uppercase tracking-wide text-sm">${esc(categoria.nombre)}</h4>
@@ -352,7 +353,8 @@ function abrirDialogoDeCategoria({ comidaId, opcionId, categoriaId }) {
         </div>
         <button data-click="categoriaCerrar" class="${claseIcono}" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <div data-dialogo-lista class="flex-1 overflow-y-auto p-3 space-y-1.5">
+      <div class="relative flex-1 min-h-0 flex flex-col">
+      <div data-dialogo-lista class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 pb-8 space-y-1.5">
         ${alimentos
           .map(
             (a) => `
@@ -366,6 +368,8 @@ function abrirDialogoDeCategoria({ comidaId, opcionId, categoriaId }) {
           </button>`,
           )
           .join('')}
+      </div>
+      <div data-dialogo-degrade aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-cyberCard to-transparent"></div>
       </div>
       <div class="p-3 border-t border-gray-800">
         <button data-click="categoriaCerrar" class="w-full min-h-11 neon-glow-button text-white rounded-lg text-xs font-bold uppercase tracking-wider">Listo</button>
@@ -398,6 +402,7 @@ function agregarDesdeElDialogo(alimentoId) {
 
 function cerrarDialogoDeCategoria() {
   dialogo = null;
+  document.body.style.overflow = '';
   const overlay = document.getElementById('app-modal-overlay');
   if (overlay) overlay.style.display = 'none';
 }
