@@ -79,9 +79,18 @@ describe('vista del alumno: cabecera fija de cada ejercicio', () => {
     expect(insignia.compareDocumentPosition(columnas('e1')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('la última marca no va en la parte fija: se va con el scroll', () => {
-    expect(cabecera('e1').querySelector('[data-ultima-marca]')).toBeNull();
-    expect(tarjeta('e1').querySelector('[data-ultima-marca]')).not.toBeNull();
+  it('la última marca también va en la parte fija, arriba de los títulos de las columnas', () => {
+    abrir('e1');
+    const marca = cabecera('e1').querySelector('[data-ultima-marca]');
+    expect(marca).not.toBeNull();
+    expect(
+      marca.compareDocumentPosition(columnas('e1').querySelector('.grid')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('la última marca solo se ve con el ejercicio desplegado (con el plegado no ocupa lugar)', () => {
+    expect(columnas('e1').hidden).toBe(true);
+    expect(columnas('e1').contains(cabecera('e1').querySelector('[data-ultima-marca]'))).toBe(true);
   });
 });
 
