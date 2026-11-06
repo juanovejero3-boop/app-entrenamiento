@@ -11,7 +11,7 @@ let content;
 beforeEach(async () => {
   content = document.createElement('div');
   document.body.appendChild(content);
-  const plan = planCompleto();
+  const plan = planCompleto({ superserie: false });
   // Fondos (e3) pasa a ser por tiempo: el coach lo anota como 20"
   for (const ej of plan.weeks[0].days[0].blocks.flatMap((b) => b.exercises)) if (ej.id === 'e3') ej.reps = '20"';
   await sembrarPlan(ALUMNO.id, plan);

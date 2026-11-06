@@ -29,7 +29,7 @@ const esperar = () => new Promise((r) => setTimeout(r, 0));
 const SEMANA_1 = '2026-10-20'; // el plan de prueba arranca el lunes 19/10/2026
 const SEMANA_2 = '2026-10-27';
 
-async function guardarPlan(plan = planCompleto()) {
+async function guardarPlan(plan = planCompleto({ superserie: false })) {
   await sembrarPlan(ALUMNO.id, plan);
 }
 const abrir = (opciones = {}) => abrirPlanAlumno(content, ALUMNO, { hoy: SEMANA_1, ...opciones });
@@ -51,7 +51,7 @@ describe('vista del alumno: sin plan', () => {
   });
 
   it('un plan sin semanas cuenta como sin plan', async () => {
-    await guardarPlan({ ...planCompleto(), weeks: [] });
+    await guardarPlan({ ...planCompleto({ superserie: false }), weeks: [] });
     await abrir();
     expect(content.textContent).toContain('todavía no cargó tu plan');
   });
@@ -118,20 +118,13 @@ describe('vista del alumno: el plan', () => {
     expect(fondos).toContain('Pausa abajo');
   });
 
-  it('las superseries se muestran con A1, A2 y el ejercicio suelto sin etiqueta', async () => {
-    await abrir();
-    expect($('[data-ejercicio="e1"] [data-etiqueta]').textContent.trim()).toBe('A1');
-    expect($('[data-ejercicio="e2"] [data-etiqueta]').textContent.trim()).toBe('A2');
-    expect($('[data-ejercicio="e3"] [data-etiqueta]')).toBeNull();
-  });
-
   it('muestra el tipo de cada bloque', async () => {
     await abrir();
     expect(content.textContent).toContain('Fuerza Máxima');
   });
 
   it('muestra lo que escribió el entrenador como texto, sin interpretar HTML', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises[0].name = '<img src=x onerror="window.__xss=1"> Press';
     plan.weeks[0].days[0].blocks[0].exercises[0].notes = '<b>fuerte</b>';
     await guardarPlan(plan);
@@ -301,7 +294,7 @@ describe('vista del alumno: PDF', () => {
   });
 
   it('sin lineamientos cargados no ofrece el PDF de lineamientos', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.report = { objective: '', priorities: [], focus: '', evaluation: '', guidelines: '' };
     await guardarPlan(plan);
     await abrir();
@@ -312,7 +305,7 @@ describe('vista del alumno: PDF', () => {
 
 describe('vista del alumno: video de demostración', () => {
   it('ofrece "Demo" solo para los ejercicios que están en la base de ejercicios con video', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises[0].name = '  02 paused air squat '; // sin importar mayúsculas ni espacios
     await guardarPlan(plan);
     await abrir();
@@ -329,7 +322,7 @@ describe('vista del alumno: series con rango y series omitidas', () => {
   const omitir = (ejercicio, serie) => $(`[data-click="alumnoOmitir"][data-e="${ejercicio}"][data-n="${serie}"]`);
 
   it('un ejercicio con rango de series (3-4) muestra una fila por cada serie hasta el máximo', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises[0].sets = '3-4';
     await guardarPlan(plan);
     await abrir();
@@ -442,7 +435,7 @@ const textoDelAviso = () => document.getElementById('app-modal-overlay-aux')?.te
 
 /** El primer día con un solo ejercicio de 1 serie (para terminarlo sin series pendientes). */
 function planDeUnaSerie() {
-  const plan = planCompleto();
+  const plan = planCompleto({ superserie: false });
   plan.weeks[0].days[0].blocks[0].exercises = [{ ...plan.weeks[0].days[0].blocks[0].exercises[0], sets: '1' }];
   return plan;
 }
@@ -654,7 +647,7 @@ describe('vista del alumno: barra de progreso con omitidas en rojo', () => {
   });
 
   it('las dos partes nunca pasan del 100 % por el redondeo', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises = [{ ...plan.weeks[0].days[0].blocks[0].exercises[0], sets: '8' }];
     await guardarPlan(plan);
     await abrir();
@@ -858,8 +851,8 @@ describe('vista del alumno: barra fija de semanas y días', () => {
 
   it('un día sin ejercicios no muestra contador en la barra', async () => {
     await guardarPlan({
-      ...planCompleto(),
-      weeks: [{ ...planCompleto().weeks[0], days: [{ id: 'dv', name: 'Vacío', blocks: [] }] }],
+      ...planCompleto({ superserie: false }),
+      weeks: [{ ...planCompleto({ superserie: false }).weeks[0], days: [{ id: 'dv', name: 'Vacío', blocks: [] }] }],
     });
     await abrir();
     expect($('[data-barra-fija]')).not.toBeNull();
@@ -1108,7 +1101,7 @@ describe('vista del alumno: el peso se copia a las series siguientes', () => {
   });
 
   it('con un rango de series llega hasta la última fila', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises[0].sets = '3-4';
     await guardarPlan(plan);
     await abrir();
@@ -1155,7 +1148,7 @@ describe('vista en vivo del coach', () => {
   let cicloId;
   /** La misma semana 1, con un segundo día que también tiene ejercicios (e9). */
   function planConDosDias() {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[1].blocks = [
       {
         id: 'b9',

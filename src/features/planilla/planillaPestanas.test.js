@@ -73,7 +73,7 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
 
   describe('Entrenamiento', () => {
     it('primero lo que cargó el coach en la app y debajo el link a la planilla de Sheets', async () => {
-      await sembrarPlan(ALUMNO.id, planCompleto());
+      await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
       await renderTabEntrenamiento(content);
       const plan = panel('entrenamiento').querySelector('[data-mi-plan]');
       const sheets = panel('entrenamiento').querySelector('a[href="https://docs.google.com/entrenamiento"]');
@@ -137,7 +137,7 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
     });
 
     it('cambiar de pestaña no vuelve a cargar el entrenamiento ni pierde lo que estaba abierto', async () => {
-      await sembrarPlan(ALUMNO.id, planCompleto());
+      await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
       await renderTabEntrenamiento(content);
       const antes = $('[data-mi-plan]');
       pestana('nutricion').click();

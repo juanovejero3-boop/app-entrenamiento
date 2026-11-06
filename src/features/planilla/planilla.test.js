@@ -42,7 +42,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('si el entrenador le armó un plan, lo ve debajo de las tarjetas de siempre', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
 
     await renderTabEntrenamiento(content);
 
@@ -54,7 +54,7 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('el alumno anota sus series y quedan guardadas', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
 
     const kg = $('[data-change="alumnoSerie"][data-e="e1"][data-n="1"][data-campo="kg"]');
@@ -74,8 +74,12 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('si tiene ciclos anteriores los ve plegados debajo del activo', async () => {
-    await repo.crearCiclo(ALUMNO.id, { ...planCompleto(), macroName: 'Ciclo viejo' }, 'finalizado');
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await repo.crearCiclo(
+      ALUMNO.id,
+      { ...planCompleto({ superserie: false }), macroName: 'Ciclo viejo' },
+      'finalizado',
+    );
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
 
     await renderTabEntrenamiento(content);
 
@@ -84,13 +88,13 @@ describe('Planilla del alumno: mi plan de entrenamiento', () => {
   });
 
   it('un ciclo en borrador no le muestra la sección de plan', async () => {
-    await repo.crearCiclo(ALUMNO.id, planCompleto(), 'borrador');
+    await repo.crearCiclo(ALUMNO.id, planCompleto({ superserie: false }), 'borrador');
     await renderTabEntrenamiento(content);
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
   it('no mezcla el plan de otro alumno', async () => {
-    await sembrarPlan('otro-alumno', planCompleto());
+    await sembrarPlan('otro-alumno', planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
@@ -118,7 +122,7 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
   };
 
   it('la ficha muestra directo el entrenamiento del alumno, como lo ve él y en solo lectura, sin pantalla aparte', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await abrirFichaDelAlumno();
 
     const entrenamiento = $('[data-entrenamiento-alumno]');
@@ -132,13 +136,13 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
   });
 
   it('ya no existe el botón "Ver como alumno", que reemplazaba toda la pantalla', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await abrirFichaDelAlumno();
     expect($('[data-click="planillaVerComoAlumno"]')).toBeNull();
   });
 
   it('las series que el alumno va completando aparecen en la ficha al instante', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await abrirFichaDelAlumno();
     const check = () => $('[data-click="alumnoCheck"][data-e="e1"][data-n="1"]');
     expect(check().getAttribute('aria-pressed')).toBe('false');
@@ -155,8 +159,8 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
   });
 
   it('con varios alumnos abiertos en pestañas, cada ficha muestra el entrenamiento del suyo', async () => {
-    await sembrarPlan(ALUMNO.id, { ...planCompleto(), macroName: 'Plan de Franco' });
-    await sembrarPlan(OTRO.id, { ...planCompleto(), macroName: 'Plan de Lucía' });
+    await sembrarPlan(ALUMNO.id, { ...planCompleto({ superserie: false }), macroName: 'Plan de Franco' });
+    await sembrarPlan(OTRO.id, { ...planCompleto({ superserie: false }), macroName: 'Plan de Lucía' });
     await renderTabEntrenamiento(content);
     await seleccionar(ALUMNO.id);
     expect($('[data-entrenamiento-alumno]').textContent).toContain('Plan de Franco');
@@ -172,8 +176,8 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
   });
 
   it('solo escucha en vivo al alumno de la ficha que está abierta', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
-    await sembrarPlan(OTRO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
+    await sembrarPlan(OTRO.id, planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
     await seleccionar(ALUMNO.id);
     $('[data-click="adminPlanillaMostrarBuscador"]').click();
@@ -183,7 +187,7 @@ describe('Planilla del coach: el entrenamiento del alumno en su ficha', () => {
   });
 
   it('"Ciclos de entrenamiento" abre los ciclos y "Volver" regresa a la ficha, con el entrenamiento a la vista', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await abrirFichaDelAlumno();
     $('[data-click="planillaAbrirCiclos"]').click();
     await vi.waitFor(() => expect($('[data-click="ciclosVolver"]')).not.toBeNull());
@@ -212,7 +216,7 @@ describe('Planilla del coach: su propio plan', () => {
   });
 
   it('si tiene un plan asignado lo ve en su Planilla y puede completarlo', async () => {
-    await sembrarPlan(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto({ superserie: false }));
 
     await renderTabEntrenamiento(content);
 
@@ -239,7 +243,7 @@ describe('Planilla del coach: su propio plan', () => {
 
   describe('al volver al buscador desde la ficha de un alumno', () => {
     const abrirYVolver = async (cerrar) => {
-      await sembrarPlan(COACH.id, planCompleto());
+      await sembrarPlan(COACH.id, planCompleto({ superserie: false }));
       await renderTabEntrenamiento(content);
       $(`[data-click="adminPlanillaSeleccionar"][data-id="${ALUMNO.id}"]`).click();
       await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
@@ -272,7 +276,7 @@ describe('Planilla del coach: su propio plan', () => {
   });
 
   it('el buscador de alumnos sigue estando', async () => {
-    await sembrarPlan(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
     expect($('#admin-planilla-search')).not.toBeNull();
   });
@@ -283,13 +287,13 @@ describe('Planilla del coach: su propio plan', () => {
   });
 
   it('el plan de un alumno no aparece como plan del coach', async () => {
-    await sembrarPlan(ALUMNO.id, planCompleto());
+    await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
     expect(content.textContent).not.toContain('Mi plan de entrenamiento');
   });
 
   it('en su propia ficha ve su plan para completarlo: no es solo lectura ni en vivo', async () => {
-    await sembrarPlan(COACH.id, planCompleto());
+    await sembrarPlan(COACH.id, planCompleto({ superserie: false }));
     await renderTabEntrenamiento(content);
     $(`[data-click="adminPlanillaSeleccionar"][data-id="${COACH.id}"]`).click();
     await vi.waitFor(() => expect($('[data-entrenamiento-alumno] [data-plan-alumno]')).not.toBeNull());

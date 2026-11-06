@@ -12,7 +12,7 @@ const SEMANA_2 = '2026-10-27';
 
 /** El plan de prueba con la semana 2 igual a la 1 pero con ids propios (como cuando el coach propaga la semana). */
 function planConDosSemanas() {
-  const plan = planCompleto();
+  const plan = planCompleto({ superserie: false });
   const copia = structuredClone(plan.weeks[0]);
   copia.id = 'w2';
   copia.name = 'Semana 2';

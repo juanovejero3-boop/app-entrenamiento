@@ -351,18 +351,137 @@ function crearVista(vista) {
   function dibujarBloque(bloque) {
     const tipo = TIPOS_BLOQUE[bloque.type] ?? { label: bloque.type, color: '#888' };
     const etiquetas = etiquetasSuperserie(bloque);
+    // Los ejercicios con la misma letra forman una superserie: una sola tarjeta, en el lugar del primero
+    const miembros = {};
+    bloque.exercises.forEach((ej, i) => {
+      if (ej.group) (miembros[ej.group] ??= []).push({ ej, etiqueta: etiquetas[i] });
+    });
+    const dibujados = new Set();
+    const tarjetas = bloque.exercises.map((ej, i) => {
+      if (!ej.group || miembros[ej.group].length < 2) return dibujarEjercicio(ej, etiquetas[i]);
+      if (dibujados.has(ej.group)) return '';
+      dibujados.add(ej.group);
+      return dibujarSuperserie(ej.group, miembros[ej.group]);
+    });
     return `
     <section class="space-y-2">
       <h3 class="text-[11px] font-black uppercase tracking-wider pl-2 border-l-4" style="color: ${esc(tipo.color)}; border-color: ${esc(tipo.color)}">${esc(tipo.label)}</h3>
-      ${bloque.exercises.map((ej, i) => dibujarEjercicio(ej, etiquetas[i])).join('')}
+      ${tarjetas.join('')}
     </section>
   `;
   }
 
   /** Lo que hizo la última vez que entrenó este ejercicio en el ciclo (o que todavía no hay marcas). */
-  function dibujarUltimaMarca(ej) {
+  function dibujarUltimaMarca(ej, etiqueta = '') {
     const marca = ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej);
-    return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-xs rounded-lg bg-black border border-gray-700 px-2.5 py-1 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-neonRed not-italic"></i>${marca ? '<b class="uppercase tracking-wide text-[10px] text-gray-400">Última marca</b><br>' : ''}${esc(textoUltimaMarca(marca))}</p>`;
+    const titulo = etiqueta ? `Última marca · ${esc(etiqueta)}` : 'Última marca';
+    return `<p data-ultima-marca ${marca ? '' : 'data-sin-marca'} class="text-xs rounded-lg bg-black border border-gray-700 px-2.5 py-1 ${marca ? 'text-gray-200' : 'text-gray-400 italic'}"><i class="fa-solid fa-clock-rotate-left mr-1.5 text-neonRed not-italic"></i>${marca ? `<b class="uppercase tracking-wide text-[10px] text-gray-400">${titulo}</b><br>` : etiqueta ? `<b class="not-italic text-gray-300">${esc(etiqueta)}</b> · ` : ''}${esc(textoUltimaMarca(marca))}</p>`;
+  }
+
+  const chipDeLetra = (texto, color) =>
+    `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${esc(color)}; background: ${esc(color)}22; border: 1px solid ${esc(color)}">${esc(texto)}</span>`;
+
+  const insigniasDe = (ej) =>
+    [
+      ej.reps && `Reps ${ej.reps}`,
+      ej.intensityValue && `${ej.intensityType} ${ej.intensityValue}`,
+      ej.rest && `Descanso ${ej.rest}`,
+      ej.tech,
+    ].filter(Boolean);
+
+  /**
+   * Una superserie en una sola tarjeta: arriba qué ejercicios la forman (siempre a la vista) y, desplegada, las series
+   * ordenadas por ronda (A1, A2, A3 de la ronda 1, después las de la ronda 2...) que es como se entrenan, así no hay
+   * que scrollear de un ejercicio al otro.
+   * @param {string} grupo  letra de la superserie
+   * @param {{ ej: object, etiqueta: string }[]} miembros
+   */
+  function dibujarSuperserie(grupo, miembros) {
+    const color = GRUPOS_SUPERSERIE[grupo] ?? '#9ca3af';
+    const ids = miembros.map(({ ej }) => ej.id);
+    const abierto = vista.abiertos.has(ids[0]);
+    const { texto, completo } = resumenDeGrupo(miembros.map(({ ej }) => ej));
+    const rondas = Math.max(...miembros.map(({ ej }) => cantidadDeSeries(ej)));
+    const leyenda = miembros
+      .map(({ ej, etiqueta }) => {
+        const video = vista.videos.get(ej.name.trim().toLowerCase());
+        return `
+        <div data-ss-ejercicio="${esc(ej.id)}" class="space-y-1">
+          <div class="flex items-center gap-2">
+            ${chipDeLetra(etiqueta, color)}
+            <span class="flex-1 min-w-0 font-black text-white text-sm">${esc(ej.name || 'Ejercicio')}</span>
+            ${video ? `<button data-click="materialAbrirLink" data-link="${esc(video)}" data-nombre="${esc(ej.name.trim())}" class="shrink-0 text-[10px] font-bold uppercase px-2 py-1 rounded bg-red-950 border border-neonRed text-neonRed"><i class="fa-solid fa-play mr-1"></i>Demo</button>` : ''}
+          </div>
+          <div class="flex flex-wrap gap-1 pl-10">${insigniasDe(ej)
+            .map(
+              (t) =>
+                `<span data-insignia class="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-black border border-gray-500 text-gray-100">${esc(t)}</span>`,
+            )
+            .join('')}</div>
+        </div>`;
+      })
+      .join('');
+    // Sin ninguna marca todavía, una sola línea alcanza para toda la superserie
+    const hayMarcas = miembros.some(
+      ({ ej }) => ultimaMarca(vista.plan, vista.registro, { w: vista.w, d: vista.d }, ej) !== null,
+    );
+    const marcas = hayMarcas
+      ? miembros.map(({ ej, etiqueta }) => dibujarUltimaMarca(ej, etiqueta)).join('')
+      : dibujarUltimaMarca(miembros[0].ej);
+    const notas = miembros
+      .filter(({ ej }) => ej.notes)
+      .map(
+        ({ ej, etiqueta }) =>
+          `<p class="text-xs text-gray-400"><b class="text-gray-300">${esc(etiqueta)}</b> · ${esc(ej.notes)}</p>`,
+      )
+      .join('');
+    const todosPorTiempo = miembros.every(({ ej }) => esTiempo(ej.reps));
+    const columnas = `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span></span><span>Kg</span><span>${todosPorTiempo ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
+    const filasDeRonda = (ronda) =>
+      miembros
+        .filter(({ ej }) => cantidadDeSeries(ej) >= ronda)
+        .map(({ ej, etiqueta }) => dibujarFila(ej, ronda, chipDeFila(etiqueta, color)))
+        .join('');
+    return `
+    <article data-superserie="${esc(grupo)}" data-ids="${esc(ids.join(' '))}" class="bg-cyberCard rounded-xl border border-dashed p-3 space-y-3" style="border-color: ${esc(color)}">
+      <button type="button" data-click="alumnoEjercicio" data-e="${esc(ids[0])}" aria-expanded="${abierto}" class="w-full flex items-center gap-2 text-left">
+        ${chipDeLetra(grupo, color)}
+        <span class="flex-1 min-w-0 font-black text-white text-sm">Superserie · ${rondas} ${rondas === 1 ? 'ronda' : 'rondas'}</span>
+        <span data-ej-resumen ${completo ? 'data-completo="true"' : ''} class="${claseResumen(completo)}">${esc(texto)}</span>
+        <i data-ej-flecha class="fa-solid fa-chevron-down text-gray-300 transition ${abierto ? 'rotate-180' : ''}"></i>
+      </button>
+      <div class="space-y-2">${leyenda}</div>
+      <div data-ej-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
+        ${marcas}
+        ${notas}
+        <div class="pb-1 border-b border-gray-800">${columnas}</div>
+        ${Array.from({ length: rondas }, (_, i) => i + 1)
+          .map(
+            (ronda) => `
+        <section data-ronda="${ronda}" ${rondaCompleta(miembros, ronda) ? 'data-completa="true"' : ''} class="${claseRonda(rondaCompleta(miembros, ronda))}">
+          <p class="text-[10px] font-black uppercase tracking-wider text-gray-400 px-1">Ronda ${ronda}</p>
+          ${filasDeRonda(ronda)}
+        </section>`,
+          )
+          .join('')}
+      </div>
+    </article>
+  `;
+  }
+
+  const claseRonda = (completa) =>
+    `rounded-lg border p-1.5 space-y-1 ${completa ? 'border-emerald-800 bg-emerald-950/20' : 'border-gray-800 bg-black/30'}`;
+
+  /** La etiqueta de la fila de una superserie (A1, A2...) con el color del grupo. */
+  const chipDeFila = (etiqueta, color) =>
+    `<span data-etiqueta class="text-center text-[11px] font-black rounded py-0.5" style="color: ${esc(color)}; background: ${esc(color)}22">${esc(etiqueta)}</span>`;
+
+  /** Una ronda está completa cuando todas sus series están hechas u omitidas. */
+  function rondaCompleta(miembros, ronda) {
+    const series = miembros
+      .filter(({ ej }) => cantidadDeSeries(ej) >= ronda)
+      .map(({ ej }) => serieDe(vista.registro, ej.id, ronda));
+    return series.length > 0 && series.every((x) => x.done || x.skipped);
   }
 
   function dibujarEjercicio(ej, etiqueta) {
@@ -420,6 +539,24 @@ function crearVista(vista) {
     return { texto: `${hechas}/${total}${omitidasTexto}`, completo: hechas === total };
   }
 
+  /** El "6/24" de una superserie: las series hechas de todos sus ejercicios. */
+  function resumenDeGrupo(ejercicios) {
+    let hechas = 0;
+    let omitidas = 0;
+    let total = 0;
+    for (const ej of ejercicios) {
+      const n = cantidadDeSeries(ej);
+      total += n;
+      for (let i = 1; i <= n; i++) {
+        const serie = serieDe(vista.registro, ej.id, i);
+        if (serie.done) hechas++;
+        else if (serie.skipped) omitidas++;
+      }
+    }
+    const omitidasTexto = omitidas ? ` · ${omitidas} ${omitidas === 1 ? 'omitida' : 'omitidas'}` : '';
+    return { texto: `${hechas}/${total}${omitidasTexto}`, completo: hechas === total };
+  }
+
   /** Reps de la serie. Si son segundos se escribe solo el número (el teclado del celular no tiene comillas) y la unidad se ve fija. */
   function campoReps(ej, serie, pos, dis, n) {
     const tiempo = esTiempo(ej.reps);
@@ -433,21 +570,23 @@ function crearVista(vista) {
   const dibujarColumnas = (ej) =>
     `<div class="grid ${COLUMNAS} gap-1.5 text-center text-xs font-bold uppercase text-gray-300"><span>Serie</span><span>Kg</span><span>${esTiempo(ej.reps) ? 'Seg' : 'Reps'}</span><span>Listo</span><span>No</span></div>`;
 
-  function dibujarSeries(ej) {
+  /** Una fila de serie: kg, reps, hecha y no la hice. `primera` es lo que va en la primera columna (el número o la etiqueta A1). */
+  function dibujarFila(ej, n, primera = `<span class="text-center text-xs font-bold text-gray-500">${n}</span>`) {
     const dis = vista.soloLectura || diaTerminado() ? 'disabled' : '';
-    const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => {
-      const n = i + 1;
-      const serie = serieDe(vista.registro, ej.id, n);
-      const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
-      return `
+    const serie = serieDe(vista.registro, ej.id, n);
+    const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
+    return `
       <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
-        <span class="text-center text-xs font-bold text-gray-500">${n}</span>
+        ${primera}
         <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}" aria-label="Kg de la serie ${n}">
         ${campoReps(ej, serie, pos, dis, n)}
         <button data-click="alumnoCheck" ${pos} aria-pressed="${serie.done}" ${dis} class="${claseCheck(serie.done)} disabled:opacity-60" aria-label="Serie ${n} hecha"><i class="fa-solid fa-circle-check"></i></button>
         <button data-click="alumnoOmitir" ${pos} aria-pressed="${serie.skipped}" ${dis} class="${claseOmitir(serie.skipped)} disabled:opacity-60" aria-label="Serie ${n}: no la hice" title="No la hice"><i class="fa-solid fa-circle-xmark"></i></button>
       </div>`;
-    }).join('');
+  }
+
+  function dibujarSeries(ej) {
+    const filas = Array.from({ length: cantidadDeSeries(ej) }, (_, i) => dibujarFila(ej, i + 1)).join('');
     return `
     <div class="space-y-2">${filas}</div>
   `;
@@ -472,17 +611,26 @@ function crearVista(vista) {
     if (barraRoja) barraRoja.style.width = `${rojo}%`;
   }
 
+  /** La tarjeta de un ejercicio: la suya o, si es de una superserie, la de la superserie. */
   const articuloDe = (ejercicioId) =>
-    [...vista.content.querySelectorAll('[data-ejercicio]')].find((a) => a.dataset.ejercicio === ejercicioId);
+    [...vista.content.querySelectorAll('[data-ejercicio], [data-superserie]')].find(
+      (a) => a.dataset.ejercicio === ejercicioId || a.dataset.ids?.split(' ').includes(ejercicioId),
+    );
+  const idsDeLaTarjeta = (ejercicioId) => articuloDe(ejercicioId)?.dataset.ids?.split(' ') ?? [ejercicioId];
+  const ejerciciosDelDia = () => diaActual().blocks.flatMap((b) => b.exercises);
 
   /** Actualiza el "2/4" del encabezado de un ejercicio, sin redibujar nada más. */
   function actualizarResumenDeEjercicio(ejercicioId) {
-    const ejercicio = diaActual()
-      .blocks.flatMap((b) => b.exercises)
-      .find((e) => e.id === ejercicioId);
-    const resumen = articuloDe(ejercicioId)?.querySelector('[data-ej-resumen]');
-    if (!ejercicio || !resumen) return;
-    const { texto, completo } = resumenDeEjercicio(ejercicio);
+    const articulo = articuloDe(ejercicioId);
+    const resumen = articulo?.querySelector('[data-ej-resumen]');
+    if (!resumen) return;
+    const ejercicios = idsDeLaTarjeta(ejercicioId)
+      .map((id) => ejerciciosDelDia().find((e) => e.id === id))
+      .filter(Boolean);
+    if (!ejercicios.length) return;
+    const { texto, completo } = articulo.dataset.superserie
+      ? resumenDeGrupo(ejercicios)
+      : resumenDeEjercicio(ejercicios[0]);
     resumen.textContent = texto;
     resumen.className = claseResumen(completo);
     if (completo) resumen.dataset.completo = 'true';
@@ -501,7 +649,8 @@ function crearVista(vista) {
     const articulo = articuloDe(ejercicioId);
     if (!articulo) return;
     articulo.querySelector('[data-ej-cuerpo]').hidden = !abierto;
-    articulo.querySelector('[data-ej-columnas]').hidden = !abierto;
+    const columnas = articulo.querySelector('[data-ej-columnas]');
+    if (columnas) columnas.hidden = !abierto;
     articulo.querySelector('[data-click="alumnoEjercicio"]').setAttribute('aria-expanded', String(abierto));
     articulo.querySelector('[data-ej-flecha]')?.classList.toggle('rotate-180', abierto);
   }
@@ -513,8 +662,10 @@ function crearVista(vista) {
 
   function alternarEjercicio(ejercicioId) {
     const abrir = !vista.abiertos.has(ejercicioId);
-    if (abrir) vista.abiertos.add(ejercicioId);
-    else vista.abiertos.delete(ejercicioId);
+    for (const id of idsDeLaTarjeta(ejercicioId)) {
+      if (abrir) vista.abiertos.add(id);
+      else vista.abiertos.delete(id);
+    }
     mostrarCuerpo(ejercicioId, abrir);
     actualizarBotonTodos();
   }
@@ -548,6 +699,24 @@ function crearVista(vista) {
     check.className = `${claseCheck(done)} disabled:opacity-60`;
     omitir.setAttribute('aria-pressed', String(skipped));
     omitir.className = `${claseOmitir(skipped)} disabled:opacity-60`;
+    pintarRonda(fila);
+  }
+
+  /** En una superserie, marca en verde la ronda cuando todas sus series están hechas u omitidas. */
+  function pintarRonda(fila) {
+    const ronda = fila.closest('[data-ronda]');
+    if (!ronda) return;
+    const completa = [...ronda.querySelectorAll('[data-serie]')].every((f) => {
+      const [id, n] = [
+        f.dataset.serie.slice(0, f.dataset.serie.lastIndexOf('-')),
+        Number(f.dataset.serie.split('-').pop()),
+      ];
+      const serie = serieDe(vista.registro, id, n);
+      return serie.done || serie.skipped;
+    });
+    ronda.className = claseRonda(completa);
+    if (completa) ronda.dataset.completa = 'true';
+    else delete ronda.dataset.completa;
   }
 
   const diaActual = () => vista.plan.weeks[vista.w].days[vista.d];

@@ -11,7 +11,7 @@ let content;
 beforeEach(async () => {
   content = document.createElement('div');
   document.body.appendChild(content);
-  await sembrarPlan(ALUMNO.id, planCompleto());
+  await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
   await abrirPlanAlumno(content, ALUMNO, { hoy: '2026-10-20' });
 });
 afterEach(() => {
@@ -49,7 +49,7 @@ describe('vista del alumno: cabecera de cada ejercicio', () => {
   });
 
   it('en un ejercicio por tiempo la columna se llama Seg', async () => {
-    const plan = planCompleto();
+    const plan = planCompleto({ superserie: false });
     plan.weeks[0].days[0].blocks[0].exercises[2].reps = '20"';
     await sembrarPlan(ALUMNO.id, plan);
     await abrirPlanAlumno(content, ALUMNO, { hoy: '2026-10-20' });

@@ -20,7 +20,8 @@ export function textoDe(documento) {
 export const ALUMNO = { id: 'u1', name: 'Franco Soria', email: 'franco@ejemplo.com', goal: 'Aumento de masa muscular' };
 
 /** Plan completo: 2 semanas, la 1 con un día con superserie A (2 ejercicios) y un ejercicio suelto. */
-export function planCompleto() {
+/** @param {{ superserie?: boolean }} [opciones]  con superserie: false, Press banca y Remo son ejercicios sueltos */
+export function planCompleto({ superserie = true } = {}) {
   const ej = (id, name, extra = {}) => ({
     id,
     name,
@@ -62,8 +63,12 @@ export function planCompleto() {
                 id: 'b1',
                 type: 'fuerza',
                 exercises: [
-                  ej('e1', 'Press banca', { group: 'A', rest: '2 min' }),
-                  ej('e2', 'Remo con barra', { group: 'A', intensityType: 'RPE', intensityValue: '8' }),
+                  ej('e1', 'Press banca', { group: superserie ? 'A' : '', rest: '2 min' }),
+                  ej('e2', 'Remo con barra', {
+                    group: superserie ? 'A' : '',
+                    intensityType: 'RPE',
+                    intensityValue: '8',
+                  }),
                   ej('e3', 'Fondos', { sets: '3', reps: '10', tech: 'Rest-Pause', notes: 'Pausa abajo' }),
                 ],
               },

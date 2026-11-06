@@ -24,7 +24,7 @@ const $ = (selector) => content.querySelector(selector);
 const $$ = (selector) => [...content.querySelectorAll(selector)];
 const esperar = () => new Promise((r) => setTimeout(r, 0));
 const abrir = (opciones = {}) => abrirPlanesDelAlumno(content, ALUMNO, { hoy: HOY, ...opciones });
-const plan = (nombre) => ({ ...planCompleto(), macroName: nombre });
+const plan = (nombre) => ({ ...planCompleto({ superserie: false }), macroName: nombre });
 const anterior = (id) => $(`[data-ciclo-anterior="${id}"]`);
 const alternar = async (id) => {
   anterior(id).querySelector('[data-click="historialAlternar"]').click();
