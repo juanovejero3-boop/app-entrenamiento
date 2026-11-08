@@ -12,6 +12,23 @@ function medidasPng(ruta) {
   return { ancho: bytes.readUInt32BE(16), alto: bytes.readUInt32BE(20) };
 }
 
+/** `true` si el PNG tiene canal de transparencia (tipo de color 4 o 6 en la cabecera). */
+const tieneTransparencia = (ruta) => [4, 6].includes(readFileSync(raiz(ruta))[25]);
+
+describe('esquinas de los íconos', () => {
+  it('los íconos redondeados (pestaña y app) tienen las esquinas transparentes', () => {
+    for (const nombre of ['favicon-16', 'favicon-32', 'favicon-48', 'icon-192', 'icon-512']) {
+      expect(tieneTransparencia(`public/icons/${nombre}.png`), nombre).toBe(true);
+    }
+  });
+
+  it('el ícono «maskable» y el del iPhone son cuadrados opacos: el sistema les pone su propia forma', () => {
+    for (const nombre of ['icon-maskable-512', 'apple-touch-icon']) {
+      expect(tieneTransparencia(`public/icons/${nombre}.png`), nombre).toBe(false);
+    }
+  });
+});
+
 describe('manifest de la app (instalable en el celular)', () => {
   it('lleva el nombre de la marca y abre como app, sin la barra del navegador', () => {
     expect(manifest.name).toBe('Prime Physique');
