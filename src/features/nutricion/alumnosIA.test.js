@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asentar } from '../../test-helpers.js';
 import '../../lib/ui.js';
 import { mostrarAlumnosDeNutricion } from './alumnos.js';
 import { crearComida } from './comidas.js';
-import { claveDelPlan, crearRepoNutricionLocal } from './repoLocal.js';
+import { crearClienteFalso } from '../coaching/repo/clienteFalso.js';
+import { crearRepoNutricionLocal } from './repoLocal.js';
+import { crearRepoNutricion } from './repoNutricion.js';
 
 const SIMON = { id: 'u2', name: 'Simón Álvarez', email: 'simon@ejemplo.com' };
 const PARAMETROS = {
@@ -18,6 +21,7 @@ const PARAMETROS = {
 
 let content;
 let almacen;
+let cliente;
 let repo;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout'] });
@@ -25,7 +29,11 @@ beforeEach(() => {
   document.body.appendChild(content);
   const datos = new Map();
   almacen = { datos, getItem: (k) => datos.get(k) ?? null, setItem: (k, v) => void datos.set(k, String(v)) };
-  repo = crearRepoNutricionLocal(() => almacen);
+  cliente = crearClienteFalso();
+  repo = crearRepoNutricion(
+    cliente,
+    crearRepoNutricionLocal(() => almacen),
+  );
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -36,7 +44,12 @@ const $ = (selector) => content.querySelector(selector);
 const $$ = (selector) => [...content.querySelectorAll(selector)];
 const toasts = () => [...document.body.querySelectorAll('div.fixed')].map((e) => e.textContent);
 const form = () => $('[data-plan-form]').elements;
-const planGuardado = (id) => JSON.parse(almacen.datos.get(claveDelPlan(id)));
+/** Lo que quedó guardado en la cuenta del coach para ese alumno (espera a que termine de guardarse). */
+const planGuardado = async (id) => {
+  await asentar();
+  const fila = cliente.tablas.nutrition_plans.find((f) => f.student_id === id);
+  return fila && { parametros: fila.parametros, comidas: fila.comidas, notas: fila.notas };
+};
 const escribir = (campo, valor) => {
   campo.value = valor;
   campo.dispatchEvent(new Event('input', { bubbles: true }));
@@ -60,32 +73,33 @@ const sugerencia = (avisos = []) => ({
 
 describe('ficha: sugerir comidas con IA', () => {
   let sugerir;
-  const abrir = (extra = {}) => {
+  const abrir = async (extra = {}) => {
     sugerir = vi.fn(async () => sugerencia());
-    mostrarAlumnosDeNutricion(content, { repo, alumnos: [SIMON], sugerir, ...extra });
+    await mostrarAlumnosDeNutricion(content, { repo, alumnos: [SIMON], sugerir, ...extra });
     $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await asentar();
   };
   const pedir = async () => {
     $('[data-click="nutricionIASugerir"]').click();
     await vi.waitFor(() => expect($('[data-ia-sugerencia]')).not.toBeNull());
   };
 
-  it('es una sección plegable, cerrada al principio, con 4 comidas y 2 opciones por defecto', () => {
-    abrir();
+  it('es una sección plegable, cerrada al principio, con 4 comidas y 2 opciones por defecto', async () => {
+    await abrir();
     expect($('[data-seccion="ia"] [data-seccion-cuerpo]').hidden).toBe(true);
     expect($('[data-ia-comidas]').value).toBe('4');
     expect($('[data-ia-opciones]').value).toBe('2');
   });
 
-  it('sin los datos para calcular objetivos no llama a la IA y avisa', () => {
-    abrir();
+  it('sin los datos para calcular objetivos no llama a la IA y avisa', async () => {
+    await abrir();
     $('[data-click="nutricionIASugerir"]').click();
     expect(sugerir).not.toHaveBeenCalled();
     expect(toasts().join(' ')).toMatch(/parámetros/i);
   });
 
   it('manda a la IA los objetivos calculados, la cantidad de comidas y de opciones y las indicaciones', async () => {
-    abrir();
+    await abrir();
     completar();
     $('[data-ia-comidas]').value = '5';
     $('[data-ia-opciones]').value = '3';
@@ -99,17 +113,17 @@ describe('ficha: sugerir comidas con IA', () => {
   });
 
   it('muestra una vista previa ordenada por hora, con el total del día, y no guarda nada todavía', async () => {
-    abrir();
+    await abrir();
     completar();
     await pedir();
     expect($$('[data-ia-comida-nombre]').map((e) => e.textContent)).toEqual(['Desayuno', 'Cena']);
     expect($$('[data-ia-alimento]')[0].textContent).toContain('200 g');
     expect($('[data-ia-total]').textContent).toContain('600 kcal'); // 5 porciones de pollo
-    expect(repo.cargarPlan(SIMON.id)).toBeNull();
+    expect(await repo.cargarPlan(SIMON.id)).toBeNull();
   });
 
   it('muestra los avisos de la IA (alimentos omitidos)', async () => {
-    abrir();
+    await abrir();
     completar();
     sugerir.mockResolvedValue(sugerencia(['«Sushi» no está en tu biblioteca y se omitió.']));
     await pedir();
@@ -117,38 +131,38 @@ describe('ficha: sugerir comidas con IA', () => {
   });
 
   it('aplicar guarda las comidas en el plan y las muestra en la ficha', async () => {
-    abrir();
+    await abrir();
     completar();
     await pedir();
     $('[data-click="nutricionIAAplicar"]').click();
-    expect(planGuardado(SIMON.id).comidas.map((c) => c.nombre)).toEqual(['Cena', 'Desayuno']);
+    expect((await planGuardado(SIMON.id)).comidas.map((c) => c.nombre)).toEqual(['Cena', 'Desayuno']);
     expect($('[data-ia-sugerencia]')).toBeNull();
     expect(content.textContent).toContain('Desayuno');
     expect(toasts().join(' ')).toContain('Comidas aplicadas');
   });
 
   it('descartar no guarda nada', async () => {
-    abrir();
+    await abrir();
     completar();
     await pedir();
     $('[data-click="nutricionIADescartar"]').click();
     expect($('[data-ia-sugerencia]')).toBeNull();
-    expect(repo.cargarPlan(SIMON.id)).toBeNull();
+    expect(await repo.cargarPlan(SIMON.id)).toBeNull();
   });
 
   it('si el alumno ya tiene comidas avisa que aplicar las reemplaza', async () => {
-    repo.guardarPlan(SIMON.id, {
+    await repo.guardarPlan(SIMON.id, {
       parametros: PARAMETROS,
       comidas: [crearComida({ nombre: 'Vieja', hora: '09:00' })],
       notas: '',
     });
-    abrir();
+    await abrir();
     await pedir();
     expect($('[data-ia-reemplaza]').textContent).toContain('1 comida');
   });
 
   it('si la IA falla muestra el mensaje y no deja nada a medias', async () => {
-    abrir();
+    await abrir();
     completar();
     sugerir.mockRejectedValue(new Error('La IA tiene mucha demanda'));
     $('[data-click="nutricionIASugerir"]').click();
@@ -158,7 +172,7 @@ describe('ficha: sugerir comidas con IA', () => {
   });
 
   it('el nombre de la comida y los avisos se muestran como texto, no como HTML', async () => {
-    abrir();
+    await abrir();
     completar();
     const malo = sugerencia(['<img src=x onerror=alert(1)>']);
     malo.comidas[0].nombre = '<b id="x">Cena</b>';
@@ -170,29 +184,32 @@ describe('ficha: sugerir comidas con IA', () => {
 });
 
 describe('ficha: PDF del plan', () => {
-  const abrir = (pdf) => {
-    mostrarAlumnosDeNutricion(content, { repo, alumnos: [SIMON], pdf });
+  const abrir = async (pdf) => {
+    await mostrarAlumnosDeNutricion(content, { repo, alumnos: [SIMON], pdf });
     $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await asentar();
   };
 
-  it('baja el plan guardado del alumno en PDF', () => {
+  it('baja el plan guardado del alumno en PDF', async () => {
     const pdf = vi.fn();
-    repo.guardarPlan(SIMON.id, {
+    await repo.guardarPlan(SIMON.id, {
       parametros: PARAMETROS,
       comidas: [comidaConPollo('Almuerzo', '13:00', 2)],
       notas: 'Agua.',
     });
-    abrir(pdf);
+    await abrir(pdf);
     $('[data-click="nutricionPdf"]').click();
+    await asentar();
     expect(pdf).toHaveBeenCalledTimes(1);
     expect(pdf.mock.calls[0][0].comidas[0].nombre).toBe('Almuerzo');
     expect(pdf.mock.calls[0][1]).toEqual(SIMON);
   });
 
-  it('sin comidas con alimentos avisa en vez de generar un PDF vacío', () => {
+  it('sin comidas con alimentos avisa en vez de generar un PDF vacío', async () => {
     const pdf = vi.fn();
-    abrir(pdf);
+    await abrir(pdf);
     $('[data-click="nutricionPdf"]').click();
+    await asentar();
     expect(pdf).not.toHaveBeenCalled();
     expect(toasts().join(' ')).toMatch(/al menos una comida/i);
   });

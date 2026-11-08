@@ -8,3 +8,6 @@ import { supaClient } from '../../../lib/supabase.js';
 import { crearRepoSupabase } from './supabase.js';
 
 export const repo = crearRepoSupabase(supaClient);
+
+/** El cliente de Supabase, para los repos de otras áreas (nutrición); los tests lo reemplazan por uno falso. */
+export const clienteSupabase = supaClient;

@@ -6,7 +6,7 @@ vi.mock('./features/coaching/repo/index.js', async () => {
   const { crearClienteFalso } = await import('./features/coaching/repo/clienteFalso.js');
   const { crearRepoSupabase } = await import('./features/coaching/repo/supabase.js');
   const clienteDePrueba = crearClienteFalso();
-  return { repo: crearRepoSupabase(clienteDePrueba), clienteDePrueba };
+  return { repo: crearRepoSupabase(clienteDePrueba), clienteDePrueba, clienteSupabase: clienteDePrueba };
 });
 
 beforeEach(async () => {

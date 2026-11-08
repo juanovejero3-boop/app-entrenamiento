@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
 import { sembrarPlan } from '../coaching/repo/test-utils.js';
 import { state } from '../../state.js';
+import { alimentosIniciales } from '../nutricion/alimentos.js';
+import { agregarItem, crearComida } from '../nutricion/comidas.js';
+import { parametrosIniciales } from '../nutricion/objetivos.js';
+import { repoNutricion } from '../nutricion/repoNutricion.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
 
 vi.mock('../coaching/pdf/generar.js', () => ({ generarPdfBlob: vi.fn() }));
@@ -24,6 +28,13 @@ beforeEach(async () => {
   document.body.appendChild(content);
   Object.assign(state, { currentUser: { id: COACH.id }, userProfile: COACH, adminAllUsers: [ALUMNA] });
   await sembrarPlan(ALUMNO.id, planCompleto({ superserie: false }));
+  const pollo = alimentosIniciales().find((a) => a.nombre === 'Pechuga de Pollo');
+  const almuerzo = crearComida({ nombre: 'Almuerzo', hora: '13:00' });
+  await repoNutricion.guardarPlan(ALUMNO.id, {
+    parametros: parametrosIniciales({}),
+    comidas: agregarItem([almuerzo], almuerzo.id, almuerzo.opciones[0].id, pollo, 2),
+    notas: '',
+  });
   await renderTabEntrenamiento(content);
   content.querySelector(`[data-click="adminPlanillaSeleccionar"][data-id="${ALUMNO.id}"]`).click();
   await vi.waitFor(() => expect(content.querySelector('[data-click="planillaSubpestana"]')).not.toBeNull());
@@ -88,13 +99,14 @@ describe('ficha del alumno (coach): pestañas Entrenamiento y Nutrición', () =>
   });
 
   describe('Nutrición', () => {
-    it('lleva el botón para ver el plan de alimentación y debajo el link a Sheets', () => {
+    it('lleva el plan de alimentación del alumno (directo, sin botón) y debajo el link a Sheets', async () => {
       const p = panel('nutricion');
-      const boton = p.querySelector('[data-click="planillaVerAlimentacion"]');
+      await vi.waitFor(() => expect(p.querySelector('[data-plan-de-alimentacion]')).not.toBeNull());
+      const plan = p.querySelector('[data-plan-de-alimentacion]');
       const sheets = p.querySelector('a[href="https://docs.google.com/nutricion"]');
-      expect(boton).not.toBeNull();
-      expect(boton.dataset.id).toBe(ALUMNO.id);
-      expect(boton.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(p.querySelector('[data-click="planillaVerAlimentacion"]')).toBeNull();
+      expect(plan.textContent).toContain('Almuerzo');
+      expect(plan.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it('no incluye nada de entrenamiento', () => {
@@ -104,15 +116,6 @@ describe('ficha del alumno (coach): pestañas Entrenamiento y Nutrición', () =>
   });
 
   describe('recuerda dónde estaba', () => {
-    it('al volver del plan de alimentación, vuelve a la pestaña Nutrición', async () => {
-      pestana('nutricion').click();
-      panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]').click();
-      content.querySelector('[data-click="alimentacionVolver"]').click();
-      await vi.waitFor(() => expect($('[data-click="planillaSubpestana"]')).not.toBeNull());
-      expect(pestana('nutricion').getAttribute('aria-selected')).toBe('true');
-      expect(visible('nutricion')).toBe(true);
-    });
-
     it('cambiar de pestaña no recarga el entrenamiento del alumno', async () => {
       await vi.waitFor(() => expect(panel('entrenamiento').querySelector('[data-ejercicio="e1"]')).not.toBeNull());
       const antes = panel('entrenamiento').querySelector('[data-ejercicio="e1"]');

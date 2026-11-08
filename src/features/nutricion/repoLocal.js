@@ -1,10 +1,12 @@
-// Repo de nutrición guardado en el navegador del coach (localStorage). Es el prototipo: la pantalla usa solo
-// esta interfaz (`cargarAlimentos` / `guardarAlimentos`), así que pasar a Supabase es cambiar el repo.
+// Repo de nutrición guardado en el navegador del coach (localStorage). Hoy lo usa la app para la biblioteca de
+// alimentos y para encontrar los planes de prueba que el coach armó antes de que los planes pasaran a Supabase
+// (ver repoNutricion.js).
 import { alimentosIniciales, normalizarAlimentos } from './alimentos.js';
 import { normalizarComidas } from './comidas.js';
 import { normalizarParametros } from './objetivos.js';
 
 export const CLAVE_ALIMENTOS = 'pp:v1:nutricion:alimentos';
+export const CLAVE_ALIMENTOS_SUBIDOS = 'pp:v1:nutricion:alimentos:subidos';
 export const claveDelPlan = (alumnoId) => `pp:v1:nutricion:plan:${alumnoId}`;
 
 export const MAX_NOTAS = 2000;
@@ -47,6 +49,24 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
       return base;
     },
 
+    /** ¿Ya se pasó la biblioteca de este navegador a la cuenta del coach? */
+    alimentosSubidos() {
+      try {
+        return obtenerAlmacen().getItem(CLAVE_ALIMENTOS_SUBIDOS) === '1';
+      } catch {
+        return false;
+      }
+    },
+
+    /** Recuerda que la biblioteca de este navegador ya se pasó a la cuenta (si no se puede recordar, se repite sin daño). */
+    marcarAlimentosSubidos() {
+      try {
+        obtenerAlmacen().setItem(CLAVE_ALIMENTOS_SUBIDOS, '1');
+      } catch {
+        // no es grave: la próxima vez solo se suma lo que falte
+      }
+    },
+
     /** @throws {Error} si el navegador no deja guardar (por ejemplo, sin espacio o en modo privado) */
     guardarAlimentos(lista) {
       guardar(CLAVE_ALIMENTOS, lista);
@@ -73,5 +93,3 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
     },
   };
 }
-
-export const repoNutricion = crearRepoNutricionLocal();

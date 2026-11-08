@@ -4,7 +4,10 @@ import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
 import { loadAdminData } from '../admin/admin.js';
 import { renderTabNutricion } from './nutricion.js';
+import { asentar } from '../../test-helpers.js';
+import { crearClienteFalso } from '../coaching/repo/clienteFalso.js';
 import { crearRepoNutricionLocal } from './repoLocal.js';
+import { crearRepoNutricion } from './repoNutricion.js';
 
 vi.mock('../../router.js', () => ({ switchTab: vi.fn() }));
 vi.mock('../admin/admin.js', () => ({ loadAdminData: vi.fn() }));
@@ -15,10 +18,13 @@ beforeEach(() => {
   content = document.createElement('div');
   document.body.appendChild(content);
   const datos = new Map();
-  repo = crearRepoNutricionLocal(() => ({
-    getItem: (k) => datos.get(k) ?? null,
-    setItem: (k, v) => void datos.set(k, String(v)),
-  }));
+  repo = crearRepoNutricion(
+    crearClienteFalso(),
+    crearRepoNutricionLocal(() => ({
+      getItem: (k) => datos.get(k) ?? null,
+      setItem: (k, v) => void datos.set(k, String(v)),
+    })),
+  );
   state.userProfile = { id: 'coach', role: 'admin' };
   state.adminAllUsers = [{ id: 'u1', name: 'Aldy Taranto', email: 'aldy@ejemplo.com' }];
 });
@@ -44,10 +50,10 @@ describe('Nutrición (solo admin)', () => {
     expect(content.innerHTML).toBe('');
   });
 
-  it('muestra el título y avisa que es un prototipo que se guarda en este navegador', async () => {
+  it('muestra el título, sin cartel de prototipo ni avisos de guardado en el navegador', async () => {
     await abrir();
     expect(content.querySelector('h2').textContent).toContain('Nutrición');
-    expect(content.textContent).toMatch(/este navegador/i);
+    expect(content.textContent).not.toMatch(/prototipo|este navegador/i);
   });
 
   it('tiene las subpestañas Alumnos y Alimentos, y arranca en Alumnos', async () => {
@@ -61,6 +67,7 @@ describe('Nutrición (solo admin)', () => {
   it('Alimentos muestra la biblioteca y Alumnos vuelve al buscador', async () => {
     await abrir();
     subtab('alimentos').click();
+    await asentar();
     expect(subtab('alimentos').getAttribute('aria-selected')).toBe('true');
     expect($('[data-categoria="proteins"]')).not.toBeNull();
     expect($('[data-alumno-filtro]')).toBeNull();
@@ -73,7 +80,9 @@ describe('Nutrición (solo admin)', () => {
   it('al volver a la pestaña se queda en la subpestaña donde estaba', async () => {
     await abrir();
     subtab('alimentos').click();
+    await asentar();
     await renderTabNutricion(content, { repo }); // como al salir y volver a entrar
+    await asentar();
     expect(subtab('alimentos').getAttribute('aria-selected')).toBe('true');
     expect($('[data-categoria="proteins"]')).not.toBeNull();
   });

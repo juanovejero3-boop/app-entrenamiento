@@ -1,58 +1,63 @@
 // El plan de alimentación tal como lo ve el alumno: sus objetivos del día, las comidas por horario (plegables), con
-// sus opciones y los alimentos con la cantidad bien clara, y las aclaraciones del coach. Es solo para mirar.
-// El coach abre la misma pantalla desde la ficha del alumno, en modo lectura: ve exactamente lo mismo.
+// sus opciones y los alimentos con la cantidad bien clara, y las aclaraciones del coach. Es solo para mirar y se
+// dibuja directamente dentro de la pestaña de Nutrición. El coach ve el mismo plan en la ficha del alumno, en modo
+// lectura: ve exactamente lo mismo.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
 import { cantidadParaMostrar, macrosDeItem, macrosDeOpcion, ordenadasPorHora } from './comidas.js';
 import { calcularObjetivos } from './objetivos.js';
 import { mostrarPdfAlimentacion } from './mostrarPdf.js';
-import { repoNutricion } from './repoLocal.js';
-
-/** ¿El alumno ya tiene algo cargado en su plan de alimentación? (si no, no hay nada para mostrarle) */
-export function tienePlanDeAlimentacion(repo, alumnoId) {
-  const plan = alumnoId ? repo.cargarPlan(alumnoId) : null;
-  return Boolean(plan?.comidas.some((c) => opcionesConAlimentos(c).length));
-}
-
-/** Qué hacer al tocar «Volver»; lo define quien abre la pantalla. */
-let alVolverActual = null;
-/** Baja en PDF el plan que se está mirando; null si no hay nada para bajar. */
-let pdfActual = null;
 
 /**
- * Muestra el plan de alimentación del alumno dentro de `content`.
- * @param {HTMLElement} content
- * @param {{ id: string, name?: string, email?: string }} alumno
- * @param {{ repo?: typeof repoNutricion, alVolver: () => void, soloLectura?: boolean }} opciones
- *   soloLectura: lo mira el coach (muestra un cartel con el nombre del alumno); el contenido es el mismo
+ * El plan de alimentación del alumno si ya tiene algo cargado (y visible); si no, null y no hay nada para mostrarle.
+ * Si no se pudo consultar, también null: la Planilla sigue funcionando con los links de siempre.
  */
-export function abrirPlanDeAlimentacion(
-  content,
-  alumno,
-  { repo = repoNutricion, alVolver, soloLectura = false, pdf = mostrarPdfAlimentacion },
-) {
-  alVolverActual = alVolver;
-  const plan = repo.cargarPlan(alumno.id);
-  // Solo las comidas que tienen algo cargado, en orden de horario
-  const comidas = plan ? ordenadasPorHora(plan.comidas).filter((c) => opcionesConAlimentos(c).length) : [];
-  const nombre = nombreDelAlumno(alumno);
-  pdfActual = comidas.length ? () => pdf(plan, alumno) : null;
-
-  content.innerHTML = `
-    <div class="space-y-4 pb-24">
-      <div class="flex items-center gap-3">
-        <button data-click="alimentacionVolver" class="w-10 h-10 shrink-0 inline-flex items-center justify-center text-gray-400 hover:text-neonRed" title="Volver" aria-label="Volver">
-          <i class="fa-solid fa-arrow-left"></i>
-        </button>
-        <h2 class="flex-1 min-w-0 text-lg font-black text-white uppercase tracking-wide">${soloLectura ? `Plan de alimentación de ${esc(nombre)}` : 'Mi plan de alimentación'}</h2>
-        ${comidas.length ? `<button data-click="alimentacionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>` : ''}
-      </div>
-      ${soloLectura ? `<p data-modo-lectura class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 text-xs text-sky-200"><i class="fa-solid fa-eye mr-1"></i><b class="uppercase tracking-wide">Modo lectura</b> · así lo ve ${esc(nombre)}.</p>` : ''}
-      ${comidas.length ? dibujarPlan(plan, comidas) : dibujarVacio(soloLectura)}
-    </div>
-  `;
+export async function cargarPlanDeAlimentacion(repo, alumnoId) {
+  try {
+    const plan = alumnoId ? await repo.cargarPlan(alumnoId) : null;
+    return plan?.comidas.some((c) => opcionesConAlimentos(c).length) ? plan : null;
+  } catch {
+    return null;
+  }
 }
+
+const botonPdf = `<button data-click="alimentacionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>`;
+
+/** Las comidas del plan que tienen algo cargado, en orden de horario. */
+const comidasConAlimentos = (plan) =>
+  plan ? ordenadasPorHora(plan.comidas).filter((c) => opcionesConAlimentos(c).length) : [];
+
+/**
+ * Dibuja el plan (ya cargado) dentro de `contenedor`, sin encabezado: así se ve directamente en la pestaña de
+ * Nutrición. Trae el botón para bajarlo en PDF.
+ * `soloLectura`: lo mira el coach (con un cartel con el nombre del alumno, y un aviso si todavía no lo mostró).
+ * @param {HTMLElement} contenedor
+ * @param {{ id: string, name?: string, email?: string }} alumno
+ * @param {import('./repoPlanes.js').PlanGuardado | null} plan  null si el alumno todavía no tiene uno
+ */
+export function montarPlanDeAlimentacion(
+  contenedor,
+  alumno,
+  plan,
+  { pdf = mostrarPdfAlimentacion, soloLectura = false } = {},
+) {
+  const comidas = comidasConAlimentos(plan);
+  pdfActual = comidas.length ? () => pdf(plan, alumno) : null;
+  contenedor.innerHTML = `<div data-plan-de-alimentacion class="space-y-4">
+      ${comidas.length ? `<div class="flex justify-end">${botonPdf}</div>` : ''}
+      ${soloLectura ? avisosDelCoach(plan, nombreDelAlumno(alumno)) : ''}
+      ${comidas.length ? dibujarPlan(plan, comidas) : dibujarVacio(soloLectura)}
+    </div>`;
+}
+
+/** Lo que ve el coach además del plan: que está en modo lectura y, si todavía no lo mostró, que el alumno no lo ve. */
+const avisosDelCoach = (plan, nombre) => `
+      <p data-modo-lectura class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 text-xs text-sky-200"><i class="fa-solid fa-eye mr-1"></i><b class="uppercase tracking-wide">Modo lectura</b> · así lo ve ${esc(nombre)}.</p>
+      ${plan && !plan.publicado ? `<p data-no-publicado class="bg-amber-950/40 border border-amber-800 rounded-xl p-3 text-xs text-amber-200"><i class="fa-solid fa-eye-slash mr-1"></i>Todavía no lo mostraste: ${esc(nombre)} no lo ve. Podés mostrárselo desde Nutrición › Alumnos.</p>` : ''}`;
+
+/** Baja en PDF el plan que se está mirando; null si no hay nada para bajar. */
+let pdfActual = null;
 
 const opcionesConAlimentos = (comida) =>
   comida.opciones.map((opcion, i) => ({ opcion, numero: i + 1 })).filter(({ opcion }) => opcion.items.length);
@@ -190,7 +195,6 @@ function elegirOpcion(boton) {
 }
 
 registrarAcciones({
-  alimentacionVolver: () => alVolverActual?.(),
   alimentacionPdf: () => pdfActual?.(),
   alimentacionToggle: (el) => alternar(el),
   alimentacionOpcion: (el) => elegirOpcion(el),

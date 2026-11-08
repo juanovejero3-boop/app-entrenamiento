@@ -8,11 +8,19 @@ const CLAVES = {
   training_cycles: ['id'],
   training_sessions: ['cycle_id', 'day_id'],
   training_set_logs: ['cycle_id', 'exercise_id', 'set_n'],
+  nutrition_plans: ['student_id'],
+  nutrition_foods: ['id'],
 };
 
 export function crearClienteFalso() {
   /** @type {Record<string, object[]>} */
-  const tablas = { training_cycles: [], training_sessions: [], training_set_logs: [] };
+  const tablas = {
+    training_cycles: [],
+    training_sessions: [],
+    training_set_logs: [],
+    nutrition_plans: [],
+    nutrition_foods: [],
+  };
   const llamadas = [];
   let falla = null;
   let reloj = 0; // created_at crece con cada fila nueva, así el orden por fecha es el de creación
