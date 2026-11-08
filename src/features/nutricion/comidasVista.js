@@ -7,7 +7,8 @@
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import { plano } from '../../lib/texto.js';
-import { categoriaDe } from './alimentos.js';
+import { modalBase } from '../../lib/ui.js';
+import { categoriaDe, CATEGORIAS } from './alimentos.js';
 import {
   actualizarComida,
   actualizarPorciones,
@@ -51,7 +52,14 @@ export function montarComidas({ contenedor, lineaDeTiempo, comidas, alimentos, o
 export function actualizarObjetivosDeComidas(objetivos) {
   if (!vista?.contenedor.isConnected) return;
   vista.objetivos = objetivos;
-  vista.contenedor.querySelector('[data-consumo-panel]').innerHTML = dibujarConsumo();
+  pintarConsumo();
+}
+
+/** Dibuja el tablero de nutrientes. Solo queda fijo arriba cuando hay objetivos contra los que comparar. */
+function pintarConsumo() {
+  const panel = vista.contenedor.querySelector('[data-consumo-panel]');
+  panel.innerHTML = dibujarConsumo();
+  panel.classList.toggle('sticky', Boolean(vista.objetivos));
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +92,7 @@ function dibujar({ enfocar = null } = {}) {
   const { contenedor, linea, comidas } = vista;
   contenedor.innerHTML = `
     <div class="space-y-4">
-      <div data-consumo-panel>${dibujarConsumo()}</div>
+      <div data-consumo-panel class="top-0 z-30"></div>
       <div class="flex items-center justify-between gap-2">
         <p class="text-[11px] text-gray-500">${comidas.length} ${comidas.length === 1 ? 'comida' : 'comidas'}</p>
         <button data-click="comidaNueva" class="${claseBoton} border-transparent neon-glow-button text-white font-black">
@@ -100,11 +108,19 @@ function dibujar({ enfocar = null } = {}) {
   `;
   // Los selects de la hora se fijan por código (en vez de con `selected` en el HTML) para que siempre queden en el valor guardado
   for (const comida of comidas) fijarHora(comida);
+  pintarConsumo();
   linea.innerHTML = dibujarLinea();
   if (enfocar) contenedor.querySelector(`[data-opcion="${enfocar}"] [data-buscar-alimento]`)?.focus();
 }
 
-const COLORES = { bajo: 'bg-amber-500', ok: 'bg-emerald-500', alto: 'bg-red-500' };
+// Cada nutriente tiene su color (el mismo que ve el alumno); si el plan se pasa del objetivo, la barra se pone roja
+const NUTRIENTES = {
+  kcal: { nombre: 'Calorías', unidad: 'kcal', texto: 'text-amber-300', barra: 'bg-amber-400' },
+  p: { nombre: 'Proteína', unidad: 'g', texto: 'text-sky-300', barra: 'bg-sky-400' },
+  c: { nombre: 'Carbos', unidad: 'g', texto: 'text-emerald-300', barra: 'bg-emerald-400' },
+  f: { nombre: 'Grasas', unidad: 'g', texto: 'text-orange-300', barra: 'bg-orange-400' },
+};
+const COLOR_DEL_ESTADO = { bajo: 'text-gray-400', ok: 'text-emerald-300', alto: 'text-red-400' };
 
 /** Lo que suma el plan frente a los objetivos del alumno: es la guía para ir armando las comidas. */
 function dibujarConsumo() {
@@ -117,7 +133,8 @@ function dibujarConsumo() {
         <p class="text-[11px] text-gray-400">El plan suma ${resumen(total)}</p>
       </div>`;
   }
-  const fila = (clave, nombre, unidad) => {
+  const columna = (clave) => {
+    const { nombre, unidad, texto, barra } = NUTRIENTES[clave];
     const { consumido, objetivo, restante, pct, estado } = comparacion[clave];
     const mensaje =
       estado === 'bajo'
@@ -126,26 +143,18 @@ function dibujarConsumo() {
           ? `Te pasás ${-restante} ${unidad}`
           : 'En el objetivo';
     return `
-      <div data-consumo="${clave}" data-estado="${estado}" class="space-y-1">
-        <div class="flex justify-between text-xs">
-          <span class="font-bold text-gray-200">${nombre}</span>
-          <span class="text-gray-300">${consumido} / ${objetivo} ${unidad}</span>
+      <div data-consumo="${clave}" data-estado="${estado}" class="min-w-0 space-y-1">
+        <p class="text-[10px] font-bold uppercase ${texto} truncate">${nombre}</p>
+        <p class="text-[11px] text-gray-400 leading-tight whitespace-nowrap"><b class="text-xs text-white">${consumido}</b> / ${objetivo}</p>
+        <div class="h-1.5 rounded-full bg-cyberDark overflow-hidden">
+          <div class="h-full ${estado === 'alto' ? 'bg-red-500' : barra}" style="width:${Math.min(pct ?? 0, 100)}%"></div>
         </div>
-        <div class="h-2 rounded-full bg-cyberDark overflow-hidden">
-          <div class="h-full ${COLORES[estado]}" style="width:${Math.min(pct ?? 0, 100)}%"></div>
-        </div>
-        <p class="text-[10px] text-gray-500">${mensaje}</p>
+        <p class="text-[10px] leading-tight ${COLOR_DEL_ESTADO[estado]}">${estado === 'ok' ? '<i class="fa-solid fa-check mr-0.5"></i>' : ''}${mensaje}</p>
       </div>`;
   };
   return `
-    <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-      <p class="text-[10px] text-gray-400 uppercase font-bold">Lo que suma el plan contra el objetivo</p>
-      <div class="grid gap-3 md:grid-cols-2">
-        ${fila('kcal', 'Calorías', 'kcal')}
-        ${fila('p', 'Proteína', 'g')}
-        ${fila('c', 'Carbohidratos', 'g')}
-        ${fila('f', 'Grasas', 'g')}
-      </div>
+    <div class="bg-cyberCard p-3 rounded-xl border border-gray-800 shadow-lg shadow-black/60">
+      <div class="grid grid-cols-4 gap-2">${['kcal', 'p', 'c', 'f'].map(columna).join('')}</div>
     </div>`;
 }
 
@@ -232,8 +241,26 @@ function dibujarBuscador(comida, opcion) {
         <input data-buscar-alimento data-input="alimentoBuscar" type="search" enterkeyhint="done" placeholder="Buscar alimento para agregar…" ${hayAlimentos ? '' : 'disabled'} class="${claseInput} pl-9">
       </div>
       <div data-resultados class="space-y-1.5"></div>
+      ${dibujarCategorias(comida, opcion)}
       ${hayAlimentos ? '' : '<p class="text-[11px] text-amber-300">La biblioteca de alimentos está vacía: cargá alimentos en la subpestaña Alimentos.</p>'}
     </form>`;
+}
+
+/** Botones con las categorías de la biblioteca: al tocar una se abre un diálogo con todos sus alimentos. */
+function dibujarCategorias(comida, opcion) {
+  const botones = CATEGORIAS.map((categoria) => ({
+    categoria,
+    cantidad: vista.alimentos.filter((a) => a.categoria === categoria.id).length,
+  }))
+    .filter(({ cantidad }) => cantidad > 0)
+    .map(
+      ({ categoria }) =>
+        `<button type="button" data-click="categoriaAbrir" data-id="${esc(comida.id)}" data-opcion-id="${esc(opcion.id)}" data-categoria="${esc(categoria.id)}" class="${claseNeutro} !normal-case !tracking-normal !text-xs">${esc(categoria.nombre)}</button>`,
+    )
+    .join('');
+  return botones
+    ? `<div data-categorias class="space-y-1.5"><p class="text-[10px] text-gray-400 uppercase font-bold">O elegí por categoría</p><div class="flex flex-wrap gap-2">${botones}</div></div>`
+    : '';
 }
 
 function dibujarResultados(buscador, texto) {
@@ -295,6 +322,89 @@ function dibujarOpcion(comida, opcion, indice) {
       ${opcion.items.map((item) => dibujarItem(comida, opcion, item)).join('') || '<p class="text-[11px] text-gray-500">Sin alimentos todavía.</p>'}
       ${dibujarBuscador(comida, opcion)}
     </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Diálogo de una categoría
+// ---------------------------------------------------------------------------
+
+/** El diálogo que está abierto: a qué opción de qué comida se le agrega, y de qué categoría se elige. */
+let dialogo = null;
+
+const opcionDelDialogo = () =>
+  vista.comidas.find((c) => c.id === dialogo.comidaId)?.opciones.find((o) => o.id === dialogo.opcionId);
+
+function abrirDialogoDeCategoria({ comidaId, opcionId, categoriaId }) {
+  const categoria = categoriaDe(categoriaId);
+  if (!categoria) return;
+  dialogo = { comidaId, opcionId, categoriaId };
+  document.body.style.overflow = 'hidden'; // la página de atrás no se mueve mientras se elige
+  const { kcal, p, c, f } = categoria.macros;
+  const alimentos = vista.alimentos
+    .filter((a) => a.categoria === categoriaId)
+    .sort((x, y) => x.nombre.localeCompare(y.nombre, 'es'));
+  const overlay = modalBase();
+  overlay.innerHTML = `
+    <div data-dialogo-categoria role="dialog" aria-modal="true" aria-label="${esc(categoria.nombre)}" class="bg-cyberCard border border-gray-700 rounded-2xl w-full max-w-md max-h-[85dvh] flex flex-col shadow-2xl">
+      <div class="flex items-start gap-3 p-4 border-b border-gray-800">
+        <div class="flex-1 min-w-0">
+          <h4 class="font-black text-white uppercase tracking-wide text-sm">${esc(categoria.nombre)}</h4>
+          <p class="text-[11px] text-gray-400">Cada porción: ${kcal} kcal · P ${p} · C ${c} · G ${f}</p>
+        </div>
+        <button data-click="categoriaCerrar" class="${claseIcono}" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="relative flex-1 min-h-0 flex flex-col">
+      <div data-dialogo-lista class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 pb-8 space-y-1.5">
+        ${alimentos
+          .map(
+            (a) => `
+          <button type="button" data-click="categoriaAgregar" data-alimento-id="${esc(a.id)}" class="w-full min-h-14 flex items-center gap-3 text-left px-3 py-2 bg-cyberDark rounded-lg border border-gray-800 hover:border-neonRed transition">
+            <div class="flex-1 min-w-0">
+              <p data-dialogo-nombre class="text-sm font-bold text-white break-words">${esc(a.nombre)}</p>
+              <p class="text-[11px] text-gray-400">${esc(a.porcion)}</p>
+            </div>
+            <span data-dialogo-cantidad hidden class="shrink-0 text-xs font-black px-2 py-1 rounded-md bg-red-950 border border-neonRed text-neonRed"></span>
+            <i class="fa-solid fa-plus text-neonRed"></i>
+          </button>`,
+          )
+          .join('')}
+      </div>
+      <div data-dialogo-degrade aria-hidden="true" class="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-cyberCard to-transparent"></div>
+      </div>
+      <div class="p-3 border-t border-gray-800">
+        <button data-click="categoriaCerrar" class="w-full min-h-11 neon-glow-button text-white rounded-lg text-xs font-bold uppercase tracking-wider">Listo</button>
+      </div>
+    </div>`;
+  marcarLoAgregado();
+}
+
+/** Marca en cada alimento del diálogo cuántas porciones ya tiene la opción (así se ve qué se fue sumando). */
+function marcarLoAgregado() {
+  const opcion = dialogo && opcionDelDialogo();
+  const lista = document.querySelector('#app-modal-overlay [data-dialogo-lista]');
+  if (!opcion || !lista) return;
+  for (const fila of lista.querySelectorAll('[data-click="categoriaAgregar"]')) {
+    const alimento = vista.alimentos.find((a) => a.id === fila.dataset.alimentoId);
+    const item = opcion.items.find((i) => i.categoria === alimento?.categoria && i.nombre === alimento?.nombre);
+    const marca = fila.querySelector('[data-dialogo-cantidad]');
+    marca.hidden = !item;
+    marca.textContent = item ? `${coma(item.porciones)} × ` : '';
+  }
+}
+
+/** Suma una porción del alimento tocado y deja el diálogo abierto para seguir eligiendo. */
+function agregarDesdeElDialogo(alimentoId) {
+  const alimento = vista.alimentos.find((a) => a.id === alimentoId);
+  if (!dialogo || !alimento) return;
+  aplicar(agregarItem(vista.comidas, dialogo.comidaId, dialogo.opcionId, alimento, 1));
+  marcarLoAgregado();
+}
+
+function cerrarDialogoDeCategoria() {
+  dialogo = null;
+  document.body.style.overflow = '';
+  const overlay = document.getElementById('app-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
 }
 
 /** Las comidas del día en orden de horario, con lo que aporta cada una. */
@@ -412,6 +522,14 @@ function moverPorciones(el, paso) {
 }
 
 registrarAcciones({
+  categoriaAbrir: (el) =>
+    abrirDialogoDeCategoria({
+      comidaId: el.dataset.id,
+      opcionId: el.dataset.opcionId,
+      categoriaId: el.dataset.categoria,
+    }),
+  categoriaAgregar: (el) => agregarDesdeElDialogo(el.dataset.alimentoId),
+  categoriaCerrar: () => cerrarDialogoDeCategoria(),
   comidaNueva: () => nuevaComida(),
   comidaToggle: (el) => alternarComida(el),
   comidaEditar: (el) => aplicar(actualizarComida(vista.comidas, el.dataset.id, { nombre: el.value })),

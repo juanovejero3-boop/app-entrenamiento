@@ -124,7 +124,7 @@ function dibujarFicha() {
     (a) => `<option value="${a.valor}">${a.valor} - ${esc(a.nombre)}</option>`,
   ).join('');
   const seccion = (id, titulo, cuerpo, abierta = true) => `
-    <section data-seccion="${id}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-hidden">
+    <section data-seccion="${id}" class="bg-cyberCard rounded-xl border border-gray-800 overflow-clip">
       <button type="button" data-click="nutricionSeccion" aria-expanded="${abierta}" class="w-full flex items-center gap-3 px-4 py-3 min-h-14 text-left">
         <h3 class="flex-1 font-bold text-neonRed uppercase tracking-wide text-sm">${titulo}</h3>
         <i data-chevron class="fa-solid fa-chevron-down text-gray-400 transition-transform ${abierta ? 'rotate-180' : ''}"></i>
