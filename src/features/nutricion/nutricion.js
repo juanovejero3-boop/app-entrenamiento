@@ -1,5 +1,5 @@
 // Nutrición (solo admin): dos subpestañas. «Alumnos» calcula los objetivos de cada alumno y «Alimentos» es la
-// biblioteca del coach. Los planes se guardan en Supabase; la biblioteca, por ahora, en el navegador del coach.
+// biblioteca del coach. Todo se guarda en Supabase.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
@@ -46,9 +46,6 @@ export async function renderTabNutricion(content, { repo = repoNutricion, subpes
         <h2 class="text-xl font-black text-white uppercase tracking-wide">Nutrición</h2>
         <p class="text-xs text-gray-400">Objetivos de los alumnos y biblioteca de alimentos</p>
       </div>
-      <p class="text-[11px] text-amber-300/90 bg-amber-950/30 border border-amber-900/60 rounded-lg px-3 py-2">
-        <i class="fa-solid fa-circle-info mr-1"></i> Los planes de los alumnos se guardan en tu cuenta y el alumno los ve cuando se los mostrás. La biblioteca de alimentos, por ahora, se guarda solo en este navegador.
-      </p>
       <div role="tablist" class="bg-cyberCard p-1 rounded-xl border border-gray-800 flex">
         ${SUBPESTANAS.map(
           (s) =>

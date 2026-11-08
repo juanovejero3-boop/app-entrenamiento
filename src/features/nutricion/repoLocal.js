@@ -6,6 +6,7 @@ import { normalizarComidas } from './comidas.js';
 import { normalizarParametros } from './objetivos.js';
 
 export const CLAVE_ALIMENTOS = 'pp:v1:nutricion:alimentos';
+export const CLAVE_ALIMENTOS_SUBIDOS = 'pp:v1:nutricion:alimentos:subidos';
 export const claveDelPlan = (alumnoId) => `pp:v1:nutricion:plan:${alumnoId}`;
 
 export const MAX_NOTAS = 2000;
@@ -46,6 +47,24 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
         // se usa la base en memoria
       }
       return base;
+    },
+
+    /** ¿Ya se pasó la biblioteca de este navegador a la cuenta del coach? */
+    alimentosSubidos() {
+      try {
+        return obtenerAlmacen().getItem(CLAVE_ALIMENTOS_SUBIDOS) === '1';
+      } catch {
+        return false;
+      }
+    },
+
+    /** Recuerda que la biblioteca de este navegador ya se pasó a la cuenta (si no se puede recordar, se repite sin daño). */
+    marcarAlimentosSubidos() {
+      try {
+        obtenerAlmacen().setItem(CLAVE_ALIMENTOS_SUBIDOS, '1');
+      } catch {
+        // no es grave: la próxima vez solo se suma lo que falte
+      }
     },
 
     /** @throws {Error} si el navegador no deja guardar (por ejemplo, sin espacio o en modo privado) */

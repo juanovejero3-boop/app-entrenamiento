@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../lib/ui.js'; // modales propios: window.alert / window.confirm reales de la app
 import { alimentosIniciales, crearAlimento } from './alimentos.js';
 import { mostrarBibliotecaDeAlimentos } from './biblioteca.js';
-import { CLAVE_ALIMENTOS, crearRepoNutricionLocal } from './repoLocal.js';
+import { asentar } from '../../test-helpers.js';
+import { crearClienteFalso } from '../coaching/repo/clienteFalso.js';
+import { crearRepoNutricionLocal } from './repoLocal.js';
+import { crearRepoNutricion } from './repoNutricion.js';
 
 let content;
 let almacen;
+let cliente;
+let local;
 let repo;
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout'] }); // los toasts se quitan solos
@@ -13,7 +18,9 @@ beforeEach(() => {
   document.body.appendChild(content);
   const datos = new Map();
   almacen = { datos, getItem: (k) => datos.get(k) ?? null, setItem: (k, v) => void datos.set(k, String(v)) };
-  repo = crearRepoNutricionLocal(() => almacen);
+  cliente = crearClienteFalso();
+  local = crearRepoNutricionLocal(() => almacen);
+  repo = crearRepoNutricion(cliente, local);
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -23,7 +30,8 @@ afterEach(() => {
 const $ = (selector) => content.querySelector(selector);
 const $$ = (selector) => [...content.querySelectorAll(selector)];
 const abrir = async () => mostrarBibliotecaDeAlimentos(content, { repo });
-const guardados = () => JSON.parse(almacen.datos.get(CLAVE_ALIMENTOS));
+/** Lo que quedó guardado en la biblioteca de la cuenta. */
+const guardados = () => cliente.tablas.nutrition_foods;
 const nombres = () => $$('[data-alimento] [data-nombre]').map((e) => e.textContent.trim());
 const fila = (nombre) =>
   $$('[data-alimento]').find((f) => f.querySelector('[data-nombre]').textContent.trim() === nombre);
@@ -42,11 +50,15 @@ function llenarFormulario({ nombre, porcion, categoria, gluten, lacteo }) {
   if (gluten !== undefined) form.elements.gluten.checked = gluten;
   if (lacteo !== undefined) form.elements.lacteo.checked = lacteo;
 }
-const guardar = () => $('[data-click="alimentoGuardar"]').click();
+const guardar = async () => {
+  $('[data-click="alimentoGuardar"]').click();
+  await asentar();
+};
 async function responderConfirmacion(acepta) {
   const modal = document.getElementById('app-modal-overlay-aux');
   modal.querySelector(`[data-click="resolverModal"][data-valor="${acepta}"]`).click();
   await vi.advanceTimersByTimeAsync(0);
+  await asentar();
 }
 
 describe('Nutrición del coach: biblioteca de alimentos', () => {
@@ -73,13 +85,16 @@ describe('Nutrición del coach: biblioteca de alimentos', () => {
   });
 
   it('si la biblioteca quedó vacía lo dice', async () => {
-    repo.guardarAlimentos([]);
+    local.marcarAlimentosSubidos(); // sin nada que traer del navegador
     await abrir();
     expect(content.textContent).toContain('Todavía no hay alimentos');
   });
 
   it('escapa el HTML de los nombres', async () => {
-    repo.guardarAlimentos([crearAlimento({ categoria: 'fats', nombre: '<img src=x onerror=alert(1)>', porcion: '1' })]);
+    local.marcarAlimentosSubidos();
+    await repo.guardarAlimentos([
+      crearAlimento({ categoria: 'fats', nombre: '<img src=x onerror=alert(1)>', porcion: '1' }),
+    ]);
     await abrir();
     expect($('img')).toBeNull();
     expect(content.textContent).toContain('<img src=x');
@@ -150,7 +165,7 @@ describe('categorías plegables', () => {
     await abrir();
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'Tofu', porcion: '100 g', categoria: 'proteins' });
-    guardar();
+    await guardar();
     expect(cuerpo('proteins').hidden).toBe(false);
     expect(cuerpo('carbs').hidden).toBe(true);
   });
@@ -159,7 +174,7 @@ describe('categorías plegables', () => {
     await abrir();
     fila('Whey Protein').querySelector('[data-click="alimentoEditar"]').click();
     llenarFormulario({ categoria: 'mixed_pc' });
-    guardar();
+    await guardar();
     expect(cuerpo('mixed_pc').hidden).toBe(false);
   });
 });
@@ -196,7 +211,7 @@ describe('crear un alimento', () => {
     expect($('[data-alimento-form]').elements.categoria.value).toBe('proteins');
   });
 
-  it('lo guarda en el navegador y lo muestra en su categoría', async () => {
+  it('lo guarda en la cuenta y lo muestra en su categoría', async () => {
     await abrir();
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({
@@ -206,7 +221,7 @@ describe('crear un alimento', () => {
       lacteo: false,
       gluten: false,
     });
-    guardar();
+    await guardar();
 
     expect($('[data-alimento-form]')).toBeNull(); // el formulario se cierra
     expect($('[data-categoria="proteins"]').textContent).toContain('Atún al natural');
@@ -218,7 +233,7 @@ describe('crear un alimento', () => {
     await abrir();
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'Tostada', porcion: '2 unidades', categoria: 'carbs', gluten: true, lacteo: true });
-    guardar();
+    await guardar();
     expect(fila('Tostada').textContent).toMatch(/Gluten/);
     expect(fila('Tostada').textContent).toMatch(/Lácteo/);
   });
@@ -228,7 +243,7 @@ describe('crear un alimento', () => {
     escribir($('[data-nutricion-filtro]'), 'pollo');
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'Tofu', porcion: '100 g', categoria: 'proteins' });
-    guardar();
+    await guardar();
     expect(fila('Tofu')).toBeDefined();
     expect($('[data-nutricion-filtro]').value).toBe('');
   });
@@ -237,7 +252,7 @@ describe('crear un alimento', () => {
     await abrir();
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'Algo', porcion: '' });
-    guardar();
+    await guardar();
 
     expect($('[data-alimento-error]').textContent).toMatch(/porción/i);
     expect($('[data-alimento-form]').elements.nombre.value).toBe('Algo');
@@ -248,7 +263,7 @@ describe('crear un alimento', () => {
     await abrir();
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'pechuga de pollo', porcion: '200 g', categoria: 'proteins' });
-    guardar();
+    await guardar();
     expect($('[data-alimento-error]').textContent).toMatch(/ya existe/i);
   });
 
@@ -261,17 +276,19 @@ describe('crear un alimento', () => {
     expect(fila('Tofu')).toBeUndefined();
   });
 
-  it('si el navegador no deja guardar lo avisa y no lo muestra como guardado', async () => {
+  it('si no se puede guardar lo avisa, no lo muestra como guardado y deja el formulario para reintentar', async () => {
     await abrir();
-    almacen.setItem = () => {
-      throw new Error('sin espacio');
-    };
     $('[data-click="alimentoNuevo"]').click();
     llenarFormulario({ nombre: 'Tofu', porcion: '100 g', categoria: 'proteins' });
-    guardar();
+    cliente.fallarLaProxima('sin conexión');
+    await guardar();
 
-    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+    expect(toasts().join()).toContain('sin conexión');
     expect(fila('Tofu')).toBeUndefined();
+    expect($('[data-alimento-form]')).not.toBeNull();
+    await guardar();
+    expect(fila('Tofu')).toBeDefined();
+    expect(guardados().some((a) => a.nombre === 'Tofu')).toBe(true);
   });
 });
 
@@ -294,7 +311,7 @@ describe('editar un alimento', () => {
     const id = fila('Papa (Cocida)').dataset.alimento;
     editar('Papa (Cocida)');
     llenarFormulario({ nombre: 'Papa hervida', porcion: '120 g' });
-    guardar();
+    await guardar();
 
     expect(fila('Papa (Cocida)')).toBeUndefined();
     expect(fila('Papa hervida').dataset.alimento).toBe(id);
@@ -305,7 +322,7 @@ describe('editar un alimento', () => {
     await abrir();
     editar('Whey Protein');
     llenarFormulario({ categoria: 'mixed_pc' });
-    guardar();
+    await guardar();
     expect($('[data-categoria="mixed_pc"]').textContent).toContain('Whey Protein');
     expect($('[data-categoria="proteins"]').textContent).not.toContain('Whey Protein');
   });
@@ -314,7 +331,7 @@ describe('editar un alimento', () => {
     await abrir();
     editar('Papa (Cocida)');
     llenarFormulario({ porcion: '130 g' });
-    guardar();
+    await guardar();
     expect($('[data-alimento-error]')).toBeNull();
     expect(fila('Papa (Cocida)').textContent).toContain('130 g');
   });
@@ -358,15 +375,14 @@ describe('eliminar un alimento', () => {
     expect(fila('Papa (Cocida)')).toBeDefined();
   });
 
-  it('si el navegador no deja guardar, el alimento sigue en la lista y lo avisa', async () => {
+  it('si no se puede borrar, el alimento sigue en la lista y lo avisa', async () => {
     await abrir();
-    almacen.setItem = () => {
-      throw new Error('sin espacio');
-    };
+    cliente.fallarLaProxima('sin conexión');
     eliminar('Papa (Cocida)');
     await responderConfirmacion(true);
     expect(fila('Papa (Cocida)')).toBeDefined();
-    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+    expect(toasts().join()).toContain('sin conexión');
+    expect(guardados().some((a) => a.nombre === 'Papa (Cocida)')).toBe(true);
   });
 
   it('al borrar uno mientras se edita otro, el formulario sigue abierto', async () => {
@@ -375,5 +391,44 @@ describe('eliminar un alimento', () => {
     eliminar('Papa (Cocida)');
     await responderConfirmacion(true);
     expect($('[data-alimento-form]').elements.nombre.value).toBe('Pan Integral');
+  });
+});
+
+describe('biblioteca en la nube', () => {
+  it('si no se pudo cargar lo dice y deja reintentar', async () => {
+    cliente.fallarLaProxima('sin conexión');
+    await abrir();
+    expect($('[data-error]').textContent).toMatch(/no pudimos cargar/i);
+    expect(toasts().join()).toContain('sin conexión');
+    $('[data-click="alimentoReintentar"]').click();
+    await asentar();
+    expect($('[data-error]')).toBeNull();
+    expect(fila('Pechuga de Pollo')).toBeDefined();
+  });
+
+  it('muestra un alimento que cargó otro coach (la biblioteca es la misma para todos)', async () => {
+    local.marcarAlimentosSubidos();
+    cliente.tablas.nutrition_foods.push({
+      id: 'otro-coach-1',
+      categoria: 'proteins',
+      nombre: 'Tofu firme',
+      porcion: '100 g',
+      gluten: false,
+      lacteo: false,
+    });
+    await abrir();
+    expect(fila('Tofu firme')).toBeDefined();
+  });
+
+  it('un alimento nuevo queda en la cuenta y lo ve otro coach', async () => {
+    await abrir();
+    $('[data-click="alimentoNuevo"]').click();
+    llenarFormulario({ nombre: 'Tofu', porcion: '100 g', categoria: 'proteins' });
+    await guardar();
+    const otro = crearRepoNutricion(
+      cliente,
+      crearRepoNutricionLocal(() => ({ getItem: () => '1', setItem() {} })),
+    );
+    expect((await otro.cargarAlimentos()).some((a) => a.nombre === 'Tofu')).toBe(true);
   });
 });

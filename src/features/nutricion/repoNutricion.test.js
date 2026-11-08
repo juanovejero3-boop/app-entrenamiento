@@ -31,12 +31,85 @@ function plan(notas) {
 }
 
 describe('repo de nutrición de la app', () => {
-  it('los alimentos siguen en el navegador del coach, no en Supabase', async () => {
-    const lista = repo.cargarAlimentos();
-    expect(lista.length).toBeGreaterThan(0);
-    repo.guardarAlimentos([lista[0]]);
-    expect(repo.cargarAlimentos()).toEqual([lista[0]]);
-    expect(cliente.llamadas).toHaveLength(0);
+  describe('biblioteca de alimentos', () => {
+    const queso = {
+      id: 'q1',
+      categoria: 'mixed_pf',
+      nombre: 'Queso casero',
+      porcion: '40g',
+      gluten: false,
+      lacteo: true,
+    };
+
+    it('guarda y carga desde Supabase, compartida entre coaches', async () => {
+      const lista = await repo.cargarAlimentos();
+      await repo.guardarAlimentos([...lista, queso]);
+      expect(cliente.tablas.nutrition_foods.some((f) => f.id === 'q1')).toBe(true);
+      const otroCoach = crearRepoNutricion(
+        cliente,
+        crearRepoNutricionLocal(() => ({ getItem: () => null, setItem() {} })),
+      );
+      expect((await otroCoach.cargarAlimentos()).some((a) => a.id === 'q1')).toBe(true);
+    });
+
+    it('la primera vez arma la biblioteca con la base inicial', async () => {
+      const lista = await repo.cargarAlimentos();
+      expect(lista.length).toBeGreaterThan(20);
+      expect(cliente.tablas.nutrition_foods).toHaveLength(lista.length);
+      expect(lista.some((a) => a.nombre === 'Pechuga de Pollo')).toBe(true);
+    });
+
+    it('trae la biblioteca que el coach ya tenía en su navegador (con lo que agregó o cambió)', async () => {
+      local.guardarAlimentos([queso]);
+      const lista = await repo.cargarAlimentos();
+      expect(lista).toEqual([queso]);
+    });
+
+    it('si la base ya tenía alimentos, suma solo los del navegador que no estaban (sin repetir nombres)', async () => {
+      await repo.guardarAlimentos([
+        { id: 'p1', categoria: 'proteins', nombre: 'Pechuga de Pollo', porcion: '100g', gluten: false, lacteo: false },
+      ]);
+      local.guardarAlimentos([
+        {
+          id: 'otro-id',
+          categoria: 'proteins',
+          nombre: 'pechuga de pollo',
+          porcion: '100g',
+          gluten: false,
+          lacteo: false,
+        },
+        queso,
+      ]);
+      const lista = await repo.cargarAlimentos();
+      expect(lista.map((a) => a.nombre).sort()).toEqual(['Pechuga de Pollo', 'Queso casero']);
+    });
+
+    it('trae lo del navegador una sola vez: lo que se borra después no vuelve', async () => {
+      local.guardarAlimentos([queso]);
+      const lista = await repo.cargarAlimentos();
+      await repo.guardarAlimentos(lista.filter((a) => a.id !== 'q1'));
+      expect(await repo.cargarAlimentos()).toEqual([]);
+    });
+
+    it('si no se pudo traer lo del navegador, carga igual y lo vuelve a intentar la próxima vez', async () => {
+      local.guardarAlimentos([queso]);
+      const desde = cliente.from;
+      let consultas = 0;
+      cliente.from = (tabla) => {
+        if (++consultas === 2) cliente.fallarLaProxima('sin conexión'); // la 1.ª lee y la 2.ª intenta sumar
+        return desde(tabla);
+      };
+      expect(await repo.cargarAlimentos()).toEqual([]); // carga lo que hay, sin romper la pantalla
+      cliente.from = desde;
+      expect(await repo.cargarAlimentos()).toEqual([queso]); // y esta vez lo trae
+    });
+
+    it('los alimentos ya no se guardan en el navegador', async () => {
+      const lista = await repo.cargarAlimentos();
+      local.guardarAlimentos([queso]);
+      await repo.guardarAlimentos(lista.slice(0, 3));
+      expect(local.cargarAlimentos()).toEqual([queso]);
+    });
   });
 
   it('los planes se guardan en Supabase, no en el navegador', async () => {

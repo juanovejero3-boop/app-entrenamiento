@@ -1,8 +1,9 @@
 // Biblioteca de alimentos del coach (una subpestaña de Nutrición): se pueden crear, editar y borrar alimentos,
-// agrupados por categoría de intercambio y plegables. Se guarda en el navegador del coach (ver repoLocal.js).
+// agrupados por categoría de intercambio y plegables. Es una sola biblioteca para todos los coaches y se guarda en
+// Supabase (ver repoAlimentos.js).
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
-import { toast } from '../../lib/ui.js';
+import { mostrarProcesando, ocultarProcesando, toast } from '../../lib/ui.js';
 import {
   actualizarAlimento,
   agregarAlimento,
@@ -16,7 +17,7 @@ import { repoNutricion } from './repoNutricion.js';
 
 /**
  * @type {{
- *   content: HTMLElement, repo: ReturnType<typeof import('./repoLocal.js').crearRepoNutricionLocal>,
+ *   content: HTMLElement, repo: typeof repoNutricion,
  *   alimentos: import('./alimentos.js').Alimento[], filtro: string, abiertas: Set<string>,
  *   formulario: { id: string | null, valores: ValoresDelFormulario, error: string | null } | null
  * } | null}
@@ -26,8 +27,23 @@ let actual = null;
 /** @typedef {{ nombre: string, porcion: string, categoria: string, gluten: boolean, lacteo: boolean }} ValoresDelFormulario */
 
 /** @param {HTMLElement} content @param {{ repo?: typeof repoNutricion }} [opciones] */
-export function mostrarBibliotecaDeAlimentos(content, { repo = repoNutricion } = {}) {
-  actual = { content, repo, alimentos: repo.cargarAlimentos(), filtro: '', abiertas: new Set(), formulario: null };
+export async function mostrarBibliotecaDeAlimentos(content, { repo = repoNutricion } = {}) {
+  const esta = { content, repo, alimentos: [], filtro: '', abiertas: new Set(), formulario: null };
+  actual = esta;
+  content.innerHTML =
+    '<p data-cargando class="text-center text-sm text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando la biblioteca…</p>';
+  try {
+    esta.alimentos = await repo.cargarAlimentos();
+  } catch (error) {
+    if (actual !== esta) return;
+    toast(error.message, false);
+    content.innerHTML = `<div data-error class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center text-sm text-gray-400 space-y-3">
+        <p>No pudimos cargar la biblioteca de alimentos.</p>
+        <button data-click="alimentoReintentar" class="${claseNeutro}">Reintentar</button>
+      </div>`;
+    return;
+  }
+  if (actual !== esta) return; // el coach ya cambió de pantalla
   dibujar();
 }
 
@@ -233,19 +249,25 @@ function cancelar() {
 }
 
 /** Guarda la lista nueva en el repo; si el navegador no deja, avisa y la pantalla queda como estaba. */
-function persistir(nueva) {
+/** Guarda la lista nueva en la nube; si no se puede, avisa y la pantalla queda como estaba. */
+async function persistir(nueva) {
+  const esta = actual;
+  mostrarProcesando('Guardando...');
   try {
-    actual.repo.guardarAlimentos(nueva);
+    await esta.repo.guardarAlimentos(nueva);
   } catch (error) {
     toast(error.message, false);
     return false;
+  } finally {
+    ocultarProcesando();
   }
-  actual.alimentos = nueva;
+  esta.alimentos = nueva;
   return true;
 }
 
-function guardar() {
-  const { formulario, alimentos } = actual;
+async function guardar() {
+  const esta = actual;
+  const { formulario, alimentos } = esta;
   if (!formulario) return;
   formulario.valores = leerFormulario() ?? formulario.valores;
   const datos = crearAlimento(formulario.valores);
@@ -261,10 +283,11 @@ function guardar() {
   const nueva = formulario.id
     ? actualizarAlimento(alimentos, formulario.id, datos)
     : agregarAlimento(alimentos, candidato);
-  if (!persistir(nueva)) return;
-  actual.formulario = null;
-  actual.filtro = ''; // para que el alimento guardado se vea aunque hubiera una búsqueda
-  actual.abiertas.add(candidato.categoria); // y en su categoría abierta
+  if (!(await persistir(nueva))) return;
+  if (actual !== esta) return; // el coach ya cambió de pantalla
+  esta.formulario = null;
+  esta.filtro = ''; // para que el alimento guardado se vea aunque hubiera una búsqueda
+  esta.abiertas.add(candidato.categoria); // y en su categoría abierta
   dibujar();
   toast('Alimento guardado');
 }
@@ -274,9 +297,11 @@ async function eliminar(id) {
   if (!alimento) return;
   const ok = await window.confirm(`¿Eliminar «${alimento.nombre}»? No se puede deshacer.`);
   if (!ok) return;
+  const esta = actual;
   recordarFormulario();
-  if (!persistir(quitarAlimento(actual.alimentos, id))) return;
-  if (actual.formulario?.id === id) actual.formulario = null;
+  if (!(await persistir(quitarAlimento(esta.alimentos, id)))) return;
+  if (actual !== esta) return;
+  if (esta.formulario?.id === id) esta.formulario = null;
   dibujarLista();
 }
 
@@ -290,6 +315,7 @@ registrarAcciones({
     guardar();
   },
   alimentoCancelar: () => cancelar(),
+  alimentoReintentar: () => mostrarBibliotecaDeAlimentos(actual.content, { repo: actual.repo }),
   categoriaToggle: (el) => alternarCategoria(el),
   categoriasTodas: (el) => abrirOPlegarTodo(el.dataset.abrir === 'true'),
 });

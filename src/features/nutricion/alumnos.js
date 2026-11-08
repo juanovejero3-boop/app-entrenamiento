@@ -23,6 +23,7 @@ const MAX_INDICACIONES = 500;
  *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null,
  *   comidas: import('./comidas.js').Comida[], sugerir: typeof sugerirComidas, pdf: typeof mostrarPdfAlimentacion,
  *   sugerencia: { comidas: import('./comidas.js').Comida[], avisos: string[] } | null,
+ *   alimentos: import('./alimentos.js').Alimento[],
  *   planes: Map<string, { alumnoId: string, publicado: boolean }>, publicado: boolean,
  *   guardado: { estado: 'guardado' | 'guardando' | 'error', enCurso: boolean, pendiente: boolean,
  *     ultimo: object | null, promesa: Promise<void> | null }
@@ -52,6 +53,7 @@ export async function mostrarAlumnosDeNutricion(
     sugerir,
     pdf,
     sugerencia: null,
+    alimentos: [],
     planes: new Map(),
     publicado: false,
     guardado: guardadoNuevo(),
@@ -143,7 +145,7 @@ function dibujarLista() {
 
 /** La ficha del alumno con su plan ya cargado (null si todavía no tiene uno). */
 function dibujarFicha(plan) {
-  const { content, alumno, repo } = actual;
+  const { content, alumno } = actual;
   const p = plan?.parametros ?? parametrosIniciales(alumno);
   actual.comidas = plan?.comidas ?? [];
   actual.publicado = plan?.publicado ?? false;
@@ -258,7 +260,7 @@ function dibujarFicha(plan) {
     contenedor: content.querySelector('[data-comidas]'),
     lineaDeTiempo: content.querySelector('[data-linea]'),
     comidas: actual.comidas,
-    alimentos: repo.cargarAlimentos(),
+    alimentos: actual.alimentos,
     objetivos: null, // se completa enseguida con los de la calculadora
     alCambiar: guardarComidas,
   });
@@ -350,8 +352,9 @@ async function abrirAlumno(id) {
   esta.content.innerHTML =
     '<p data-cargando class="text-center text-sm text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando el plan…</p>';
   let plan;
+  let alimentos;
   try {
-    plan = await esta.repo.cargarPlan(alumno.id);
+    [plan, alimentos] = await Promise.all([esta.repo.cargarPlan(alumno.id), esta.repo.cargarAlimentos()]);
   } catch (error) {
     // sin saber qué tiene guardado no se abre la ficha: se podría pisar un plan que existe
     toast(error.message, false);
@@ -359,6 +362,7 @@ async function abrirAlumno(id) {
     return;
   }
   if (actual !== esta || esta.alumno !== alumno) return; // el coach ya salió de esta ficha
+  esta.alimentos = alimentos;
   dibujarFicha(plan);
 }
 
@@ -585,7 +589,7 @@ async function sugerirConIA() {
   mostrarProcesando('Consultando a la IA...');
   try {
     const sugerencia = await actual.sugerir({
-      alimentos: repo.cargarAlimentos(),
+      alimentos: await repo.cargarAlimentos(),
       objetivos: { kcal: r.kcal, p: r.p, c: r.c, f: r.f },
       cantidadComidas: Number(content.querySelector('[data-ia-comidas]').value),
       cantidadOpciones: Number(content.querySelector('[data-ia-opciones]').value),
