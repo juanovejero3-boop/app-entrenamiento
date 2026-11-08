@@ -109,13 +109,14 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
       expect(panel('nutricion').querySelector('a[href="https://docs.google.com/entrenamiento"]')).toBeNull();
     });
 
-    it('con plan de alimentación en la app, el botón va arriba y el link a Sheets queda debajo', async () => {
+    it('con plan de alimentación en la app, el plan va arriba (directo, sin botón) y el link a Sheets queda debajo', async () => {
       await sembrarAlimentacion();
       await renderTabEntrenamiento(content);
-      const boton = panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]');
+      const plan = panel('nutricion').querySelector('[data-plan-de-alimentacion]');
       const sheets = panel('nutricion').querySelector('a[href="https://docs.google.com/nutricion"]');
-      expect(boton).not.toBeNull();
-      expect(boton.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(plan).not.toBeNull();
+      expect(panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]')).toBeNull();
+      expect(plan.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it('sin nada asignado avisa que pronto lo van a cargar', async () => {
@@ -126,14 +127,14 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
   });
 
   describe('recuerda dónde estaba', () => {
-    it('al volver del plan de alimentación, vuelve a la pestaña Nutrición', async () => {
+    it('cambiar de pestaña no vuelve a cargar el plan de alimentación ni pierde lo que estaba abierto', async () => {
       await sembrarAlimentacion();
       await renderTabEntrenamiento(content);
       pestana('nutricion').click();
-      panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]').click();
-      content.querySelector('[data-click="alimentacionVolver"]').click();
-      await vi.waitFor(() => expect($('[data-click="planillaSubpestana"]')).not.toBeNull());
-      expect(pestana('nutricion').getAttribute('aria-selected')).toBe('true');
+      const antes = panel('nutricion').querySelector('[data-plan-de-alimentacion]');
+      pestana('entrenamiento').click();
+      pestana('nutricion').click();
+      expect(panel('nutricion').querySelector('[data-plan-de-alimentacion]')).toBe(antes);
       expect(visible('nutricion')).toBe(true);
     });
 

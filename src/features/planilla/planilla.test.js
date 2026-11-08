@@ -320,11 +320,6 @@ async function sembrarAlimentacion(usuarioId, { notas = 'Tomar agua.' } = {}) {
   await repoNutricion.publicarPlan(usuarioId, true);
 }
 const botonAlimentacion = () => $('[data-click="planillaVerAlimentacion"]');
-/** Toca «Ver mi plan de alimentación» y espera a que termine de cargarse. */
-const abrirAlimentacion = async () => {
-  botonAlimentacion().click();
-  await asentar();
-};
 
 describe('Planilla del alumno: mi plan de alimentación', () => {
   beforeEach(() => {
@@ -334,25 +329,41 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
   });
   afterEach(() => localStorage.clear());
 
+  const planEnLaPestana = () => $('[data-panel="nutricion"] [data-plan-de-alimentacion]');
+
   it('sin plan de alimentación en la app, la tarjeta queda como siempre (con el link a Sheets)', async () => {
     await renderTabEntrenamiento(content);
-    expect(botonAlimentacion()).toBeNull();
+    expect(planEnLaPestana()).toBeNull();
     expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
   });
 
-  it('con plan, aparece «Ver mi plan de alimentación» y el link a Sheets sigue como alternativa', async () => {
+  it('con plan, se ve directamente en la pestaña Nutrición (sin botón) y el link a Sheets queda debajo como alternativa', async () => {
     await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
-    expect(botonAlimentacion().textContent).toMatch(/ver mi plan de alimentaci/i);
-    expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
+    expect(botonAlimentacion()).toBeNull();
+    expect(content.textContent).not.toMatch(/ver mi plan de alimentaci/i);
+    const plan = planEnLaPestana();
+    expect(plan.textContent).toContain('Desayuno');
+    expect(plan.textContent).toContain('Tomar agua.');
+    expect(plan.textContent).not.toMatch(/modo lectura/i);
+    expect(plan.querySelector('[data-click="alimentacionVolver"]')).toBeNull();
+    const sheets = $('a[href="https://docs.google.com/nutricion"]');
+    expect(plan.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('el plan trae el botón para bajarlo en PDF', async () => {
+    await sembrarAlimentacion(ALUMNO.id);
+    await renderTabEntrenamiento(content);
+    expect(planEnLaPestana().querySelector('[data-click="alimentacionPdf"]')).not.toBeNull();
   });
 
   it('sin link a Sheets, no queda el cartel «Pronto te cargaremos...» cuando ya hay plan', async () => {
     state.userProfile = { ...PERFIL_ALUMNO, nutrition_url: null };
     await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
-    expect(botonAlimentacion()).not.toBeNull();
+    expect(planEnLaPestana()).not.toBeNull();
     expect(content.textContent).not.toContain('Pronto te cargaremos tu plan de nutrición');
+    expect($('[data-panel="nutricion"] a[href]')).toBeNull();
   });
 
   it('un plan sin ninguna comida cargada no cambia la tarjeta', async () => {
@@ -362,43 +373,35 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
       notas: '',
     });
     await renderTabEntrenamiento(content);
-    expect(botonAlimentacion()).toBeNull();
+    expect(planEnLaPestana()).toBeNull();
+    expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
   });
 
-  it('el plan de otro usuario no la activa', async () => {
-    await sembrarAlimentacion('otro-alumno');
-    await renderTabEntrenamiento(content);
-    expect(botonAlimentacion()).toBeNull();
-  });
-
-  it('tocarlo abre su plan, con sus comidas y aclaraciones, sin cartel de modo lectura', async () => {
-    await sembrarAlimentacion(ALUMNO.id);
-    await renderTabEntrenamiento(content);
-    await abrirAlimentacion();
-
-    expect(content.querySelector('h2').textContent).toContain('Mi plan de alimentación');
-    expect(content.textContent).toContain('Desayuno');
-    expect(content.textContent).toContain('Tomar agua.');
-    expect(content.textContent).not.toMatch(/modo lectura/i);
-  });
-
-  it('«Volver» regresa a la Planilla', async () => {
-    await sembrarAlimentacion(ALUMNO.id);
-    await renderTabEntrenamiento(content);
-    await abrirAlimentacion();
-    $('[data-click="alimentacionVolver"]').click();
-    await vi.waitFor(() => expect(content.textContent).toContain('Planilla de Entrenamiento'));
-    expect(botonAlimentacion()).not.toBeNull();
-  });
-
-  it('un alumno no puede ver el plan de otro aunque cambie el id del botón', async () => {
+  it('ve solo su propio plan, aunque haya planes de otros', async () => {
     await sembrarAlimentacion(ALUMNO.id, { notas: 'Plan propio' });
     await sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
     await renderTabEntrenamiento(content);
-    botonAlimentacion().dataset.id = 'otro-alumno';
-    await abrirAlimentacion();
-    expect(content.textContent).toContain('Mi plan de alimentación');
+    expect(content.textContent).toContain('Plan propio');
     expect(content.textContent).not.toContain('Plan ajeno');
+  });
+
+  it('el plan de otro usuario no se muestra', async () => {
+    await sembrarAlimentacion('otro-alumno');
+    await renderTabEntrenamiento(content);
+    expect(planEnLaPestana()).toBeNull();
+  });
+
+  it('un alumno no puede abrir el plan de otro aunque fabrique el botón', async () => {
+    await sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
+    await renderTabEntrenamiento(content);
+    const falso = document.createElement('button');
+    falso.dataset.click = 'planillaVerAlimentacion';
+    falso.dataset.id = 'otro-alumno';
+    content.appendChild(falso);
+    falso.click();
+    await asentar();
+    expect(content.textContent).not.toContain('Plan ajeno');
+    expect(content.textContent).toContain('Planilla de Entrenamiento');
   });
 });
 
@@ -418,36 +421,48 @@ describe('Planilla del coach: el plan de alimentación del alumno, en modo lectu
     await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
   }
 
-  it('la ficha tiene «Ver plan de alimentación» aunque el alumno todavía no tenga plan, y el link a Sheets sigue', async () => {
+  const planEnLaFicha = () => $('[data-panel="nutricion"] [data-plan-de-alimentacion]');
+
+  it('el coach ve el plan directamente en la pestaña Nutrición de la ficha, en modo lectura y con el nombre del alumno', async () => {
+    await sembrarAlimentacion(OTRO.id);
     await abrirFicha();
-    expect(botonAlimentacion().textContent).toMatch(/ver plan de alimentaci/i);
+    await vi.waitFor(() => expect(planEnLaFicha()).not.toBeNull());
+
+    expect(botonAlimentacion()).toBeNull(); // ya no hace falta tocar nada para verlo
+    expect(planEnLaFicha().querySelector('[data-modo-lectura]').textContent).toContain('Franco Soria');
+    expect(planEnLaFicha().textContent).toContain('Desayuno');
+    expect(planEnLaFicha().textContent).toContain('Tomar agua.');
+    expect(planEnLaFicha().querySelectorAll('input, textarea, select')).toHaveLength(0); // solo mirar
+  });
+
+  it('el link a la planilla de Sheets queda debajo del plan', async () => {
+    await sembrarAlimentacion(OTRO.id);
+    await abrirFicha();
+    await vi.waitFor(() => expect(planEnLaFicha()).not.toBeNull());
+    const sheets = $('[data-panel="nutricion"] a[href="https://docs.google.com/nutricion"]');
+    expect(planEnLaFicha().compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('si el alumno no tiene plan, lo dice y el link a Sheets sigue', async () => {
+    await abrirFicha();
+    await vi.waitFor(() => expect(planEnLaFicha()).not.toBeNull());
+    expect(planEnLaFicha().textContent).toContain('Este alumno todavía no tiene un plan de alimentación');
     expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
   });
 
-  it('tocarlo muestra exactamente el plan del alumno, en modo lectura y con su nombre', async () => {
+  it('si todavía no lo mostró, el coach lo ve igual y se le avisa que el alumno no lo ve', async () => {
     await sembrarAlimentacion(OTRO.id);
+    await repoNutricion.publicarPlan(OTRO.id, false);
     await abrirFicha();
-    await abrirAlimentacion();
-
-    expect(content.querySelector('h2').textContent).toContain('Franco Soria');
-    expect(content.querySelector('[data-modo-lectura]')).not.toBeNull();
-    expect(content.textContent).toContain('Desayuno');
-    expect(content.textContent).toContain('Tomar agua.');
-    expect(content.querySelectorAll('input, textarea, select')).toHaveLength(0); // solo mirar
+    await vi.waitFor(() => expect(planEnLaFicha()).not.toBeNull());
+    expect(planEnLaFicha().textContent).toContain('Desayuno');
+    expect(planEnLaFicha().querySelector('[data-no-publicado]').textContent).toMatch(/todavía no lo mostraste/i);
   });
 
-  it('si el alumno no tiene plan, lo dice', async () => {
-    await abrirFicha();
-    await abrirAlimentacion();
-    expect(content.textContent).toContain('Este alumno todavía no tiene un plan de alimentación');
-  });
-
-  it('«Volver» regresa a la ficha del mismo alumno', async () => {
+  it('con el plan publicado no hay aviso de borrador', async () => {
     await sembrarAlimentacion(OTRO.id);
     await abrirFicha();
-    await abrirAlimentacion();
-    $('[data-click="alimentacionVolver"]').click();
-    await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
-    expect(content.textContent).toContain('Franco Soria');
+    await vi.waitFor(() => expect(planEnLaFicha()).not.toBeNull());
+    expect(planEnLaFicha().querySelector('[data-no-publicado]')).toBeNull();
   });
 });

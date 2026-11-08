@@ -416,7 +416,7 @@ function dibujarPublicacion() {
 }
 
 const TEXTO_GUARDADO = {
-  guardado: 'Guardado en tu cuenta',
+  guardado: 'Guardado',
   guardando: 'Guardando…',
   error: 'No se pudo guardar · los últimos cambios solo están en esta pantalla',
 };
