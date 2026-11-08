@@ -1,5 +1,6 @@
-// Repo de nutrición guardado en el navegador del coach (localStorage). Es el prototipo: la pantalla usa solo
-// esta interfaz (`cargarAlimentos` / `guardarAlimentos`), así que pasar a Supabase es cambiar el repo.
+// Repo de nutrición guardado en el navegador del coach (localStorage). Hoy lo usa la app para la biblioteca de
+// alimentos y para encontrar los planes de prueba que el coach armó antes de que los planes pasaran a Supabase
+// (ver repoNutricion.js).
 import { alimentosIniciales, normalizarAlimentos } from './alimentos.js';
 import { normalizarComidas } from './comidas.js';
 import { normalizarParametros } from './objetivos.js';
@@ -73,5 +74,3 @@ export function crearRepoNutricionLocal(obtenerAlmacen = () => window.localStora
     },
   };
 }
-
-export const repoNutricion = crearRepoNutricionLocal();

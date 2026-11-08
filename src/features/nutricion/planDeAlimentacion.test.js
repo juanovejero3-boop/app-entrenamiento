@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asentar } from '../../test-helpers.js';
 import { alimentosIniciales } from './alimentos.js';
 import { agregarItem, agregarOpcion, crearComida } from './comidas.js';
-import { abrirPlanDeAlimentacion } from './planDeAlimentacion.js';
+import { abrirPlanDeAlimentacion, tienePlanDeAlimentacion } from './planDeAlimentacion.js';
 import { parametrosIniciales } from './objetivos.js';
 import { crearRepoNutricionLocal } from './repoLocal.js';
 
@@ -324,5 +325,78 @@ describe('plan de alimentación: PDF', () => {
   it('sin comidas no hay nada para bajar: no se ofrece el botón', async () => {
     await abrir();
     expect($('[data-click="alimentacionPdf"]')).toBeNull();
+  });
+});
+
+describe('plan de alimentación: carga desde la cuenta', () => {
+  const planPublicado = (publicado) => ({
+    parametros: PARAMETROS,
+    comidas: [comida('Almuerzo', '13:00', [POLLO, 2])],
+    notas: '',
+    publicado,
+  });
+  const repoCon = (cargarPlan) => ({ cargarPlan });
+  const toasts = () => [...document.body.querySelectorAll('div.fixed')].map((e) => e.textContent);
+
+  it('mientras carga muestra un aviso y después el plan', async () => {
+    let entregar;
+    const repoLento = repoCon(() => new Promise((resolver) => (entregar = resolver)));
+    const abriendo = abrirPlanDeAlimentacion(content, FRANCO, { repo: repoLento, alVolver });
+    expect($('[data-cargando]')).not.toBeNull();
+    entregar(planPublicado(true));
+    await abriendo;
+    expect($('[data-cargando]')).toBeNull();
+    expect(nombresDeComidas()).toEqual(['Almuerzo']);
+  });
+
+  it('si no se pudo cargar lo dice y deja volver', async () => {
+    const repoRoto = repoCon(async () => {
+      throw new Error('sin conexión');
+    });
+    await abrirPlanDeAlimentacion(content, FRANCO, { repo: repoRoto, alVolver });
+    expect($('[data-error]').textContent).toMatch(/no pudimos cargar/i);
+    expect(toasts().join()).toContain('sin conexión');
+    $('[data-click="alimentacionVolver"]').click();
+    expect(alVolver).toHaveBeenCalledTimes(1);
+  });
+
+  it('si se vuelve mientras carga, el plan que llega tarde no pisa la pantalla', async () => {
+    let entregar;
+    const repoLento = repoCon(() => new Promise((resolver) => (entregar = resolver)));
+    const abriendo = abrirPlanDeAlimentacion(content, FRANCO, { repo: repoLento, alVolver });
+    $('[data-click="alimentacionVolver"]').click();
+    content.innerHTML = '<p data-otra-pantalla>Planilla</p>';
+    entregar(planPublicado(true));
+    await abriendo;
+    expect($('[data-otra-pantalla]')).not.toBeNull();
+    expect(nombresDeComidas()).toEqual([]);
+  });
+
+  it('el coach ve un aviso si el plan todavía no está publicado (el alumno no lo ve)', async () => {
+    await abrirPlanDeAlimentacion(content, FRANCO, {
+      repo: repoCon(async () => planPublicado(false)),
+      alVolver,
+      soloLectura: true,
+    });
+    expect($('[data-no-publicado]').textContent).toMatch(/todavía no lo mostraste/i);
+  });
+
+  it('el coach no ve el aviso si ya está publicado, y el alumno nunca lo ve', async () => {
+    await abrirPlanDeAlimentacion(content, FRANCO, {
+      repo: repoCon(async () => planPublicado(true)),
+      alVolver,
+      soloLectura: true,
+    });
+    expect($('[data-no-publicado]')).toBeNull();
+    await abrirPlanDeAlimentacion(content, FRANCO, { repo: repoCon(async () => planPublicado(false)), alVolver });
+    expect($('[data-no-publicado]')).toBeNull();
+  });
+
+  it('si no se puede consultar, la Planilla trata al alumno como sin plan en vez de romperse', async () => {
+    const repoRoto = repoCon(async () => {
+      throw new Error('sin conexión');
+    });
+    expect(await tienePlanDeAlimentacion(repoRoto, FRANCO.id)).toBe(false);
+    await asentar();
   });
 });

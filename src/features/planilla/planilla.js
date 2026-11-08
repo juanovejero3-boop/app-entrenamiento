@@ -8,7 +8,7 @@ import { loadAdminData } from '../admin/admin.js';
 import { abrirPlanesDelAlumno } from '../coaching/alumno/planesDelAlumno.js';
 import { abrirCiclosDelAlumno } from '../coaching/ciclos/ciclosDelAlumno.js';
 import { abrirPlanDeAlimentacion, tienePlanDeAlimentacion } from '../nutricion/planDeAlimentacion.js';
-import { repoNutricion } from '../nutricion/repoLocal.js';
+import { repoNutricion } from '../nutricion/repoNutricion.js';
 
 let adminPlanillaAbiertos = [];
 let adminPlanillaActivo = null;
@@ -109,7 +109,7 @@ export async function renderTabEntrenamiento(content) {
 
     // Si el entrenador ya le armó un plan de alimentación en la app, se abre desde acá; el link a Sheets (si
     // lo hay) queda como alternativa. Si no, la tarjeta es la de siempre.
-    const nutricionCard = tienePlanDeAlimentacion(repoNutricion, state.userProfile?.id)
+    const nutricionCard = (await tienePlanDeAlimentacion(repoNutricion, state.userProfile?.id))
       ? `
         <button data-click="planillaVerAlimentacion" class="block w-full text-center neon-glow-button text-white font-black text-lg py-4 rounded-2xl uppercase tracking-wider shadow-lg">
           <i class="fa-solid fa-utensils mr-2"></i> VER MI PLAN DE ALIMENTACIÓN

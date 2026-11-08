@@ -5,7 +5,7 @@ import { state } from '../../state.js';
 import { alimentosIniciales } from '../nutricion/alimentos.js';
 import { agregarItem, crearComida } from '../nutricion/comidas.js';
 import { parametrosIniciales } from '../nutricion/objetivos.js';
-import { repoNutricion } from '../nutricion/repoLocal.js';
+import { repoNutricion } from '../nutricion/repoNutricion.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
 
 vi.mock('../coaching/pdf/generar.js', () => ({ generarPdfBlob: vi.fn() }));
@@ -42,11 +42,12 @@ const pestana = (nombre) => $(`[data-click="planillaSubpestana"][data-tab="${nom
 const panel = (nombre) => $(`[data-panel="${nombre}"]`);
 const visible = (nombre) => !panel(nombre).hidden;
 
-function sembrarAlimentacion() {
+async function sembrarAlimentacion() {
   const pollo = alimentosIniciales().find((a) => a.nombre === 'Pechuga de Pollo');
   const c = crearComida({ nombre: 'Almuerzo', hora: '13:00' });
   const comidas = agregarItem([c], c.id, c.opciones[0].id, pollo, 2);
-  repoNutricion.guardarPlan(ALUMNO.id, { parametros: parametrosIniciales({}), comidas, notas: '' });
+  await repoNutricion.guardarPlan(ALUMNO.id, { parametros: parametrosIniciales({}), comidas, notas: '' });
+  await repoNutricion.publicarPlan(ALUMNO.id, true);
 }
 
 describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
@@ -109,7 +110,7 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
     });
 
     it('con plan de alimentación en la app, el botón va arriba y el link a Sheets queda debajo', async () => {
-      sembrarAlimentacion();
+      await sembrarAlimentacion();
       await renderTabEntrenamiento(content);
       const boton = panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]');
       const sheets = panel('nutricion').querySelector('a[href="https://docs.google.com/nutricion"]');
@@ -126,7 +127,7 @@ describe('Planilla del alumno: pestañas Entrenamiento y Nutrición', () => {
 
   describe('recuerda dónde estaba', () => {
     it('al volver del plan de alimentación, vuelve a la pestaña Nutrición', async () => {
-      sembrarAlimentacion();
+      await sembrarAlimentacion();
       await renderTabEntrenamiento(content);
       pestana('nutricion').click();
       panel('nutricion').querySelector('[data-click="planillaVerAlimentacion"]').click();

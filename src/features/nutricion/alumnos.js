@@ -1,5 +1,6 @@
 // Nutrición por alumno (una subpestaña de Nutrición): el coach busca a un alumno y le calcula sus objetivos de
-// calorías y macros. Los parámetros se guardan por alumno en el navegador (ver repoLocal.js).
+// calorías y macros y le arma el plan de alimentación. El plan de cada alumno se guarda en Supabase (ver
+// repoPlanes.js) y el alumno lo ve solo cuando el coach lo muestra.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import { plano } from '../../lib/texto.js';
@@ -10,7 +11,8 @@ import { actualizarObjetivosDeComidas, montarComidas } from './comidasVista.js';
 import { sugerirComidas } from './ia.js';
 import { mostrarPdfAlimentacion } from './mostrarPdf.js';
 import { ACTIVIDADES, calcularObjetivos, parametrosIniciales, validarParametros } from './objetivos.js';
-import { MAX_NOTAS, repoNutricion } from './repoLocal.js';
+import { MAX_NOTAS } from './repoLocal.js';
+import { repoNutricion } from './repoNutricion.js';
 
 const ALUMNOS_POR_PAGINA = 3; // igual que las otras listas de alumnos
 const MAX_INDICACIONES = 500;
@@ -20,7 +22,10 @@ const MAX_INDICACIONES = 500;
  *   content: HTMLElement, repo: typeof repoNutricion, alumnos: { id: string, name?: string, email?: string }[],
  *   filtro: string, pagina: number, alumno: { id: string, name?: string, email?: string } | null,
  *   comidas: import('./comidas.js').Comida[], sugerir: typeof sugerirComidas, pdf: typeof mostrarPdfAlimentacion,
- *   sugerencia: { comidas: import('./comidas.js').Comida[], avisos: string[] } | null
+ *   sugerencia: { comidas: import('./comidas.js').Comida[], avisos: string[] } | null,
+ *   planes: Map<string, { alumnoId: string, publicado: boolean }>, publicado: boolean,
+ *   guardado: { estado: 'guardado' | 'guardando' | 'error', enCurso: boolean, pendiente: boolean,
+ *     ultimo: object | null, promesa: Promise<void> | null }
  * } | null}
  */
 let actual = null;
@@ -32,13 +37,39 @@ let actual = null;
  *   sugerir?: typeof sugerirComidas, pdf?: typeof mostrarPdfAlimentacion
  * }} opciones  sugerir y pdf se pueden reemplazar en los tests
  */
-export function mostrarAlumnosDeNutricion(
+export async function mostrarAlumnosDeNutricion(
   content,
   { repo = repoNutricion, alumnos, sugerir = sugerirComidas, pdf = mostrarPdfAlimentacion },
 ) {
-  actual = { content, repo, alumnos, filtro: '', pagina: 0, alumno: null, comidas: [], sugerir, pdf, sugerencia: null };
+  const esta = {
+    content,
+    repo,
+    alumnos,
+    filtro: '',
+    pagina: 0,
+    alumno: null,
+    comidas: [],
+    sugerir,
+    pdf,
+    sugerencia: null,
+    planes: new Map(),
+    publicado: false,
+    guardado: guardadoNuevo(),
+  };
+  actual = esta;
   dibujar();
+  // Qué alumnos ya tienen plan (y si está publicado): se pide una sola vez y se marcan en la lista
+  try {
+    const lista = await repo.listarPlanes(alumnos.map((a) => a.id));
+    if (actual !== esta) return; // el coach ya cambió de pantalla
+    esta.planes = new Map(lista.map((p) => [p.alumnoId, p]));
+    if (!esta.alumno) dibujarLista();
+  } catch (error) {
+    toast(error.message, false);
+  }
 }
+
+const guardadoNuevo = () => ({ estado: 'guardado', enCurso: false, pendiente: false, ultimo: null, promesa: null });
 
 // ---------------------------------------------------------------------------
 // Vista
@@ -48,9 +79,9 @@ export function mostrarAlumnosDeNutricion(
 const claseInput =
   'w-full bg-cyberDark border border-gray-700 rounded-lg p-2.5 text-base text-white outline-none focus:border-neonRed';
 
+/** La lista de alumnos (la ficha se dibuja aparte, cuando termina de cargar el plan). */
 function dibujar() {
-  if (actual.alumno) dibujarFicha();
-  else dibujarBuscador();
+  dibujarBuscador();
 }
 
 function dibujarBuscador() {
@@ -66,7 +97,7 @@ function dibujarBuscador() {
 
 /** Redibuja solo la lista: así el campo de búsqueda no pierde el foco mientras se escribe. */
 function dibujarLista() {
-  const { content, alumnos, filtro, repo } = actual;
+  const { content, alumnos, filtro, planes } = actual;
   const buscado = plano(filtro);
   const coinciden = alumnos.filter(
     (a) => !buscado || plano(`${nombreDelAlumno(a)} ${a.email ?? ''}`).includes(buscado),
@@ -99,7 +130,8 @@ function dibujarLista() {
             <p data-nombre class="text-sm font-bold text-white truncate">${esc(nombreDelAlumno(a))}</p>
             <p class="text-xs text-gray-400 truncate">${esc(a.email ?? '')}</p>
           </div>
-          ${repo.cargarPlan(a.id) ? '<span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-emerald-700 text-emerald-300">Con plan</span>' : ''}
+          ${planes.has(a.id) ? '<span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-emerald-700 text-emerald-300">Con plan</span>' : ''}
+          ${planes.get(a.id)?.publicado ? '<span data-publicado class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-sky-700 text-sky-300">Visible</span>' : ''}
           <i class="fa-solid fa-chevron-right text-gray-500"></i>
         </button>`,
         )
@@ -109,11 +141,12 @@ function dibujarLista() {
       }</div>`;
 }
 
-function dibujarFicha() {
+/** La ficha del alumno con su plan ya cargado (null si todavía no tiene uno). */
+function dibujarFicha(plan) {
   const { content, alumno, repo } = actual;
-  const plan = repo.cargarPlan(alumno.id);
   const p = plan?.parametros ?? parametrosIniciales(alumno);
   actual.comidas = plan?.comidas ?? [];
+  actual.publicado = plan?.publicado ?? false;
   actual.sugerencia = null;
   const campo = (nombre, etiqueta, atributos = '') => `
     <label class="block">
@@ -143,6 +176,13 @@ function dibujarFicha() {
           <p class="text-xs text-gray-400 truncate">Objetivos de nutrición</p>
         </div>
         <button data-click="nutricionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>
+      </div>
+      <div data-publicacion class="bg-cyberCard rounded-xl border border-gray-800 p-3 flex items-center gap-3">
+        <div class="flex-1 min-w-0 space-y-0.5">
+          <p data-publicacion-estado class="text-xs font-bold"></p>
+          <p data-guardado class="text-[11px] text-gray-500"></p>
+        </div>
+        <button data-publicacion-boton data-click="nutricionPublicar" class="shrink-0 min-h-11 px-4 rounded-lg text-[11px] font-bold uppercase tracking-wider transition"></button>
       </div>
       ${seccion(
         'parametros',
@@ -212,6 +252,8 @@ function dibujarFicha() {
   content.querySelector('[data-notas]').value = plan?.notas ?? '';
   content.querySelector('[data-ia-comidas]').value = '4';
   content.querySelector('[data-ia-opciones]').value = '2';
+  dibujarPublicacion();
+  dibujarEstadoDeGuardado();
   montarComidas({
     contenedor: content.querySelector('[data-comidas]'),
     lineaDeTiempo: content.querySelector('[data-linea]'),
@@ -299,28 +341,163 @@ function cambiarPagina(direccion) {
   dibujarLista();
 }
 
-function abrirAlumno(id) {
+async function abrirAlumno(id) {
   const alumno = actual.alumnos.find((a) => a.id === id);
   if (!alumno) return;
-  actual.alumno = alumno;
-  dibujar();
+  const esta = actual;
+  esta.alumno = alumno;
+  esta.guardado = guardadoNuevo();
+  esta.content.innerHTML =
+    '<p data-cargando class="text-center text-sm text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando el plan…</p>';
+  let plan;
+  try {
+    plan = await esta.repo.cargarPlan(alumno.id);
+  } catch (error) {
+    // sin saber qué tiene guardado no se abre la ficha: se podría pisar un plan que existe
+    toast(error.message, false);
+    if (actual === esta && esta.alumno === alumno) volver();
+    return;
+  }
+  if (actual !== esta || esta.alumno !== alumno) return; // el coach ya salió de esta ficha
+  dibujarFicha(plan);
 }
 
 function volver() {
   actual.alumno = null;
   dibujar();
+  dibujarLista();
 }
 
-/** Guarda el plan del alumno (parámetros, comidas y aclaraciones juntos, para que guardar uno no pise a los otros). */
-function guardarPlan(comidas) {
+/** Muestra el plan al alumno (o lo vuelve a esconder). Antes se asegura de que lo que se ve en pantalla esté guardado. */
+async function alternarPublicacion() {
+  const esta = actual;
+  const { alumno, repo, guardado: g } = esta;
+  const publicar = !esta.publicado;
+  if (publicar && !esta.comidas.some((c) => c.opciones.some((o) => o.items.length))) {
+    toast('Armá al menos una comida con alimentos antes de mostrarle el plan al alumno.', false);
+    return;
+  }
+  mostrarProcesando(publicar ? 'Mostrando el plan al alumno...' : 'Ocultando el plan...');
   try {
-    const notas = actual.content.querySelector('[data-notas]').value;
-    actual.repo.guardarPlan(actual.alumno.id, { parametros: leerParametros(), comidas, notas });
-    return true;
+    guardarPlan(esta.comidas); // por si el plan todavía solo existía en este navegador
+    await esperarGuardado();
+    if (g.estado === 'error') throw new Error('No se pudo guardar el plan. Probá de nuevo en un momento.');
+    await repo.publicarPlan(alumno.id, publicar);
+    esta.publicado = publicar;
+    esta.planes.set(alumno.id, { alumnoId: alumno.id, publicado: publicar });
+    if (actual === esta && esta.alumno === alumno) dibujarPublicacion();
+    toast(publicar ? 'Listo: el alumno ya ve su plan de alimentación.' : 'El plan quedó oculto para el alumno.');
   } catch (error) {
     toast(error.message, false);
+  } finally {
+    ocultarProcesando();
+  }
+}
+
+/** Muestra si el plan está visible para el alumno y el botón para cambiarlo. */
+function dibujarPublicacion() {
+  const seccion = actual.content.querySelector('[data-publicacion]');
+  if (!seccion) return;
+  const { publicado } = actual;
+  const estado = seccion.querySelector('[data-publicacion-estado]');
+  estado.textContent = publicado ? 'Visible para el alumno' : 'Borrador · el alumno todavía no lo ve';
+  estado.className = `text-xs font-bold ${publicado ? 'text-sky-300' : 'text-amber-300'}`;
+  const boton = seccion.querySelector('[data-publicacion-boton]');
+  boton.textContent = publicado ? 'Ocultar' : 'Mostrar al alumno';
+  boton.className = `shrink-0 min-h-11 px-4 rounded-lg text-[11px] font-bold uppercase tracking-wider transition ${
+    publicado
+      ? 'border border-gray-700 text-gray-300 hover:border-neonRed hover:text-neonRed'
+      : 'neon-glow-button text-white'
+  }`;
+}
+
+const TEXTO_GUARDADO = {
+  guardado: 'Guardado en tu cuenta',
+  guardando: 'Guardando…',
+  error: 'No se pudo guardar · los últimos cambios solo están en esta pantalla',
+};
+
+/** Dice si lo último que se tocó ya está guardado, y si falló ofrece reintentar. */
+function dibujarEstadoDeGuardado() {
+  const lugar = actual?.content.querySelector('[data-guardado]');
+  if (!lugar) return;
+  const { estado } = actual.guardado;
+  lugar.dataset.estado = estado;
+  lugar.className = `text-[11px] ${estado === 'error' ? 'text-amber-300' : 'text-gray-500'}`;
+  lugar.innerHTML = `${esc(TEXTO_GUARDADO[estado])}${
+    estado === 'error'
+      ? ' <button data-click="nutricionReintentar" class="underline font-bold text-amber-200">Reintentar</button>'
+      : ''
+  }`;
+}
+
+/** Los datos del plan tal como están en pantalla (parámetros, comidas y aclaraciones juntos, para que guardar uno no pise a los otros). */
+const armarPlan = (comidas) => ({
+  parametros: leerParametros(),
+  comidas,
+  notas: actual.content.querySelector('[data-notas]').value,
+});
+
+/**
+ * Manda el plan a guardar. No espera la respuesta: los cambios se ven al instante y el estado de guardado dice cómo
+ * va. Si ya hay un guardado en curso, lo último tocado se manda cuando termine (así nunca llegan desordenados).
+ * @returns {boolean} false si el repo rechazó el guardado en el momento (por ejemplo, un navegador sin espacio)
+ */
+function guardarPlan(comidas) {
+  const g = actual.guardado;
+  g.ultimo = armarPlan(comidas);
+  if (g.enCurso) {
+    g.pendiente = true;
+    return true;
+  }
+  return enviarPlan();
+}
+
+function enviarPlan() {
+  const esta = actual;
+  const { alumno, repo, guardado: g } = esta;
+  g.pendiente = false;
+  let resultado;
+  try {
+    resultado = repo.guardarPlan(alumno.id, g.ultimo);
+  } catch (error) {
+    toast(error.message, false);
+    g.estado = 'error';
+    dibujarEstadoDeGuardado();
     return false;
   }
+  const alTerminar = (error) => {
+    g.enCurso = false;
+    if (error) {
+      g.estado = 'error';
+      if (actual === esta) toast(error.message, false);
+    } else if (g.pendiente) {
+      if (actual === esta && esta.alumno === alumno) enviarPlan();
+      return;
+    } else {
+      g.estado = 'guardado';
+      esta.planes.set(alumno.id, { alumnoId: alumno.id, publicado: esta.publicado });
+    }
+    if (actual === esta && esta.guardado === g) dibujarEstadoDeGuardado();
+  };
+  if (!resultado?.then) {
+    alTerminar(null); // repo síncrono
+    return true;
+  }
+  g.enCurso = true;
+  g.estado = 'guardando';
+  dibujarEstadoDeGuardado();
+  g.promesa = resultado.then(
+    () => alTerminar(null),
+    (error) => alTerminar(error),
+  );
+  return true;
+}
+
+/** Espera a que lo que se tocó esté guardado (o haya fallado). */
+async function esperarGuardado() {
+  const g = actual.guardado;
+  while (g.enCurso) await g.promesa;
 }
 
 /** Al confirmar un cambio en los parámetros (salir del campo) se guarda el plan. */
@@ -426,7 +603,9 @@ async function sugerirConIA() {
 
 function aplicarSugerencia() {
   if (!actual.sugerencia || !guardarComidas(actual.sugerencia.comidas)) return;
-  dibujarFicha(); // vuelve a dibujar las comidas, el tablero y la línea de tiempo con lo aplicado
+  // vuelve a dibujar las comidas, el tablero y la línea de tiempo con lo aplicado
+  dibujarFicha({ ...armarPlan(actual.comidas), publicado: actual.publicado });
+  dibujarEstadoDeGuardado();
   toast('Comidas aplicadas al plan.');
 }
 
@@ -435,13 +614,21 @@ function descartarSugerencia() {
   dibujarSugerencia();
 }
 
-function bajarPdf() {
-  const plan = actual.repo.cargarPlan(actual.alumno.id);
+async function bajarPdf() {
+  const { alumno } = actual;
+  let plan;
+  try {
+    await esperarGuardado();
+    plan = await actual.repo.cargarPlan(alumno.id);
+  } catch (error) {
+    toast(error.message, false);
+    return;
+  }
   if (!plan?.comidas.some((c) => c.opciones.some((o) => o.items.length))) {
     toast('Armá al menos una comida con alimentos para bajar el PDF.', false);
     return;
   }
-  actual.pdf(plan, actual.alumno);
+  actual.pdf(plan, alumno);
 }
 
 registrarAcciones({
@@ -449,6 +636,8 @@ registrarAcciones({
   nutricionIAAplicar: () => aplicarSugerencia(),
   nutricionIADescartar: () => descartarSugerencia(),
   nutricionPdf: () => bajarPdf(),
+  nutricionPublicar: () => alternarPublicacion(),
+  nutricionReintentar: () => guardarPlan(actual.comidas),
   nutricionBuscarAlumno: (el) => buscar(el.value),
   nutricionCambiarPagina: (el) => cambiarPagina(Number(el.dataset.dir)),
   nutricionAlumno: (el) => abrirAlumno(el.dataset.id),

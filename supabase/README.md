@@ -13,6 +13,7 @@ Este directorio contiene las migraciones de la base de datos, versionadas y orde
 | `migrations/20260812000004_profile_fields.sql` | Agrega columnas de ficha del alumno: `name`, `goal`, `height_cm`, `weight_kg` |
 | `migrations/20261016000000_training_tables.sql` | Entrenamiento: `training_cycles` (N macrociclos por alumno, plan en jsonb), `training_sessions` (día terminado o no entrenado) y `training_set_logs` (series anotadas), con RLS. Se prueba en `src/features/coaching/repo/esquema.test.js` sobre un Postgres en memoria (PGlite) |
 | `migrations/20261102000000_realtime_entrenamiento.sql` | Suma `training_set_logs` y `training_sessions` a la publicación `supabase_realtime`, para que el entrenador vea en vivo lo que completa el alumno. Idempotente |
+| `migrations/20261108000000_nutrition_plans.sql` | Nutrición: `nutrition_plans` (un plan de alimentación por alumno, en jsonb, con `published`: el coach lo prepara y lo muestra; el alumno solo lee el suyo si está publicado), con RLS. Se prueba en `src/features/nutricion/esquemaNutricion.test.js` (PGlite). **Aplicarla en Supabase antes de desplegar la app que la usa** |
 
 ## Convención
 

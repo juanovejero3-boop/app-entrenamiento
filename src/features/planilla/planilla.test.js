@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asentar } from '../../test-helpers.js';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
 import { clienteDePrueba, repo } from '../coaching/repo/index.js';
 import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
@@ -6,7 +7,7 @@ import { state } from '../../state.js';
 import { alimentosIniciales } from '../nutricion/alimentos.js';
 import { agregarItem, crearComida } from '../nutricion/comidas.js';
 import { parametrosIniciales } from '../nutricion/objetivos.js';
-import { repoNutricion } from '../nutricion/repoLocal.js';
+import { repoNutricion } from '../nutricion/repoNutricion.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './planilla.js';
 
 // El motor de PDF no se usa acá, pero la vista del alumno lo importa
@@ -309,15 +310,21 @@ describe('Planilla del coach: su propio plan', () => {
 // Plan de alimentación: el alumno lo ve desde su Planilla y el coach, en modo lectura, desde la ficha
 // ---------------------------------------------------------------------------
 
-/** Le arma al usuario un plan de alimentación con un desayuno (en el navegador, como lo guarda el coach). */
-function sembrarAlimentacion(usuarioId, { notas = 'Tomar agua.' } = {}) {
+/** Le arma al usuario un plan de alimentación con un desayuno (guardado en la cuenta y publicado, como lo deja el coach). */
+async function sembrarAlimentacion(usuarioId, { notas = 'Tomar agua.' } = {}) {
   const pollo = alimentosIniciales().find((a) => a.nombre === 'Pechuga de Pollo');
   const desayuno = crearComida({ nombre: 'Desayuno', hora: '08:00' });
   const comidas = agregarItem([desayuno], desayuno.id, desayuno.opciones[0].id, pollo, 1);
   const parametros = { ...parametrosIniciales({}), edad: 28, peso: 75, altura: 175 };
-  repoNutricion.guardarPlan(usuarioId, { parametros, comidas, notas });
+  await repoNutricion.guardarPlan(usuarioId, { parametros, comidas, notas });
+  await repoNutricion.publicarPlan(usuarioId, true);
 }
 const botonAlimentacion = () => $('[data-click="planillaVerAlimentacion"]');
+/** Toca «Ver mi plan de alimentación» y espera a que termine de cargarse. */
+const abrirAlimentacion = async () => {
+  botonAlimentacion().click();
+  await asentar();
+};
 
 describe('Planilla del alumno: mi plan de alimentación', () => {
   beforeEach(() => {
@@ -334,7 +341,7 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
   });
 
   it('con plan, aparece «Ver mi plan de alimentación» y el link a Sheets sigue como alternativa', async () => {
-    sembrarAlimentacion(ALUMNO.id);
+    await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
     expect(botonAlimentacion().textContent).toMatch(/ver mi plan de alimentaci/i);
     expect($('a[href="https://docs.google.com/nutricion"]')).not.toBeNull();
@@ -342,14 +349,14 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
 
   it('sin link a Sheets, no queda el cartel «Pronto te cargaremos...» cuando ya hay plan', async () => {
     state.userProfile = { ...PERFIL_ALUMNO, nutrition_url: null };
-    sembrarAlimentacion(ALUMNO.id);
+    await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
     expect(botonAlimentacion()).not.toBeNull();
     expect(content.textContent).not.toContain('Pronto te cargaremos tu plan de nutrición');
   });
 
   it('un plan sin ninguna comida cargada no cambia la tarjeta', async () => {
-    repoNutricion.guardarPlan(ALUMNO.id, {
+    await repoNutricion.guardarPlan(ALUMNO.id, {
       parametros: parametrosIniciales({}),
       comidas: [crearComida({ nombre: 'Vacía' })],
       notas: '',
@@ -359,15 +366,15 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
   });
 
   it('el plan de otro usuario no la activa', async () => {
-    sembrarAlimentacion('otro-alumno');
+    await sembrarAlimentacion('otro-alumno');
     await renderTabEntrenamiento(content);
     expect(botonAlimentacion()).toBeNull();
   });
 
   it('tocarlo abre su plan, con sus comidas y aclaraciones, sin cartel de modo lectura', async () => {
-    sembrarAlimentacion(ALUMNO.id);
+    await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
-    botonAlimentacion().click();
+    await abrirAlimentacion();
 
     expect(content.querySelector('h2').textContent).toContain('Mi plan de alimentación');
     expect(content.textContent).toContain('Desayuno');
@@ -376,20 +383,20 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
   });
 
   it('«Volver» regresa a la Planilla', async () => {
-    sembrarAlimentacion(ALUMNO.id);
+    await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
-    botonAlimentacion().click();
+    await abrirAlimentacion();
     $('[data-click="alimentacionVolver"]').click();
     await vi.waitFor(() => expect(content.textContent).toContain('Planilla de Entrenamiento'));
     expect(botonAlimentacion()).not.toBeNull();
   });
 
   it('un alumno no puede ver el plan de otro aunque cambie el id del botón', async () => {
-    sembrarAlimentacion(ALUMNO.id, { notas: 'Plan propio' });
-    sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
+    await sembrarAlimentacion(ALUMNO.id, { notas: 'Plan propio' });
+    await sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
     await renderTabEntrenamiento(content);
     botonAlimentacion().dataset.id = 'otro-alumno';
-    botonAlimentacion().click();
+    await abrirAlimentacion();
     expect(content.textContent).toContain('Mi plan de alimentación');
     expect(content.textContent).not.toContain('Plan ajeno');
   });
@@ -418,9 +425,9 @@ describe('Planilla del coach: el plan de alimentación del alumno, en modo lectu
   });
 
   it('tocarlo muestra exactamente el plan del alumno, en modo lectura y con su nombre', async () => {
-    sembrarAlimentacion(OTRO.id);
+    await sembrarAlimentacion(OTRO.id);
     await abrirFicha();
-    botonAlimentacion().click();
+    await abrirAlimentacion();
 
     expect(content.querySelector('h2').textContent).toContain('Franco Soria');
     expect(content.querySelector('[data-modo-lectura]')).not.toBeNull();
@@ -431,14 +438,14 @@ describe('Planilla del coach: el plan de alimentación del alumno, en modo lectu
 
   it('si el alumno no tiene plan, lo dice', async () => {
     await abrirFicha();
-    botonAlimentacion().click();
+    await abrirAlimentacion();
     expect(content.textContent).toContain('Este alumno todavía no tiene un plan de alimentación');
   });
 
   it('«Volver» regresa a la ficha del mismo alumno', async () => {
-    sembrarAlimentacion(OTRO.id);
+    await sembrarAlimentacion(OTRO.id);
     await abrirFicha();
-    botonAlimentacion().click();
+    await abrirAlimentacion();
     $('[data-click="alimentacionVolver"]').click();
     await vi.waitFor(() => expect($('[data-entrenamiento-alumno]')).not.toBeNull());
     expect(content.textContent).toContain('Franco Soria');

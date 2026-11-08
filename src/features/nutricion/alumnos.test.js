@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asentar } from '../../test-helpers.js';
 import '../../lib/ui.js';
 import { mostrarAlumnosDeNutricion } from './alumnos.js';
-import { claveDelPlan, crearRepoNutricionLocal } from './repoLocal.js';
+import { alimentosIniciales } from './alimentos.js';
+import { agregarItem, crearComida } from './comidas.js';
+import { parametrosIniciales } from './objetivos.js';
+import { crearClienteFalso } from '../coaching/repo/clienteFalso.js';
+import { crearRepoNutricionLocal } from './repoLocal.js';
+import { crearRepoNutricion } from './repoNutricion.js';
 
 const ALDY = { id: 'u1', name: 'Aldy Taranto', email: 'aldy@ejemplo.com', weight_kg: 62, height_cm: 164 };
 const SIMON = { id: 'u2', name: 'Simón Álvarez', email: 'simon@ejemplo.com' };
@@ -9,6 +15,7 @@ const SIN_NOMBRE = { id: 'u3', name: '', email: 'sin-nombre@ejemplo.com' };
 
 let content;
 let almacen;
+let cliente;
 let repo;
 let alumnos;
 beforeEach(() => {
@@ -17,7 +24,11 @@ beforeEach(() => {
   document.body.appendChild(content);
   const datos = new Map();
   almacen = { datos, getItem: (k) => datos.get(k) ?? null, setItem: (k, v) => void datos.set(k, String(v)) };
-  repo = crearRepoNutricionLocal(() => almacen);
+  cliente = crearClienteFalso();
+  repo = crearRepoNutricion(
+    cliente,
+    crearRepoNutricionLocal(() => almacen),
+  );
   alumnos = [ALDY, SIMON, SIN_NOMBRE];
 });
 afterEach(() => {
@@ -31,7 +42,6 @@ const abrir = async () => mostrarAlumnosDeNutricion(content, { repo, alumnos });
 const nombres = () => $$('[data-click="nutricionAlumno"] [data-nombre]').map((e) => e.textContent.trim());
 const toasts = () => [...document.body.querySelectorAll('div.fixed')].map((e) => e.textContent);
 const form = () => $('[data-plan-form]').elements;
-const planGuardado = (id) => JSON.parse(almacen.datos.get(claveDelPlan(id)));
 
 function escribir(campo, valor) {
   campo.value = valor;
@@ -44,7 +54,21 @@ function cambiar(campo, valor) {
 }
 const abrirAlumno = async (alumno = ALDY) => {
   await abrir();
+  await irA(alumno);
+};
+const irA = async (alumno) => {
   $(`[data-click="nutricionAlumno"][data-id="${alumno.id}"]`).click();
+  await asentar();
+};
+const volver = async () => {
+  await asentar(); // que termine de guardar antes de salir
+  $('[data-click="nutricionVolverAlumnos"]').click();
+};
+/** Lo que quedó guardado en la cuenta del coach para ese alumno (espera a que termine de guardarse). */
+const planGuardado = async (id) => {
+  await asentar();
+  const fila = cliente.tablas.nutrition_plans.find((f) => f.student_id === id);
+  return fila && { parametros: fila.parametros, comidas: fila.comidas, notas: fila.notas };
 };
 const resultado = (clave) => $(`[data-resultados] [data-${clave}]`)?.textContent.replace(/\s+/g, ' ').trim();
 
@@ -111,7 +135,7 @@ describe('alumnos: buscador', () => {
       await abrir();
       cambiarPagina(1);
       $('[data-click="nutricionAlumno"][data-id="a4"]').click();
-      $('[data-click="nutricionVolverAlumnos"]').click();
+      await volver();
       expect(pagina()).toBe('Página 2 de 3');
     });
 
@@ -148,7 +172,7 @@ describe('alumnos: buscador', () => {
   });
 
   it('marca a los que ya tienen un plan guardado', async () => {
-    repo.guardarPlan(SIMON.id, { parametros: {} });
+    await repo.guardarPlan(SIMON.id, { parametros: {}, comidas: [], notas: '' });
     await abrir();
     const fila = (a) => $(`[data-click="nutricionAlumno"][data-id="${a.id}"]`);
     expect(fila(SIMON).textContent).toContain('Con plan');
@@ -271,7 +295,7 @@ describe('alumnos: la calculadora', () => {
   });
 });
 
-describe('alumnos: se guarda en el navegador', () => {
+describe('alumnos: se guarda en la cuenta del coach', () => {
   it('al confirmar un cambio guarda el plan del alumno, y al volver a abrirlo está todo', async () => {
     await abrirAlumno(SIMON);
     cambiar(form().edad, '28');
@@ -279,10 +303,10 @@ describe('alumnos: se guarda en el navegador', () => {
     cambiar(form().altura, '175');
     cambiar(form().ajuste, '90');
 
-    expect(planGuardado(SIMON.id).parametros).toMatchObject({ edad: '28', peso: '75', ajuste: '90' });
+    expect((await planGuardado(SIMON.id)).parametros).toMatchObject({ edad: '28', peso: '75', ajuste: '90' });
 
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await volver();
+    await irA(SIMON);
     expect(form().edad.value).toBe('28');
     expect(form().ajuste.value).toBe('90');
     expect(resultado('kcal')).toBeTruthy();
@@ -291,16 +315,18 @@ describe('alumnos: se guarda en el navegador', () => {
   it('mientras se escribe no guarda en cada tecla: guarda al confirmar', async () => {
     await abrirAlumno(SIMON);
     escribir(form().edad, '28');
-    expect(almacen.datos.has(claveDelPlan(SIMON.id))).toBe(false);
+    await asentar();
+    expect(cliente.tablas.nutrition_plans).toHaveLength(0);
     form().edad.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(almacen.datos.has(claveDelPlan(SIMON.id))).toBe(true);
+    await asentar();
+    expect(cliente.tablas.nutrition_plans).toHaveLength(1);
   });
 
   it('cada alumno tiene su plan', async () => {
     await abrirAlumno(SIMON);
     cambiar(form().edad, '28');
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${ALDY.id}"]`).click();
+    await volver();
+    await irA(ALDY);
     expect(form().edad.value).toBe('');
     expect(form().peso.value).toBe('62');
   });
@@ -308,17 +334,45 @@ describe('alumnos: se guarda en el navegador', () => {
   it('al volver al buscador el alumno aparece marcado con plan', async () => {
     await abrirAlumno(SIMON);
     cambiar(form().edad, '28');
-    $('[data-click="nutricionVolverAlumnos"]').click();
+    await volver();
     expect($(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).textContent).toContain('Con plan');
   });
 
-  it('si el navegador no deja guardar lo avisa', async () => {
+  it('si no se puede guardar lo avisa, lo deja a la vista y se puede reintentar', async () => {
     await abrirAlumno(SIMON);
-    almacen.setItem = () => {
-      throw new Error('sin espacio');
-    };
+    expect($('[data-guardado]').dataset.estado).toBe('guardado');
+    cliente.fallarLaProxima('sin conexión');
     cambiar(form().edad, '28');
-    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+    await asentar();
+    expect(toasts().join()).toContain('sin conexión');
+    expect($('[data-guardado]').dataset.estado).toBe('error');
+    expect($('[data-guardado]').textContent).toMatch(/no se pudo guardar/i);
+    $('[data-click="nutricionReintentar"]').click();
+    await asentar();
+    expect($('[data-guardado]').dataset.estado).toBe('guardado');
+    expect((await planGuardado(SIMON.id)).parametros.edad).toBe('28');
+  });
+
+  it('dos cambios seguidos, antes de que termine el primer guardado, quedan los dos (y llegan en orden)', async () => {
+    await abrirAlumno(SIMON);
+    cambiar(form().edad, '28');
+    cambiar(form().peso, '75');
+    cambiar(form().altura, '175');
+    await asentar();
+    await asentar();
+    expect((await planGuardado(SIMON.id)).parametros).toMatchObject({ edad: '28', peso: '75', altura: '175' });
+    expect($('[data-guardado]').dataset.estado).toBe('guardado');
+    // el primero sale solo; lo que se toca mientras tanto se manda junto después (no una llamada por cambio)
+    expect(cliente.llamadas.filter((l) => l.tabla === 'nutrition_plans' && l.op === 'upsert')).toHaveLength(2);
+  });
+
+  it('si no se puede abrir el plan guardado, no abre la ficha (podría pisar uno que existe) y vuelve a la lista', async () => {
+    await abrir();
+    cliente.fallarLaProxima('sin conexión');
+    await irA(SIMON);
+    expect(toasts().join()).toContain('sin conexión');
+    expect($('[data-plan-form]')).toBeNull();
+    expect($('[data-click="nutricionAlumno"][data-id="u2"]')).not.toBeNull();
   });
 });
 
@@ -366,11 +420,11 @@ describe('alumnos: comidas del plan', () => {
     agregarPollo(2);
     expect(consumo('kcal')).toContain('240 / 2649');
 
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await volver();
+    await irA(SIMON);
     expect($('[data-comida]').textContent).toContain('Comida 1');
     expect(consumo('kcal')).toContain('240 / 2649');
-    expect(planGuardado(SIMON.id).comidas[0].opciones[0].items[0]).toMatchObject({
+    expect((await planGuardado(SIMON.id)).comidas[0].opciones[0].items[0]).toMatchObject({
       nombre: 'Pechuga de Pollo',
       porciones: 2,
     });
@@ -380,16 +434,16 @@ describe('alumnos: comidas del plan', () => {
     await abrirAlumno(SIMON);
     cambiar(form().edad, '28');
     nuevaComida();
-    expect(planGuardado(SIMON.id).parametros.edad).toBe('28');
+    expect((await planGuardado(SIMON.id)).parametros.edad).toBe('28');
 
     cambiar(form().peso, '75');
-    expect(planGuardado(SIMON.id).comidas).toHaveLength(1);
+    expect((await planGuardado(SIMON.id)).comidas).toHaveLength(1);
   });
 
   it('con solo una comida cargada el alumno ya figura con plan', async () => {
     await abrirAlumno(SIMON);
     nuevaComida();
-    $('[data-click="nutricionVolverAlumnos"]').click();
+    await volver();
     expect($(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).textContent).toContain('Con plan');
   });
 
@@ -406,19 +460,21 @@ describe('alumnos: comidas del plan', () => {
   it('cada alumno tiene sus propias comidas', async () => {
     await abrirAlumno(SIMON);
     nuevaComida();
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${ALDY.id}"]`).click();
+    await volver();
+    await irA(ALDY);
     expect($$('[data-comida]')).toHaveLength(0);
   });
 
-  it('si el navegador no deja guardar, avisa y la comida no aparece', async () => {
+  it('si no se puede guardar una comida, avisa y deja el aviso con la opción de reintentar', async () => {
     await abrirAlumno(SIMON);
-    almacen.setItem = () => {
-      throw new Error('sin espacio');
-    };
+    cliente.fallarLaProxima('sin conexión');
     nuevaComida();
-    expect(toasts().join()).toMatch(/no se pudo guardar/i);
-    expect($$('[data-comida]')).toHaveLength(0);
+    await asentar();
+    expect(toasts().join()).toContain('sin conexión');
+    expect($('[data-guardado]').dataset.estado).toBe('error');
+    $('[data-click="nutricionReintentar"]').click();
+    await asentar();
+    expect((await planGuardado(SIMON.id)).comidas).toHaveLength(1);
   });
 
   it('la línea de tiempo muestra las comidas con horario', async () => {
@@ -443,10 +499,10 @@ describe('alumnos: aclaraciones para el alumno', () => {
   it('al salir del cuadro se guardan con el plan, y al reabrir al alumno están', async () => {
     await abrirAlumno(SIMON);
     cambiar(notas(), 'Tomar 2 litros de agua por día.');
-    expect(planGuardado(SIMON.id).notas).toBe('Tomar 2 litros de agua por día.');
+    expect((await planGuardado(SIMON.id)).notas).toBe('Tomar 2 litros de agua por día.');
 
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await volver();
+    await irA(SIMON);
     expect(notas().value).toBe('Tomar 2 litros de agua por día.');
   });
 
@@ -454,40 +510,40 @@ describe('alumnos: aclaraciones para el alumno', () => {
     await abrirAlumno(SIMON);
     cambiar(notas(), 'Sin gluten.');
     $('[data-click="comidaNueva"]').click();
-    expect(planGuardado(SIMON.id).notas).toBe('Sin gluten.');
+    expect((await planGuardado(SIMON.id)).notas).toBe('Sin gluten.');
     cambiar(form().edad, '30');
-    expect(planGuardado(SIMON.id).notas).toBe('Sin gluten.');
+    expect((await planGuardado(SIMON.id)).notas).toBe('Sin gluten.');
   });
 
   it('guardar las aclaraciones no pierde las comidas', async () => {
     await abrirAlumno(SIMON);
     $('[data-click="comidaNueva"]').click();
     cambiar(notas(), 'Hola');
-    expect(planGuardado(SIMON.id).comidas).toHaveLength(1);
+    expect((await planGuardado(SIMON.id)).comidas).toHaveLength(1);
   });
 
   it('cada alumno tiene las suyas', async () => {
     await abrirAlumno(SIMON);
     cambiar(notas(), 'Solo de Simón');
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${ALDY.id}"]`).click();
+    await volver();
+    await irA(ALDY);
     expect(notas().value).toBe('');
   });
 
-  it('si el navegador no deja guardar lo avisa', async () => {
+  it('si no se pueden guardar lo avisa', async () => {
     await abrirAlumno(SIMON);
-    almacen.setItem = () => {
-      throw new Error('sin espacio');
-    };
+    cliente.fallarLaProxima('sin conexión');
     cambiar(notas(), 'x');
-    expect(toasts().join()).toMatch(/no se pudo guardar/i);
+    await asentar();
+    expect(toasts().join()).toContain('sin conexión');
+    expect($('[data-guardado]').dataset.estado).toBe('error');
   });
 
   it('un texto con HTML no se interpreta', async () => {
     await abrirAlumno(SIMON);
     cambiar(notas(), '<img src=x onerror=alert(1)>');
-    $('[data-click="nutricionVolverAlumnos"]').click();
-    $(`[data-click="nutricionAlumno"][data-id="${SIMON.id}"]`).click();
+    await volver();
+    await irA(SIMON);
     expect($('img')).toBeNull();
     expect(notas().value).toBe('<img src=x onerror=alert(1)>');
   });
@@ -517,5 +573,96 @@ describe('alumnos: secciones plegables', () => {
     boton('parametros').click();
     expect(form().edad.value).toBe('28');
     expect(resultado('kcal')).toContain('2649');
+  });
+});
+
+describe('alumnos: mostrar el plan al alumno', () => {
+  const POLLO = alimentosIniciales().find((a) => a.nombre === 'Pechuga de Pollo');
+  const planConPollo = () => {
+    const c = crearComida({ nombre: 'Almuerzo', hora: '13:00' });
+    return {
+      parametros: parametrosIniciales({}),
+      comidas: agregarItem([c], c.id, c.opciones[0].id, POLLO, 2),
+      notas: '',
+    };
+  };
+  const estado = () => $('[data-publicacion-estado]').textContent;
+  const boton = () => $('[data-publicacion-boton]');
+  const filaDe = (id) => cliente.tablas.nutrition_plans.find((f) => f.student_id === id);
+
+  it('un plan nuevo es un borrador: el alumno todavía no lo ve', async () => {
+    await abrirAlumno(SIMON);
+    expect(estado()).toMatch(/borrador/i);
+    expect(boton().textContent).toMatch(/mostrar al alumno/i);
+  });
+
+  it('no se puede mostrar un plan sin comidas con alimentos', async () => {
+    await abrirAlumno(SIMON);
+    boton().click();
+    await asentar();
+    expect(toasts().join()).toMatch(/al menos una comida con alimentos/i);
+    expect(cliente.tablas.nutrition_plans).toHaveLength(0);
+    expect(estado()).toMatch(/borrador/i);
+  });
+
+  it('«Mostrar al alumno» lo publica, y «Ocultar» lo vuelve a esconder', async () => {
+    await repo.guardarPlan(SIMON.id, planConPollo());
+    await abrirAlumno(SIMON);
+    boton().click();
+    await asentar();
+    expect(filaDe(SIMON.id).published).toBe(true);
+    expect(estado()).toMatch(/visible para el alumno/i);
+    expect(boton().textContent).toMatch(/ocultar/i);
+    expect(toasts().join()).toMatch(/el alumno ya ve su plan/i);
+
+    boton().click();
+    await asentar();
+    expect(filaDe(SIMON.id).published).toBe(false);
+    expect(estado()).toMatch(/borrador/i);
+  });
+
+  it('al volver a abrir la ficha, sigue publicado', async () => {
+    await repo.guardarPlan(SIMON.id, planConPollo());
+    await abrirAlumno(SIMON);
+    boton().click();
+    await asentar();
+    await volver();
+    await irA(SIMON);
+    expect(estado()).toMatch(/visible para el alumno/i);
+  });
+
+  it('en la lista, el alumno con el plan publicado figura como visible', async () => {
+    await repo.guardarPlan(SIMON.id, planConPollo());
+    await repo.guardarPlan(ALDY.id, planConPollo());
+    await repo.publicarPlan(SIMON.id, true);
+    await abrir();
+    const fila = (a) => $(`[data-click="nutricionAlumno"][data-id="${a.id}"]`);
+    expect(fila(SIMON).querySelector('[data-publicado]')).not.toBeNull();
+    expect(fila(ALDY).textContent).toContain('Con plan');
+    expect(fila(ALDY).querySelector('[data-publicado]')).toBeNull();
+  });
+
+  it('publicar guarda antes lo que está en pantalla (un plan que solo estaba en el navegador pasa a la cuenta)', async () => {
+    const delNavegador = planConPollo();
+    almacen.setItem(`pp:v1:nutricion:plan:${SIMON.id}`, JSON.stringify(delNavegador));
+    await abrirAlumno(SIMON);
+    expect(cliente.tablas.nutrition_plans).toHaveLength(0);
+    boton().click();
+    await asentar();
+    await asentar();
+    expect(filaDe(SIMON.id).published).toBe(true);
+    expect(filaDe(SIMON.id).comidas).toHaveLength(1);
+  });
+
+  it('si no se puede publicar, avisa y el plan sigue como borrador', async () => {
+    await repo.guardarPlan(SIMON.id, planConPollo());
+    await abrirAlumno(SIMON);
+    cliente.fallarLaProxima('sin conexión');
+    boton().click();
+    await asentar();
+    await asentar();
+    expect(toasts().join()).toMatch(/no se pudo guardar|sin conexión/i);
+    expect(filaDe(SIMON.id).published).toBeFalsy();
+    expect(estado()).toMatch(/borrador/i);
   });
 });

@@ -12,7 +12,7 @@ import {
   quitarAlimento,
   validarAlimento,
 } from './alimentos.js';
-import { repoNutricion } from './repoLocal.js';
+import { repoNutricion } from './repoNutricion.js';
 
 /**
  * @type {{

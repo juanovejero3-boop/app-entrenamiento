@@ -3,20 +3,30 @@
 // El coach abre la misma pantalla desde la ficha del alumno, en modo lectura: ve exactamente lo mismo.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
+import { toast } from '../../lib/ui.js';
 import { nombreDelAlumno } from '../coaching/pdf/alumno.js';
 import { cantidadParaMostrar, macrosDeItem, macrosDeOpcion, ordenadasPorHora } from './comidas.js';
 import { calcularObjetivos } from './objetivos.js';
 import { mostrarPdfAlimentacion } from './mostrarPdf.js';
-import { repoNutricion } from './repoLocal.js';
+import { repoNutricion } from './repoNutricion.js';
 
-/** ¿El alumno ya tiene algo cargado en su plan de alimentación? (si no, no hay nada para mostrarle) */
-export function tienePlanDeAlimentacion(repo, alumnoId) {
-  const plan = alumnoId ? repo.cargarPlan(alumnoId) : null;
-  return Boolean(plan?.comidas.some((c) => opcionesConAlimentos(c).length));
+/**
+ * ¿El alumno ya tiene algo cargado (y visible) en su plan de alimentación? Si no, no hay nada para mostrarle.
+ * Si no se pudo consultar, se trata como que no hay plan: la Planilla sigue funcionando con los links de siempre.
+ */
+export async function tienePlanDeAlimentacion(repo, alumnoId) {
+  try {
+    const plan = alumnoId ? await repo.cargarPlan(alumnoId) : null;
+    return Boolean(plan?.comidas.some((c) => opcionesConAlimentos(c).length));
+  } catch {
+    return false;
+  }
 }
 
 /** Qué hacer al tocar «Volver»; lo define quien abre la pantalla. */
 let alVolverActual = null;
+/** Cuenta las aperturas: si se vuelve (o se abre otra pantalla) mientras carga, la carga vieja no dibuja nada. */
+let aperturas = 0;
 /** Baja en PDF el plan que se está mirando; null si no hay nada para bajar. */
 let pdfActual = null;
 
@@ -27,28 +37,42 @@ let pdfActual = null;
  * @param {{ repo?: typeof repoNutricion, alVolver: () => void, soloLectura?: boolean }} opciones
  *   soloLectura: lo mira el coach (muestra un cartel con el nombre del alumno); el contenido es el mismo
  */
-export function abrirPlanDeAlimentacion(
+export async function abrirPlanDeAlimentacion(
   content,
   alumno,
   { repo = repoNutricion, alVolver, soloLectura = false, pdf = mostrarPdfAlimentacion },
 ) {
   alVolverActual = alVolver;
-  const plan = repo.cargarPlan(alumno.id);
-  // Solo las comidas que tienen algo cargado, en orden de horario
-  const comidas = plan ? ordenadasPorHora(plan.comidas).filter((c) => opcionesConAlimentos(c).length) : [];
+  const apertura = ++aperturas;
   const nombre = nombreDelAlumno(alumno);
-  pdfActual = comidas.length ? () => pdf(plan, alumno) : null;
-
-  content.innerHTML = `
-    <div class="space-y-4 pb-24">
+  const encabezado = (extra = '') => `
       <div class="flex items-center gap-3">
         <button data-click="alimentacionVolver" class="w-10 h-10 shrink-0 inline-flex items-center justify-center text-gray-400 hover:text-neonRed" title="Volver" aria-label="Volver">
           <i class="fa-solid fa-arrow-left"></i>
         </button>
         <h2 class="flex-1 min-w-0 text-lg font-black text-white uppercase tracking-wide">${soloLectura ? `Plan de alimentación de ${esc(nombre)}` : 'Mi plan de alimentación'}</h2>
-        ${comidas.length ? `<button data-click="alimentacionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>` : ''}
-      </div>
+        ${extra}
+      </div>`;
+  content.innerHTML = `<div class="space-y-4 pb-24">${encabezado()}<p data-cargando class="text-center text-sm text-gray-400 py-10"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Cargando…</p></div>`;
+  let plan;
+  try {
+    plan = await repo.cargarPlan(alumno.id);
+  } catch (error) {
+    if (apertura !== aperturas) return;
+    toast(error.message, false);
+    content.innerHTML = `<div class="space-y-4 pb-24">${encabezado()}<div data-error class="bg-cyberCard p-6 rounded-xl border border-gray-800 text-center text-sm text-gray-400">No pudimos cargar el plan de alimentación. Revisá tu conexión y probá de nuevo.</div></div>`;
+    return;
+  }
+  if (apertura !== aperturas) return; // ya se volvió o se abrió otra pantalla
+  // Solo las comidas que tienen algo cargado, en orden de horario
+  const comidas = plan ? ordenadasPorHora(plan.comidas).filter((c) => opcionesConAlimentos(c).length) : [];
+  pdfActual = comidas.length ? () => pdf(plan, alumno) : null;
+
+  content.innerHTML = `
+    <div class="space-y-4 pb-24">
+      ${encabezado(comidas.length ? `<button data-click="alimentacionPdf" class="shrink-0 min-h-10 px-3 rounded-lg text-[11px] font-bold uppercase tracking-wider border border-gray-700 text-gray-300 hover:text-neonRed hover:border-neonRed transition"><i class="fa-solid fa-file-pdf mr-1"></i>PDF</button>` : '')}
       ${soloLectura ? `<p data-modo-lectura class="bg-sky-950/40 border border-sky-800 rounded-xl p-3 text-xs text-sky-200"><i class="fa-solid fa-eye mr-1"></i><b class="uppercase tracking-wide">Modo lectura</b> · así lo ve ${esc(nombre)}.</p>` : ''}
+      ${soloLectura && plan && !plan.publicado ? `<p data-no-publicado class="bg-amber-950/40 border border-amber-800 rounded-xl p-3 text-xs text-amber-200"><i class="fa-solid fa-eye-slash mr-1"></i>Todavía no lo mostraste: ${esc(nombre)} no lo ve. Podés mostrárselo desde Nutrición › Alumnos.</p>` : ''}
       ${comidas.length ? dibujarPlan(plan, comidas) : dibujarVacio(soloLectura)}
     </div>
   `;
@@ -190,7 +214,10 @@ function elegirOpcion(boton) {
 }
 
 registrarAcciones({
-  alimentacionVolver: () => alVolverActual?.(),
+  alimentacionVolver: () => {
+    aperturas++; // cancela una carga que todavía no terminó
+    alVolverActual?.();
+  },
   alimentacionPdf: () => pdfActual?.(),
   alimentacionToggle: (el) => alternar(el),
   alimentacionOpcion: (el) => elegirOpcion(el),
