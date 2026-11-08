@@ -23,7 +23,7 @@ import {
   serieDe,
   seriesCambiadas,
 } from './registro.js';
-import { diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
+import { diaPendiente, diasTerminados, reabrirSesion, sesionDe, terminarSesion } from './sesiones.js';
 import { vigilarTeclado } from './escribirSinTapar.js';
 import { conUnidadDeTiempo, esTiempo, sinUnidadDeTiempo } from './tiempo.js';
 import { textoUltimaMarca, ultimaMarca } from './ultimaMarca.js';
@@ -106,6 +106,7 @@ export async function abrirPlanAlumno(
     : [{}, {}];
   const plan = ciclo?.plan.weeks.length ? ciclo.plan : null;
   const videos = plan ? await cargarVideos() : new Map();
+  const semana = plan ? semanaActual(plan, hoy) : 0;
   const vista = {
     content,
     alumno,
@@ -119,8 +120,8 @@ export async function abrirPlanAlumno(
     hoy,
     soloLectura,
     alVolver,
-    w: plan ? semanaActual(plan, hoy) : 0,
-    d: 0,
+    w: semana,
+    d: plan ? diaPendiente(plan.weeks[semana], sesiones) : 0, // abre donde el alumno se quedó
     videos,
     abiertos: new Set(), // ids de los ejercicios desplegados
     enVivo: enVivo && soloLectura, // solo el coach en modo lectura puede seguir al alumno

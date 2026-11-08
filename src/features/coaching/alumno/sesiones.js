@@ -46,6 +46,19 @@ export function diasTerminados(semana, sesiones) {
   return { hechos: marcados.filter((sesion) => sesion.estado === 'hecha').length, total: marcados.length };
 }
 
+/**
+ * Índice del día de la semana donde conviene abrir la vista: el primero con ejercicios que todavía no se
+ * completó (ni entrenado ni marcado como no entrenado). Con la semana completa, el último día con
+ * ejercicios; y sin días con ejercicios, el primero.
+ */
+export function diaPendiente(semana, sesiones) {
+  const conEjercicios = semana.days
+    .map((dia, indice) => ({ dia, indice }))
+    .filter(({ dia }) => dia.blocks.some((b) => b.exercises.length));
+  const pendiente = conEjercicios.find(({ dia }) => !sesionDe(sesiones, dia.id));
+  return (pendiente ?? conEjercicios.at(-1))?.indice ?? 0;
+}
+
 const esObjeto = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Valida las sesiones que vienen de afuera (localStorage): descarta las que no tienen fecha válida. */
