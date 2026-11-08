@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { asentar } from '../../test-helpers.js';
 import { ALUMNO, planCompleto } from '../coaching/pdf/test-utils.js';
 import { clienteDePrueba, repo } from '../coaching/repo/index.js';
 import { sembrarPlan, registroDe } from '../coaching/repo/test-utils.js';
@@ -392,19 +391,6 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
     await sembrarAlimentacion('otro-alumno');
     await renderTabEntrenamiento(content);
     expect(planEnLaPestana()).toBeNull();
-  });
-
-  it('un alumno no puede abrir el plan de otro aunque fabrique el botón', async () => {
-    await sembrarAlimentacion('otro-alumno', { notas: 'Plan ajeno' });
-    await renderTabEntrenamiento(content);
-    const falso = document.createElement('button');
-    falso.dataset.click = 'planillaVerAlimentacion';
-    falso.dataset.id = 'otro-alumno';
-    content.appendChild(falso);
-    falso.click();
-    await asentar();
-    expect(content.textContent).not.toContain('Plan ajeno');
-    expect(content.textContent).toContain('Planilla de Entrenamiento');
   });
 });
 

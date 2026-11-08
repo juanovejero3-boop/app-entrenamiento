@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { asentar } from '../../test-helpers.js';
 import { alimentosIniciales } from './alimentos.js';
 import { agregarItem, agregarOpcion, crearComida } from './comidas.js';
-import { abrirPlanDeAlimentacion, cargarPlanDeAlimentacion, montarPlanDeAlimentacion } from './planDeAlimentacion.js';
+import { cargarPlanDeAlimentacion, montarPlanDeAlimentacion } from './planDeAlimentacion.js';
 import { parametrosIniciales } from './objetivos.js';
 import { crearRepoNutricionLocal } from './repoLocal.js';
 
@@ -19,14 +19,12 @@ const PARAMETROS = { ...parametrosIniciales({}), edad: 28, peso: 75, altura: 175
 let content;
 let almacen;
 let repo;
-let alVolver;
 beforeEach(() => {
   content = document.createElement('div');
   document.body.appendChild(content);
   const datos = new Map();
   almacen = { getItem: (k) => datos.get(k) ?? null, setItem: (k, v) => void datos.set(k, String(v)) };
   repo = crearRepoNutricionLocal(() => almacen);
-  alVolver = vi.fn();
 });
 afterEach(() => {
   document.body.innerHTML = '';
@@ -35,7 +33,9 @@ afterEach(() => {
 const $ = (selector) => content.querySelector(selector);
 const $$ = (selector) => [...content.querySelectorAll(selector)];
 const texto = (el) => el.textContent.replace(/\s+/g, ' ').trim();
-const abrir = (opciones = {}) => abrirPlanDeAlimentacion(content, FRANCO, { repo, alVolver, ...opciones });
+/** Dibuja el plan guardado del alumno, como lo hace la Planilla. */
+const abrir = async (opciones = {}) =>
+  montarPlanDeAlimentacion(content, FRANCO, await repo.cargarPlan(FRANCO.id), opciones);
 
 /** Una comida con alimentos en su primera opción. */
 function comida(nombre, hora, ...pares) {
@@ -68,12 +68,6 @@ describe('plan de alimentación: sin plan', () => {
     await abrir();
     expect(content.textContent).toContain('Todavía no tenés un plan de alimentación');
   });
-
-  it('siempre se puede volver', async () => {
-    await abrir();
-    $('[data-click="alimentacionVolver"]').click();
-    expect(alVolver).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('plan de alimentación: lo que ve el alumno', () => {
@@ -82,11 +76,6 @@ describe('plan de alimentación: lo que ve el alumno', () => {
       comidas: [comida('Cena', '21:00', [ARROZ, 2]), comida('Desayuno', '08:00', [POLLO, 1], [PAN, 2])],
       notas: 'Tomar 2 litros de agua.\nNo saltear el desayuno.',
     });
-  });
-
-  it('el título es «Mi plan de alimentación»', async () => {
-    await abrir();
-    expect($('h2').textContent).toContain('Mi plan de alimentación');
   });
 
   it('arriba están sus objetivos del día', async () => {
@@ -173,7 +162,7 @@ describe('plan de alimentación: lo que ve el alumno', () => {
     await abrir();
     expect($$('input, textarea, select')).toHaveLength(0);
     const acciones = $$('[data-click]').map((b) => b.dataset.click);
-    expect(new Set(acciones)).toEqual(new Set(['alimentacionVolver', 'alimentacionToggle', 'alimentacionPdf']));
+    expect(new Set(acciones)).toEqual(new Set(['alimentacionToggle', 'alimentacionPdf']));
   });
 
   it('el HTML de los nombres y de las aclaraciones no se interpreta', async () => {
@@ -266,11 +255,6 @@ describe('plan de alimentación: lo que ve el coach (mismo contenido, en modo le
     expect(texto($('[data-modo-lectura]'))).toContain('Franco Soria');
   });
 
-  it('el título nombra al alumno', async () => {
-    await abrir({ soloLectura: true });
-    expect($('h2').textContent).toContain('Franco Soria');
-  });
-
   it('ve exactamente las mismas comidas, objetivos y aclaraciones que el alumno', async () => {
     await abrir();
     const comoAlumno = {
@@ -290,12 +274,6 @@ describe('plan de alimentación: lo que ve el coach (mismo contenido, en modo le
   it('tampoco se puede editar nada', async () => {
     await abrir({ soloLectura: true });
     expect($$('input, textarea, select')).toHaveLength(0);
-  });
-
-  it('puede volver a la ficha', async () => {
-    await abrir({ soloLectura: true });
-    $('[data-click="alimentacionVolver"]').click();
-    expect(alVolver).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -328,7 +306,7 @@ describe('plan de alimentación: PDF', () => {
   });
 });
 
-describe('plan de alimentación: carga desde la cuenta', () => {
+describe('plan de alimentación: lo que depende de la cuenta', () => {
   const planPublicado = (publicado) => ({
     parametros: PARAMETROS,
     comidas: [comida('Almuerzo', '13:00', [POLLO, 2])],
@@ -336,59 +314,16 @@ describe('plan de alimentación: carga desde la cuenta', () => {
     publicado,
   });
   const repoCon = (cargarPlan) => ({ cargarPlan });
-  const toasts = () => [...document.body.querySelectorAll('div.fixed')].map((e) => e.textContent);
-
-  it('mientras carga muestra un aviso y después el plan', async () => {
-    let entregar;
-    const repoLento = repoCon(() => new Promise((resolver) => (entregar = resolver)));
-    const abriendo = abrirPlanDeAlimentacion(content, FRANCO, { repo: repoLento, alVolver });
-    expect($('[data-cargando]')).not.toBeNull();
-    entregar(planPublicado(true));
-    await abriendo;
-    expect($('[data-cargando]')).toBeNull();
-    expect(nombresDeComidas()).toEqual(['Almuerzo']);
-  });
-
-  it('si no se pudo cargar lo dice y deja volver', async () => {
-    const repoRoto = repoCon(async () => {
-      throw new Error('sin conexión');
-    });
-    await abrirPlanDeAlimentacion(content, FRANCO, { repo: repoRoto, alVolver });
-    expect($('[data-error]').textContent).toMatch(/no pudimos cargar/i);
-    expect(toasts().join()).toContain('sin conexión');
-    $('[data-click="alimentacionVolver"]').click();
-    expect(alVolver).toHaveBeenCalledTimes(1);
-  });
-
-  it('si se vuelve mientras carga, el plan que llega tarde no pisa la pantalla', async () => {
-    let entregar;
-    const repoLento = repoCon(() => new Promise((resolver) => (entregar = resolver)));
-    const abriendo = abrirPlanDeAlimentacion(content, FRANCO, { repo: repoLento, alVolver });
-    $('[data-click="alimentacionVolver"]').click();
-    content.innerHTML = '<p data-otra-pantalla>Planilla</p>';
-    entregar(planPublicado(true));
-    await abriendo;
-    expect($('[data-otra-pantalla]')).not.toBeNull();
-    expect(nombresDeComidas()).toEqual([]);
-  });
 
   it('el coach ve un aviso si el plan todavía no está publicado (el alumno no lo ve)', async () => {
-    await abrirPlanDeAlimentacion(content, FRANCO, {
-      repo: repoCon(async () => planPublicado(false)),
-      alVolver,
-      soloLectura: true,
-    });
+    montarPlanDeAlimentacion(content, FRANCO, planPublicado(false), { soloLectura: true });
     expect($('[data-no-publicado]').textContent).toMatch(/todavía no lo mostraste/i);
   });
 
   it('el coach no ve el aviso si ya está publicado, y el alumno nunca lo ve', async () => {
-    await abrirPlanDeAlimentacion(content, FRANCO, {
-      repo: repoCon(async () => planPublicado(true)),
-      alVolver,
-      soloLectura: true,
-    });
+    montarPlanDeAlimentacion(content, FRANCO, planPublicado(true), { soloLectura: true });
     expect($('[data-no-publicado]')).toBeNull();
-    await abrirPlanDeAlimentacion(content, FRANCO, { repo: repoCon(async () => planPublicado(false)), alVolver });
+    montarPlanDeAlimentacion(content, FRANCO, planPublicado(false));
     expect($('[data-no-publicado]')).toBeNull();
   });
 
