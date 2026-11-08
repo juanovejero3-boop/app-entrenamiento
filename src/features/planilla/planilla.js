@@ -110,15 +110,13 @@ export async function renderTabEntrenamiento(content) {
     // Si el entrenador ya le armó (y le mostró) un plan de alimentación en la app, se ve directamente en la pestaña,
     // y el link a Sheets (si lo hay) queda debajo como alternativa. Si no, la tarjeta es la de siempre.
     const planDeAlimentacion = await cargarPlanDeAlimentacion(repoNutricion, state.userProfile?.id);
-    const nutricionCard = planDeAlimentacion
-      ? ''
-      : nutritionUrl
-        ? `
+    const nutricionCard = nutritionUrl
+      ? `
         <a href="${nutritionUrl}" target="_blank" class="block w-full text-center bg-cyberCarbon text-neonRed font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-neonRed hover:bg-red-950 transition">
           <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
         </a>
       `
-        : `
+      : `
         <button disabled class="block w-full text-center bg-cyberCarbon text-gray-600 font-black text-lg py-4 rounded-2xl uppercase tracking-wider border border-gray-800 cursor-not-allowed">
           <i class="fa-solid fa-utensils mr-2"></i> ABRIR PLAN DE NUTRICIÓN
         </button>
@@ -146,7 +144,16 @@ export async function renderTabEntrenamiento(content) {
             ${
               planDeAlimentacion
                 ? `<div data-plan-alimentacion></div>
-            ${nutritionUrl ? `<a href="${nutritionUrl}" target="_blank" class="block text-center text-xs text-gray-400 underline">Ver también la planilla de Google Sheets</a>` : ''}`
+            ${
+              nutritionUrl
+                ? `<div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+              <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
+                <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Planilla de Nutrición
+              </h3>
+              ${nutricionCard}
+            </div>`
+                : ''
+            }`
                 : `<div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
               <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
                 <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición

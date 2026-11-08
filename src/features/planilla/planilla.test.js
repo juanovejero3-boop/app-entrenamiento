@@ -349,6 +349,9 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
     expect(plan.querySelector('[data-click="alimentacionVolver"]')).toBeNull();
     const sheets = $('a[href="https://docs.google.com/nutricion"]');
     expect(plan.compareDocumentPosition(sheets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // igual que en entrenamiento: una tarjeta con su título y el botón grande
+    expect(sheets.textContent).toMatch(/abrir plan de nutrici/i);
+    expect(sheets.closest('div').querySelector('h3').textContent).toContain('Planilla de Nutrición');
   });
 
   it('el plan trae el botón para bajarlo en PDF', async () => {
