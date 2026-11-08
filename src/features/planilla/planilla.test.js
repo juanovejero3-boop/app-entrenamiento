@@ -359,13 +359,19 @@ describe('Planilla del alumno: mi plan de alimentación', () => {
     expect(planEnLaPestana().querySelector('[data-click="alimentacionPdf"]')).not.toBeNull();
   });
 
-  it('sin link a Sheets, no queda el cartel «Pronto te cargaremos...» cuando ya hay plan', async () => {
+  it('sin link a Sheets, la tarjeta de la planilla queda igual que en entrenamiento: botón apagado y «Pronto te cargaremos…»', async () => {
     state.userProfile = { ...PERFIL_ALUMNO, nutrition_url: null };
     await sembrarAlimentacion(ALUMNO.id);
     await renderTabEntrenamiento(content);
-    expect(planEnLaPestana()).not.toBeNull();
-    expect(content.textContent).not.toContain('Pronto te cargaremos tu plan de nutrición');
-    expect($('[data-panel="nutricion"] a[href]')).toBeNull();
+    const plan = planEnLaPestana();
+    expect(plan).not.toBeNull();
+    const panel = $('[data-panel="nutricion"]');
+    expect(panel.textContent).toContain('Planilla de Nutrición');
+    expect(panel.querySelector('button[disabled]').textContent).toMatch(/abrir plan de nutrici/i);
+    expect(panel.textContent).toContain('Pronto te cargaremos tu plan de nutrición');
+    expect(
+      plan.compareDocumentPosition(panel.querySelector('button[disabled]')) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('un plan sin ninguna comida cargada no cambia la tarjeta', async () => {

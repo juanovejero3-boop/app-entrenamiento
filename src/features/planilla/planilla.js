@@ -144,16 +144,12 @@ export async function renderTabEntrenamiento(content) {
             ${
               planDeAlimentacion
                 ? `<div data-plan-alimentacion></div>
-            ${
-              nutritionUrl
-                ? `<div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
+            <div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
               <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
                 <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Planilla de Nutrición
               </h3>
               ${nutricionCard}
             </div>`
-                : ''
-            }`
                 : `<div class="bg-cyberCard p-5 rounded-xl border border-gray-800 space-y-3 shadow-lg">
               <h3 class="font-bold text-md text-neonRed uppercase tracking-wide border-l-4 border-neonRed pl-2">
                 <i class="fa-solid fa-apple-whole text-neonRed mr-2"></i> Plan de Nutrición
