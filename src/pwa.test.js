@@ -54,12 +54,18 @@ describe('index.html enlaza la marca', () => {
     expect(html).toContain(`<meta name="theme-color" content="${manifest.theme_color}"`);
   });
 
-  it('tiene favicon e ícono para el iPhone, y existen', () => {
-    const favicon = /<link\s+rel="icon"[^>]*href="([^"]+)"/.exec(html)?.[1];
+  it('tiene favicon en 16, 32 y 48 px (el emblema de la doble P, que es lo que se reconoce a ese tamaño) y existen', () => {
+    const favicons = [...html.matchAll(/<link\s+rel="icon"[^>]*sizes="(\d+)x\d+"[^>]*href="([^"]+)"/g)];
+    expect(favicons.map((f) => Number(f[1]))).toEqual([16, 32, 48]);
+    for (const [, lado, ruta] of favicons) {
+      expect(existsSync(raiz(`public${ruta}`)), ruta).toBe(true);
+      expect(medidasPng(`public${ruta}`)).toEqual({ ancho: Number(lado), alto: Number(lado) });
+    }
+  });
+
+  it('tiene ícono para el iPhone, y existe', () => {
     const apple = /<link\s+rel="apple-touch-icon"\s+href="([^"]+)"/.exec(html)?.[1];
-    expect(favicon).toBeDefined();
     expect(apple).toBeDefined();
-    expect(existsSync(raiz(`public${favicon}`))).toBe(true);
     expect(existsSync(raiz(`public${apple}`))).toBe(true);
   });
 
