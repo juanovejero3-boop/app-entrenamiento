@@ -17,9 +17,11 @@ import {
   nombreSugerido,
   normalizarComidas,
   ordenadasPorHora,
+  duplicarOpcion,
   quitarComida,
   quitarItem,
   quitarOpcion,
+  reemplazarItem,
 } from './comidas.js';
 
 const pollo = crearAlimento({ categoria: 'proteins', nombre: 'Pechuga de pollo', porcion: '100 g' });
@@ -149,6 +151,42 @@ describe('operaciones (no modifican la lista original)', () => {
     expect(
       actualizarPorciones([comida], comida.id, comida.opciones[0].id, item.id, valor)[0].opciones[0].items,
     ).toEqual([]);
+  });
+
+  it('duplicar una opción copia sus alimentos justo después, con ids nuevos', () => {
+    let comidas = comidaCon([pollo, 2], [arroz, 1]);
+    comidas = agregarOpcion(comidas, comidas[0].id);
+    const [primera] = comidas[0].opciones;
+    const [duplicada] = duplicarOpcion(comidas, comidas[0].id, primera.id);
+    expect(duplicada.opciones).toHaveLength(3);
+    expect(duplicada.opciones[1].items.map((i) => [i.nombre, i.porciones])).toEqual([
+      ['Pechuga de pollo', 2],
+      ['Arroz', 1],
+    ]);
+    expect(duplicada.opciones[1].id).not.toBe(primera.id);
+    expect(duplicada.opciones[1].items.map((i) => i.id)).not.toEqual(primera.items.map((i) => i.id));
+    expect(duplicada.opciones[2].items).toEqual([]);
+  });
+
+  it('reemplazar un alimento conserva las porciones y cambia nombre, medida y categoría', () => {
+    const [comida] = comidaCon([pollo, 2.5]);
+    const item = comida.opciones[0].items[0];
+    const [nueva] = reemplazarItem([comida], comida.id, comida.opciones[0].id, item.id, arroz);
+    expect(nueva.opciones[0].items[0]).toMatchObject({
+      id: item.id,
+      nombre: 'Arroz',
+      porcion: '75 g',
+      categoria: 'carbs',
+      porciones: 2.5,
+    });
+  });
+
+  it('reemplazar por un alimento que ya está en la opción suma las porciones en una fila', () => {
+    const [comida] = comidaCon([pollo, 1], [arroz, 2]);
+    const pollito = comida.opciones[0].items[0];
+    const [nueva] = reemplazarItem([comida], comida.id, comida.opciones[0].id, pollito.id, arroz);
+    expect(nueva.opciones[0].items).toHaveLength(1);
+    expect(nueva.opciones[0].items[0]).toMatchObject({ nombre: 'Arroz', porciones: 3 });
   });
 
   it('quitar un alimento', () => {

@@ -336,6 +336,73 @@ describe('constructor de planes: bloques y ejercicios', () => {
     expect(campoEj('sets')).toBe(series); // el mismo elemento: no se redibujó
   });
 
+  it('sube, baja e inserta un ejercicio antes o después', async () => {
+    await abrirConEjercicio();
+    cambiar(campoEj('name'), 'Sentadilla');
+    await esperar();
+    $('[data-click="ejercicioAgregar"][data-w="0"][data-d="0"][data-b="0"]').click();
+    await esperar();
+    cambiar(campoEj('name', '0-0-0-1'), 'Press');
+    await esperar();
+
+    expect($('[data-click="ejercicioAntes"]').textContent.trim()).toBe('+ Antes');
+    expect($('[data-click="ejercicioDespues"]').textContent.trim()).toBe('+ Después');
+
+    expect($('[data-click="ejercicioSubir"][data-e="0"]').disabled).toBe(true);
+    expect($('[data-click="ejercicioBajar"][data-e="1"]').disabled).toBe(true);
+
+    $('[data-click="ejercicioSubir"][data-e="1"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Press', 'Sentadilla']);
+
+    $('[data-click="ejercicioBajar"][data-e="0"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Sentadilla', 'Press']);
+
+    $('[data-click="ejercicioAntes"][data-e="1"]').click();
+    await esperar();
+    const trasAntes = (await guardado()).weeks[0].days[0].blocks[0].exercises;
+    expect(trasAntes.map((e) => e.name)).toEqual(['Sentadilla', '', 'Press']);
+    expect($('[data-ejercicio="0-0-0-1"] [data-click="ejercicioToggle"]').getAttribute('aria-expanded')).toBe('true');
+
+    $('[data-click="ejercicioDespues"][data-e="0"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual([
+      'Sentadilla',
+      '',
+      '',
+      'Press',
+    ]);
+  });
+
+  it('inserta un bloque antes o después', async () => {
+    await abrir();
+    await generar(1, 1);
+    $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+    await esperar();
+    cambiar($('[data-bloque="0-0-0"] [data-change="bloqueCampo"]'), 'hipertrofia');
+    await esperar();
+    $('[data-click="bloqueAgregar"][data-w="0"][data-d="0"]').click();
+    await esperar();
+
+    expect($('[data-click="bloqueAntes"]').textContent.trim()).toBe('+ Antes');
+    expect($('[data-click="bloqueDespues"]').textContent.trim()).toBe('+ Después');
+
+    $('[data-click="bloqueAntes"][data-b="1"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks.map((b) => b.type)).toEqual(['hipertrofia', 'fuerza', 'fuerza']);
+    expect((await guardado()).weeks[0].days[0].blocks[1].exercises).toEqual([]);
+
+    $('[data-click="bloqueDespues"][data-b="0"]').click();
+    await esperar();
+    expect((await guardado()).weeks[0].days[0].blocks.map((b) => b.type)).toEqual([
+      'hipertrofia',
+      'fuerza',
+      'fuerza',
+      'fuerza',
+    ]);
+  });
+
   it('eliminar un ejercicio', async () => {
     await abrirConEjercicio();
     $('[data-click="ejercicioEliminar"][data-w="0"][data-d="0"][data-b="0"][data-e="0"]').click();

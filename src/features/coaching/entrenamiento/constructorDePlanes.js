@@ -19,8 +19,11 @@ import {
   actualizarReporte,
   actualizarSemana,
   agregarBloque,
+  insertarBloque,
   agregarDia,
   agregarEjercicio,
+  insertarEjercicio,
+  moverEjercicio,
   agregarPrioridad,
   agregarSemana,
   contarSeries,
@@ -530,9 +533,13 @@ function dibujarBloque(bloque, w, d, b) {
     <div data-bloque="${w}-${d}-${b}" class="bg-cyberCard rounded p-2 space-y-2 border-l-4" style="border-left-color: ${esc(tipo.color)}">
       <div class="flex items-center justify-between gap-2">
         <select data-change="bloqueCampo" ${pos} data-campo="type" class="bg-transparent font-bold text-xs outline-none" style="color: ${esc(tipo.color)}">${opciones}</select>
-        <button data-click="bloqueEliminar" ${pos} class="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold">Quitar bloque</button>
+        <div class="flex shrink-0 flex-wrap justify-end gap-1">
+          <button type="button" data-click="bloqueAntes" ${pos} title="Agregar un bloque antes" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Antes</button>
+          <button type="button" data-click="bloqueDespues" ${pos} title="Agregar un bloque después" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Después</button>
+          <button data-click="bloqueEliminar" ${pos} class="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold">Quitar bloque</button>
+        </div>
       </div>
-      ${bloque.exercises.map((ej, e) => dibujarEjercicio(ej, w, d, b, e, etiquetas[e])).join('')}
+      ${bloque.exercises.map((ej, e) => dibujarEjercicio(ej, w, d, b, e, etiquetas[e], bloque.exercises.length)).join('')}
       <button data-click="ejercicioAgregar" ${pos} class="px-3 py-1 bg-cyberCarbon border border-gray-700 text-gray-300 text-[11px] font-bold rounded hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-1"></i>Ejercicio</button>
     </div>
   `;
@@ -543,7 +550,7 @@ const opcionesDe = (valores, actualValor, vacio) =>
     .map((v) => `<option value="${esc(v)}" ${actualValor === v ? 'selected' : ''}>${esc(v || vacio)}</option>`)
     .join('');
 
-function dibujarEjercicio(ej, w, d, b, e, etiqueta) {
+function dibujarEjercicio(ej, w, d, b, e, etiqueta, cantidad) {
   const pos = `data-w="${w}" data-d="${d}" data-b="${b}" data-e="${e}"`;
   const campo = (nombre) => `data-change="ejercicioCampo" ${pos} data-campo="${nombre}"`;
   const claseCampo =
@@ -561,7 +568,11 @@ function dibujarEjercicio(ej, w, d, b, e, etiqueta) {
       </div>
       <div class="flex items-center justify-between gap-2 pl-7">
         <p data-ej-resumen class="text-[10px] text-gray-400">${esc(resumenDelEjercicio(ej))}</p>
-        <div class="flex shrink-0 gap-2">
+        <div class="flex shrink-0 flex-wrap justify-end gap-1">
+          <button type="button" data-click="ejercicioSubir" ${pos} ${e === 0 ? 'disabled' : ''} title="Subir" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
+          <button type="button" data-click="ejercicioBajar" ${pos} ${e === cantidad - 1 ? 'disabled' : ''} title="Bajar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
+          <button type="button" data-click="ejercicioAntes" ${pos} title="Agregar un ejercicio antes" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Antes</button>
+          <button type="button" data-click="ejercicioDespues" ${pos} title="Agregar un ejercicio después" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Después</button>
           <button data-click="ejercicioPropagar" ${pos} title="Agregar este ejercicio a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
           <button data-click="ejercicioEliminar" ${pos} class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -717,6 +728,22 @@ async function eliminarDiaConfirmando(w, d) {
   await aplicar(eliminarDia(actual.plan, w, d));
 }
 
+const posicionEjercicio = (el) => ['w', 'd', 'b', 'e'].map((k) => indice(el, k));
+
+/** Inserta un bloque vacío `desplazamiento` puestos después del tocado (0 = antes). */
+function insertarBloqueEn(el, desplazamiento) {
+  const [w, d, b] = ['w', 'd', 'b'].map((k) => indice(el, k));
+  return aplicar(insertarBloque(actual.plan, w, d, b + desplazamiento));
+}
+
+/** Inserta un ejercicio en blanco `desplazamiento` puestos después del tocado (0 = antes) y lo deja abierto. */
+function insertarEjercicioEn(el, desplazamiento) {
+  const [w, d, b, e] = posicionEjercicio(el);
+  const nuevo = insertarEjercicio(actual.plan, w, d, b, e + desplazamiento);
+  actual.ejerciciosAbiertos.add(nuevo.weeks[w].days[d].blocks[b].exercises[e + desplazamiento].id);
+  return aplicar(nuevo);
+}
+
 registrarAcciones({
   constructorDePlanesVolver: () => actual.alVolver(),
   iaInstruccion: (el) => {
@@ -781,6 +808,8 @@ registrarAcciones({
   diaEliminar: (el) => eliminarDiaConfirmando(indice(el, 'w'), indice(el, 'd')),
   diaPropagar: (el) => aplicar(propagarDia(actual.plan, indice(el, 'w'), indice(el, 'd'))),
   bloqueAgregar: (el) => aplicar(agregarBloque(actual.plan, indice(el, 'w'), indice(el, 'd'))),
+  bloqueAntes: (el) => insertarBloqueEn(el, 0),
+  bloqueDespues: (el) => insertarBloqueEn(el, 1),
   // El tipo cambia el color del bloque: se redibuja
   bloqueCampo: (el) =>
     aplicar(actualizarBloque(actual.plan, indice(el, 'w'), indice(el, 'd'), indice(el, 'b'), { type: el.value })),
@@ -791,6 +820,10 @@ registrarAcciones({
     actual.ejerciciosAbiertos.add(nuevo.weeks[w].days[d].blocks[b].exercises.at(-1).id); // el nuevo viene abierto
     return aplicar(nuevo);
   },
+  ejercicioSubir: (el) => aplicar(moverEjercicio(actual.plan, ...posicionEjercicio(el), -1)),
+  ejercicioBajar: (el) => aplicar(moverEjercicio(actual.plan, ...posicionEjercicio(el), 1)),
+  ejercicioAntes: (el) => insertarEjercicioEn(el, 0),
+  ejercicioDespues: (el) => insertarEjercicioEn(el, 1),
   ejercicioCampo: (el) => cambiarCampoEjercicio(el),
   ejercicioEliminar: (el) => aplicar(eliminarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),
   ejercicioPropagar: (el) => aplicar(propagarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),

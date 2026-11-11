@@ -137,26 +137,53 @@ export function agregarDia(plan, w) {
   return nuevo;
 }
 
-export function agregarBloque(plan, w, d) {
+const bloqueVacio = () => ({ id: nuevoId(), type: 'fuerza', exercises: [] });
+
+/** Inserta un bloque de fuerza vacío en la posición `b` del día (0 = antes del primero). */
+export function insertarBloque(plan, w, d, b) {
   const nuevo = copiar(plan);
-  nuevo.weeks[w].days[d].blocks.push({ id: nuevoId(), type: 'fuerza', exercises: [] });
+  const lista = nuevo.weeks[w].days[d].blocks;
+  lista.splice(Math.max(0, Math.min(b, lista.length)), 0, bloqueVacio());
+  return nuevo;
+}
+
+export function agregarBloque(plan, w, d) {
+  return insertarBloque(plan, w, d, plan.weeks[w].days[d].blocks.length);
+}
+
+const ejercicioEnBlanco = () => ({
+  id: nuevoId(),
+  name: '',
+  sets: '',
+  reps: '',
+  intensityType: 'RIR',
+  intensityValue: '',
+  tech: '',
+  rest: '',
+  notes: '',
+  group: '',
+});
+
+/** Inserta un ejercicio en blanco en la posición `e` del bloque (0 = antes del primero). */
+export function insertarEjercicio(plan, w, d, b, e) {
+  const nuevo = copiar(plan);
+  const lista = nuevo.weeks[w].days[d].blocks[b].exercises;
+  lista.splice(Math.max(0, Math.min(e, lista.length)), 0, ejercicioEnBlanco());
   return nuevo;
 }
 
 export function agregarEjercicio(plan, w, d, b) {
+  return insertarEjercicio(plan, w, d, b, plan.weeks[w].days[d].blocks[b].exercises.length);
+}
+
+/** Mueve el ejercicio `e` un puesto: `delta` -1 sube, 1 baja. En los extremos no cambia el orden. */
+export function moverEjercicio(plan, w, d, b, e, delta) {
   const nuevo = copiar(plan);
-  nuevo.weeks[w].days[d].blocks[b].exercises.push({
-    id: nuevoId(),
-    name: '',
-    sets: '',
-    reps: '',
-    intensityType: 'RIR',
-    intensityValue: '',
-    tech: '',
-    rest: '',
-    notes: '',
-    group: '',
-  });
+  const lista = nuevo.weeks[w].days[d].blocks[b].exercises;
+  const destino = e + delta;
+  if (destino < 0 || destino >= lista.length) return nuevo;
+  const [ejercicio] = lista.splice(e, 1);
+  lista.splice(destino, 0, ejercicio);
   return nuevo;
 }
 

@@ -1,6 +1,8 @@
 // Genera un PDF en memoria (Blob) en el navegador. pdfmake y su tipografía (~2 MB) se cargan
 // recién la primera vez que se usa, para no hacer más pesada la carga de la app.
 
+import { valoresSinEmojis } from '../../../lib/texto.js';
+
 let pdfMake = null;
 
 async function cargarPdfMake() {
@@ -15,5 +17,5 @@ async function cargarPdfMake() {
 /** @returns {Promise<Blob>} el PDF de esa definición de documento */
 export async function generarPdfBlob(documento) {
   const motor = await cargarPdfMake();
-  return motor.createPdf(documento).getBlob();
+  return motor.createPdf(valoresSinEmojis(documento)).getBlob();
 }

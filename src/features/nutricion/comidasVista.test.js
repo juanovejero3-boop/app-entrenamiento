@@ -414,6 +414,43 @@ describe('opciones (variantes) de una comida', () => {
     expect($('[data-click="opcionEliminar"]')).toBeNull();
   });
 
+  it('duplicar está junto a Variante y copia la última opción', () => {
+    const acciones = $('[data-click="opcionNueva"]').parentElement;
+    expect(acciones.querySelector('[data-click="opcionDuplicar"]')).not.toBeNull();
+    expect($('[data-opcion] [data-click="opcionDuplicar"]')).toBeNull();
+
+    $(`[data-click="opcionNueva"][data-id="${id}"]`).click();
+    agregarAlimento(id, ARROZ, { opcion: 1 });
+    $('[data-click="opcionDuplicar"]').click();
+
+    expect($$('[data-opcion]')).toHaveLength(3);
+    const opciones = guardadas[0].opciones;
+    expect(opciones[2].items.map((i) => [i.nombre, i.porciones])).toEqual([['Arroz Blanco (Cocido)', 1]]);
+    expect(opciones[2].id).not.toBe(opciones[1].id);
+    expect(opciones[2].items[0].id).not.toBe(opciones[1].items[0].id);
+    expect(opciones[0].items.map((i) => i.nombre)).toEqual(['Pechuga de Pollo']);
+  });
+
+  it('cambiar un alimento lo reemplaza y conserva las porciones', () => {
+    cambiar(filaDe('Pechuga de Pollo').querySelector('[data-change="itemPorciones"]'), '2.5');
+    filaDe('Pechuga de Pollo').querySelector('[data-click="itemCambiar"]').click();
+    expect(contenedor.textContent).toMatch(/reemplazando/i);
+    escribir($('[data-buscar-alimento]'), 'arroz');
+    $(`[data-click="alimentoElegir"][data-alimento-id="${ARROZ.id}"]`).click();
+    expect(filaDe('Pechuga de Pollo')).toBeUndefined();
+    expect(porcionesDe('Arroz Blanco (Cocido)')).toBe('2.5');
+    expect(contenedor.textContent).not.toMatch(/reemplazando/i);
+  });
+
+  it('cambiar por un alimento que ya está suma las porciones', () => {
+    agregarAlimento(id, ARROZ);
+    filaDe('Pechuga de Pollo').querySelector('[data-click="itemCambiar"]').click();
+    escribir($('[data-buscar-alimento]'), 'arroz');
+    $(`[data-click="alimentoElegir"][data-alimento-id="${ARROZ.id}"]`).click();
+    expect($$('[data-item]')).toHaveLength(1);
+    expect(porcionesDe('Arroz Blanco (Cocido)')).toBe('2');
+  });
+
   it('"Variante" suma una opción vacía con sus propios alimentos', () => {
     $(`[data-click="opcionNueva"][data-id="${id}"]`).click();
     expect($$('[data-opcion]')).toHaveLength(2);

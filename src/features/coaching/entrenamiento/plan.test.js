@@ -5,8 +5,11 @@ import {
   actualizarPrioridad,
   actualizarSemana,
   agregarBloque,
+  insertarBloque,
   agregarDia,
   agregarEjercicio,
+  insertarEjercicio,
+  moverEjercicio,
   agregarPrioridad,
   agregarSemana,
   actualizarBloque,
@@ -126,6 +129,13 @@ describe('agregar y eliminar', () => {
     expect(plan.weeks[0].days[0].blocks[1]).toMatchObject({ type: 'fuerza', exercises: [] });
   });
 
+  it('insertarBloque pone un bloque de fuerza vacío en ese lugar', () => {
+    const plan = insertarBloque(planChico(), 0, 0, 0);
+    expect(plan.weeks[0].days[0].blocks.map((b) => b.type)).toEqual(['fuerza', 'fuerza']);
+    expect(plan.weeks[0].days[0].blocks[0].exercises).toEqual([]);
+    expect(plan.weeks[0].days[0].blocks[1].id).toBe('b1');
+  });
+
   it('agregarEjercicio agrega un ejercicio en blanco con intensidad RIR', () => {
     const plan = agregarEjercicio(planChico(), 0, 0, 0);
     expect(plan.weeks[0].days[0].blocks[0].exercises[1]).toMatchObject({
@@ -155,6 +165,23 @@ describe('agregar y eliminar', () => {
     let plan = agregarSemana(agregarSemana(planChico())); // Semana 1, 2, 3
     plan = eliminarSemana(plan, 1);
     expect(plan.weeks.map((w) => w.name)).toEqual(['Semana 1', 'Semana 3']);
+  });
+
+  it('moverEjercicio cambia el orden dentro del bloque y no sale de los extremos', () => {
+    let plan = agregarEjercicio(planChico(), 0, 0, 0);
+    plan = actualizarEjercicio(plan, 0, 0, 0, 1, { name: 'Press' });
+    plan = moverEjercicio(plan, 0, 0, 0, 1, -1);
+    expect(plan.weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['Press', 'Sentadilla']);
+    expect(moverEjercicio(plan, 0, 0, 0, 0, -1).weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual([
+      'Press',
+      'Sentadilla',
+    ]);
+  });
+
+  it('insertarEjercicio pone un ejercicio en blanco en ese lugar', () => {
+    const plan = insertarEjercicio(planChico(), 0, 0, 0, 0);
+    expect(plan.weeks[0].days[0].blocks[0].exercises.map((e) => e.name)).toEqual(['', 'Sentadilla']);
+    expect(plan.weeks[0].days[0].blocks[0].exercises[0]).toMatchObject({ intensityType: 'RIR', sets: '', group: '' });
   });
 
   it('eliminarDia, eliminarBloque y eliminarEjercicio quitan el elemento indicado', () => {
@@ -194,7 +221,10 @@ describe('inmutabilidad', () => {
     ['agregarSemana', (p) => agregarSemana(p)],
     ['agregarDia', (p) => agregarDia(p, 0)],
     ['agregarBloque', (p) => agregarBloque(p, 0, 0)],
+    ['insertarBloque', (p) => insertarBloque(p, 0, 0, 0)],
     ['agregarEjercicio', (p) => agregarEjercicio(p, 0, 0, 0)],
+    ['insertarEjercicio', (p) => insertarEjercicio(p, 0, 0, 0, 0)],
+    ['moverEjercicio', (p) => moverEjercicio(p, 0, 0, 0, 0, 1)],
     ['eliminarSemana', (p) => eliminarSemana(p, 0)],
     ['eliminarDia', (p) => eliminarDia(p, 0, 0)],
     ['eliminarBloque', (p) => eliminarBloque(p, 0, 0, 0)],

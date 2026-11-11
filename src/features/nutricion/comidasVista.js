@@ -15,6 +15,7 @@ import {
   agregarComida,
   agregarItem,
   agregarOpcion,
+  duplicarOpcion,
   cantidadEquivalente,
   compararConObjetivos,
   crearComida,
@@ -25,6 +26,7 @@ import {
   quitarComida,
   quitarItem,
   quitarOpcion,
+  reemplazarItem,
 } from './comidas.js';
 
 /**
@@ -44,7 +46,16 @@ let vista = null;
  * }} datos
  */
 export function montarComidas({ contenedor, lineaDeTiempo, comidas, alimentos, objetivos, alCambiar }) {
-  vista = { contenedor, linea: lineaDeTiempo, comidas, alimentos, objetivos, alCambiar, abiertas: new Set() };
+  vista = {
+    contenedor,
+    linea: lineaDeTiempo,
+    comidas,
+    alimentos,
+    objetivos,
+    alCambiar,
+    abiertas: new Set(),
+    reemplazo: null,
+  };
   dibujar();
 }
 
@@ -185,7 +196,10 @@ function dibujarComida(comida) {
         ${comida.opciones.length > 1 ? '<p class="text-[11px] text-gray-500">Las opciones son alternativas entre sí: el total del día cuenta la primera opción.</p>' : ''}
         ${comida.opciones.map((opcion, i) => dibujarOpcion(comida, opcion, i)).join('')}
         <div class="flex gap-2 justify-between">
-          <button data-click="opcionNueva" data-id="${id}" class="${claseNeutro}"><i class="fa-solid fa-plus mr-1"></i>Variante</button>
+          <div class="flex gap-2">
+            <button data-click="opcionNueva" data-id="${id}" class="${claseNeutro}"><i class="fa-solid fa-plus mr-1"></i>Variante</button>
+            <button data-click="opcionDuplicar" data-id="${id}" class="${claseNeutro}" title="Duplicar la última opción"><i class="fa-solid fa-copy mr-1"></i>Duplicar</button>
+          </div>
           <button data-click="comidaEliminar" data-id="${id}" class="${clasePeligro}"><i class="fa-solid fa-trash mr-1"></i>Eliminar comida</button>
         </div>
       </div>
@@ -234,11 +248,21 @@ function buscarAlimentos(texto) {
 function dibujarBuscador(comida, opcion) {
   const id = esc(comida.id);
   const hayAlimentos = vista.alimentos.length > 0;
+  const reemplazo = vista.reemplazo;
+  const cambiando =
+    reemplazo && reemplazo.comidaId === comida.id && reemplazo.opcionId === opcion.id
+      ? opcion.items.find((i) => i.id === reemplazo.itemId)
+      : null;
   return `
     <form data-buscador data-submit="alimentoEnter" data-id="${id}" data-opcion-id="${esc(opcion.id)}" autocomplete="off" class="space-y-2">
+      ${
+        cambiando
+          ? `<p data-reemplazando class="text-[11px] text-amber-300">Reemplazando ${esc(cambiando.nombre)}. Elegí el alimento nuevo. <button type="button" data-click="itemCambiarCancelar" class="underline">Cancelar</button></p>`
+          : ''
+      }
       <div class="relative">
         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"></i>
-        <input data-buscar-alimento data-input="alimentoBuscar" type="search" enterkeyhint="done" placeholder="Buscar alimento para agregar…" ${hayAlimentos ? '' : 'disabled'} class="${claseInput} pl-9">
+        <input data-buscar-alimento data-input="alimentoBuscar" type="search" enterkeyhint="done" placeholder="${cambiando ? 'Buscar el alimento que lo reemplaza…' : 'Buscar alimento para agregar…'}" ${hayAlimentos ? '' : 'disabled'} class="${claseInput} pl-9">
       </div>
       <div data-resultados class="space-y-1.5"></div>
       ${dibujarCategorias(comida, opcion)}
@@ -296,6 +320,7 @@ function dibujarItem(comida, opcion, item) {
     <div data-item="${esc(item.id)}" class="space-y-1.5 py-1">
       <div class="flex items-center gap-2">
         <p class="flex-1 min-w-0 text-sm font-bold text-white break-words">${esc(item.nombre)}</p>
+        <button data-click="itemCambiar" ${datos} class="${claseIcono}" title="Cambiar por otro alimento" aria-label="Cambiar ${esc(item.nombre)}"><i class="fa-solid fa-right-left"></i></button>
         <button data-click="itemQuitar" ${datos} class="${claseIcono}" title="Quitar" aria-label="Quitar ${esc(item.nombre)}"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="flex items-center gap-2">
@@ -396,6 +421,10 @@ function marcarLoAgregado() {
 function agregarDesdeElDialogo(alimentoId) {
   const alimento = vista.alimentos.find((a) => a.id === alimentoId);
   if (!dialogo || !alimento) return;
+  if (estaReemplazando(dialogo.comidaId, dialogo.opcionId)) {
+    elegirAlimento(dialogo.comidaId, dialogo.opcionId, alimento);
+    return;
+  }
   aplicar(agregarItem(vista.comidas, dialogo.comidaId, dialogo.opcionId, alimento, 1));
   marcarLoAgregado();
 }
@@ -495,9 +524,25 @@ async function eliminarOpcion(comidaId, opcionId) {
   aplicar(quitarOpcion(vista.comidas, comidaId, opcionId));
 }
 
+const estaReemplazando = (comidaId, opcionId) =>
+  vista.reemplazo?.comidaId === comidaId && vista.reemplazo?.opcionId === opcionId;
+
+/** Agrega un alimento, o reemplaza el que se está cambiando, conservando las porciones. */
+function elegirAlimento(comidaId, opcionId, alimento) {
+  if (!alimento) return;
+  if (estaReemplazando(comidaId, opcionId)) {
+    const { itemId } = vista.reemplazo;
+    vista.reemplazo = null;
+    aplicar(reemplazarItem(vista.comidas, comidaId, opcionId, itemId, alimento), { enfocar: opcionId });
+    if (dialogo) cerrarDialogoDeCategoria();
+    return;
+  }
+  aplicar(agregarItem(vista.comidas, comidaId, opcionId, alimento, 1), { enfocar: opcionId });
+}
+
 /** Agrega un alimento a una opción con 1 porción (después se ajusta con − y +). */
 function agregarAlimentoElegido(comidaId, opcionId, alimento) {
-  aplicar(agregarItem(vista.comidas, comidaId, opcionId, alimento, 1), { enfocar: opcionId });
+  elegirAlimento(comidaId, opcionId, alimento);
 }
 
 /** Enter en el buscador agrega el primer resultado. */
@@ -536,7 +581,20 @@ registrarAcciones({
   comidaHora: (el) => cambiarHora(el),
   comidaEliminar: (el) => eliminarComida(el.dataset.id),
   opcionNueva: (el) => aplicar(agregarOpcion(vista.comidas, el.dataset.id)),
+  opcionDuplicar: (el) => {
+    const comida = vista.comidas.find((c) => c.id === el.dataset.id);
+    const ultima = comida?.opciones.at(-1);
+    if (ultima) aplicar(duplicarOpcion(vista.comidas, comida.id, ultima.id));
+  },
   opcionEliminar: (el) => eliminarOpcion(el.dataset.id, el.dataset.opcionId),
+  itemCambiar: (el) => {
+    vista.reemplazo = { comidaId: el.dataset.id, opcionId: el.dataset.opcionId, itemId: el.dataset.itemId };
+    dibujar({ enfocar: el.dataset.opcionId });
+  },
+  itemCambiarCancelar: () => {
+    vista.reemplazo = null;
+    dibujar();
+  },
   alimentoBuscar: (el) => dibujarResultados(el.closest('[data-buscador]'), el.value),
   alimentoElegir: (el) =>
     agregarAlimentoElegido(
@@ -549,5 +607,8 @@ registrarAcciones({
     aplicar(actualizarPorciones(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId, el.value)),
   itemMas: (el) => moverPorciones(el, PASO_PORCIONES),
   itemMenos: (el) => moverPorciones(el, -PASO_PORCIONES),
-  itemQuitar: (el) => aplicar(quitarItem(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId)),
+  itemQuitar: (el) => {
+    if (vista.reemplazo?.itemId === el.dataset.itemId) vista.reemplazo = null;
+    aplicar(quitarItem(vista.comidas, el.dataset.id, el.dataset.opcionId, el.dataset.itemId));
+  },
 });

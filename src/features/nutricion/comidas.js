@@ -104,6 +104,49 @@ export function actualizarPorciones(comidas, comidaId, opcionId, itemId, porcion
 export const quitarItem = (comidas, comidaId, opcionId, itemId) =>
   enOpcion(comidas, comidaId, opcionId, (o) => ({ ...o, items: o.items.filter((i) => i.id !== itemId) }));
 
+/** Copia una opción con sus alimentos justo después. Cada copia tiene id nuevo. */
+export function duplicarOpcion(comidas, comidaId, opcionId) {
+  return enComida(comidas, comidaId, (c) => {
+    const i = c.opciones.findIndex((o) => o.id === opcionId);
+    if (i < 0) return c;
+    const copia = {
+      id: nuevoId(),
+      items: c.opciones[i].items.map((item) => ({ ...item, id: nuevoId() })),
+    };
+    const opciones = c.opciones.slice();
+    opciones.splice(i + 1, 0, copia);
+    return { ...c, opciones };
+  });
+}
+
+const mismoAlimento = (item, alimento) => item.categoria === alimento.categoria && item.nombre === alimento.nombre;
+
+/**
+ * Cambia el alimento de una fila y deja las porciones. Si ese alimento ya está en la opción,
+ * se suman las porciones en la fila que ya existía.
+ */
+export function reemplazarItem(comidas, comidaId, opcionId, itemId, alimento) {
+  return enOpcion(comidas, comidaId, opcionId, (o) => {
+    const actual = o.items.find((i) => i.id === itemId);
+    if (!actual || mismoAlimento(actual, alimento)) return o;
+    const repetido = o.items.find((i) => i.id !== itemId && mismoAlimento(i, alimento));
+    if (repetido) {
+      return {
+        ...o,
+        items: o.items
+          .filter((i) => i.id !== itemId)
+          .map((i) => (i.id === repetido.id ? { ...i, porciones: redondear2(i.porciones + actual.porciones) } : i)),
+      };
+    }
+    return {
+      ...o,
+      items: o.items.map((i) =>
+        i.id === itemId ? { ...i, categoria: alimento.categoria, nombre: alimento.nombre, porcion: alimento.porcion } : i,
+      ),
+    };
+  });
+}
+
 /** Las comidas ordenadas por hora; las que no tienen hora van al final. No modifica la lista. */
 export const ordenadasPorHora = (comidas) =>
   [...comidas].sort((a, b) => (a.hora || '99:99').localeCompare(b.hora || '99:99'));
