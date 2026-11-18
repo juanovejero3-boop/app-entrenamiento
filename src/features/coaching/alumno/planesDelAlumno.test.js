@@ -90,6 +90,34 @@ describe('planes del alumno: ciclo activo y anteriores', () => {
 describe('planes del alumno: el ciclo actual plegado', () => {
   const abierto = () => $('[data-plan-activo]').hidden === false;
 
+  it('al desplegarlo por primera vez, la semana actual queda primera con un scroll suave', async () => {
+    const caja = (left) => ({ left, right: left + 120, top: 0, bottom: 40, width: 120, height: 40, x: left, y: 0 });
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    const scrollTo = HTMLElement.prototype.scrollTo;
+    const scrolls = [];
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.matches('[data-click="alumnoSemana"][aria-current="true"]')) return caja(480);
+      if (this.querySelector(':scope > [data-click="alumnoSemana"]')) return caja(16);
+      return rect.call(this);
+    };
+    HTMLElement.prototype.scrollTo = function (opciones) {
+      if (this.querySelector(':scope > [data-click="alumnoSemana"]')) scrolls.push(opciones);
+    };
+    try {
+      await repo.crearCiclo(ALUMNO.id, plan('Mi ciclo'), 'activo');
+      await abrir({ hoy: '2026-10-27' });
+      expect($('[data-plan-activo]').hidden).toBe(true);
+      expect(scrolls).toHaveLength(0);
+
+      $('[data-ciclo-actual] [data-click="historialAlternar"]').click();
+      await esperar();
+      expect(scrolls.at(-1)).toEqual({ left: 424, behavior: 'smooth' });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = rect;
+      HTMLElement.prototype.scrollTo = scrollTo;
+    }
+  });
+
   it('el alumno ve el ciclo actual plegado, solo con su nombre, y se abre al tocarlo', async () => {
     await repo.crearCiclo(ALUMNO.id, plan('Mi ciclo'), 'activo');
     await abrir();

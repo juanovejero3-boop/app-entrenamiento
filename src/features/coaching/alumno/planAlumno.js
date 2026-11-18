@@ -72,6 +72,28 @@ async function cargarVideos() {
 }
 
 /**
+ * Deja la semana marcada al inicio de su fila. Si el plan está plegado no hace nada: ahí las medidas son 0.
+ * `desde` es el scroll anterior, para que al cambiar de semana no arranque de golpe en la primera.
+ * @returns {boolean} si la fila estaba visible y se pudo alinear
+ */
+export function alinearSemanaVisible(contenedor, { desde = null } = {}) {
+  const chip = contenedor.querySelector('[data-click="alumnoSemana"][aria-current="true"]');
+  const fila = chip?.parentElement;
+  if (!chip || !fila || chip.closest('[hidden]')) return false;
+  const chipCaja = chip.getBoundingClientRect();
+  const filaCaja = fila.getBoundingClientRect();
+  if (chipCaja.width === 0 || filaCaja.width === 0) return false;
+  // Un pedazo de la semana anterior queda a la vista, para que se note que se puede volver.
+  const asomo = chip.previousElementSibling ? 40 : 0;
+  const destino = Math.max(0, fila.scrollLeft + chipCaja.left - filaCaja.left - asomo);
+  if (desde !== null) fila.scrollLeft = desde;
+  if (Math.abs(fila.scrollLeft - destino) < 2) return true;
+  if (typeof fila.scrollTo === 'function') fila.scrollTo({ left: destino, behavior: 'smooth' });
+  else fila.scrollLeft = destino;
+  return true;
+}
+
+/**
  * Muestra el plan del alumno dentro de `content`.
  * @param {HTMLElement} content
  * @param {{ id: string, name?: string, email?: string }} alumno
@@ -170,12 +192,15 @@ function crearVista(vista) {
 
   function dibujar() {
     const { content, plan, soloLectura } = vista;
+    const filaVieja = content.querySelector('[data-click="alumnoSemana"]')?.parentElement;
+    const desde = filaVieja && filaVieja.clientWidth > 0 ? filaVieja.scrollLeft : null;
     content.innerHTML = `
     <div class="space-y-4">
       ${!vista.sinBarra && (soloLectura || vista.alVolver) ? dibujarBarraSuperior() : ''}
       ${plan ? dibujarPlan() : dibujarSinPlan()}
     </div>
   `;
+    alinearSemanaVisible(content, { desde });
   }
 
   /** Botón Volver (si hay a dónde volver) y, en modo lectura del coach, el aviso de que no se puede anotar. */

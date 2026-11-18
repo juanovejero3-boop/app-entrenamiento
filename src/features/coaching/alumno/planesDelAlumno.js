@@ -5,7 +5,7 @@ import { escapeAttr as esc } from '../../../lib/dom.js';
 import { registrarAcciones } from '../../../lib/acciones.js';
 import { ciclosAnteriores, cicloActivo } from '../ciclos/ciclos.js';
 import { repo } from '../repo/index.js';
-import { abrirPlanAlumno } from './planAlumno.js';
+import { abrirPlanAlumno, alinearSemanaVisible } from './planAlumno.js';
 
 /** Opciones y datos de cada contenedor, para atender el despliegue de sus ciclos anteriores. */
 const contextos = new WeakMap();
@@ -86,6 +86,7 @@ async function alternar(boton) {
   panel.hidden = !abrir;
   boton.setAttribute('aria-expanded', String(abrir));
   boton.querySelector('i')?.classList.toggle('rotate-180', abrir);
+  if (abrir) alinearSemanaVisible(panel);
   if (!abrir || panel.dataset.cargado) return;
 
   panel.dataset.cargado = 'true';

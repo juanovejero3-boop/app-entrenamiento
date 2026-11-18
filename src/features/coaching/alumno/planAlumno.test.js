@@ -80,6 +80,28 @@ describe('vista del alumno: el plan', () => {
     expect(content.textContent).toContain('Sin días cargados');
   });
 
+  it('deja la semana seleccionada al inicio de la fila, con un scroll suave', async () => {
+    const caja = (left) => ({ left, right: left + 120, top: 0, bottom: 40, width: 120, height: 40, x: left, y: 0 });
+    const original = HTMLElement.prototype.getBoundingClientRect;
+    const scrolls = [];
+    const scrollTo = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.getBoundingClientRect = function () {
+      if (this.matches('[data-click="alumnoSemana"][aria-current="true"]')) return caja(480);
+      if (this.querySelector(':scope > [data-click="alumnoSemana"]')) return caja(16);
+      return original.call(this);
+    };
+    HTMLElement.prototype.scrollTo = function (opciones) {
+      if (this.querySelector(':scope > [data-click="alumnoSemana"]')) scrolls.push(opciones);
+    };
+    try {
+      await abrir({ hoy: SEMANA_2 });
+      expect(scrolls.at(-1)).toEqual({ left: 424, behavior: 'smooth' });
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = original;
+      HTMLElement.prototype.scrollTo = scrollTo;
+    }
+  });
+
   it('en la primera semana muestra su fase, volumen objetivo y días', async () => {
     await abrir();
     expect(content.textContent).toContain('Acumulación');
