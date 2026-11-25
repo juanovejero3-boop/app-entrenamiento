@@ -5,6 +5,7 @@ import { renderTabMaterial } from './features/material/material.js';
 import { renderTabNutricion } from './features/nutricion/nutricion.js';
 import { renderTabPerfil } from './features/perfil/perfil.js';
 import { renderTabEntrenamiento, resetPlanillaPestanas } from './features/planilla/planilla.js';
+import { renderTabLlamadas } from './features/reservas/alumnoLlamadas.js';
 import { renderTabTurnos } from './features/reservas/reservas.js';
 import { registrarAcciones } from './lib/acciones.js';
 import { state } from './state.js';
@@ -16,11 +17,12 @@ const PESTANAS = {
   material: renderTabMaterial,
   nutricion: renderTabNutricion, // solo admin
   admin: renderTabAdmin,
+  llamadas: renderTabLlamadas,
   turnos: renderTabTurnos, // turnos internos (sin botón en la barra)
 };
 
 // Botones de la barra inferior (id: btn-<pestaña>)
-const BOTONES_NAV = ['perfil', 'entrenamiento', 'material', 'nutricion', 'admin'];
+const BOTONES_NAV = ['perfil', 'entrenamiento', 'material', 'nutricion', 'admin', 'llamadas'];
 
 function setActiveNav(tab) {
   state.currentTab = tab;

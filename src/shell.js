@@ -10,6 +10,20 @@ const BOTONES_ADMIN = [
   { tab: 'admin', icono: 'fa-shield-halved', texto: 'Admin' },
 ];
 
+function ponerBoton(navContainer, { tab, icono, texto }, visible) {
+  const boton = document.getElementById(`btn-${tab}`);
+  if (visible && !boton) {
+    navContainer.insertAdjacentHTML(
+      'beforeend',
+      `<button id="btn-${tab}" data-click="switchTab" data-tab="${tab}" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
+            <i class="fa-solid ${icono} text-lg mb-1"></i> ${texto}
+        </button>`,
+    );
+  } else if (!visible && boton) {
+    boton.remove();
+  }
+}
+
 export function renderApp() {
   setPublicBooking(false);
   const navBar = document.querySelector('nav');
@@ -17,19 +31,8 @@ export function renderApp() {
 
   const navContainer = document.querySelector('nav .max-w-lg');
   const esAdmin = state.userProfile?.role === 'admin';
-  for (const { tab, icono, texto } of BOTONES_ADMIN) {
-    const boton = document.getElementById(`btn-${tab}`);
-    if (esAdmin && !boton) {
-      navContainer.insertAdjacentHTML(
-        'beforeend',
-        `<button id="btn-${tab}" data-click="switchTab" data-tab="${tab}" class="flex flex-col items-center text-gray-500 hover:text-neonRed">
-            <i class="fa-solid ${icono} text-lg mb-1"></i> ${texto}
-        </button>`,
-      );
-    } else if (!esAdmin && boton) {
-      boton.remove();
-    }
-  }
+  for (const boton of BOTONES_ADMIN) ponerBoton(navContainer, boton, esAdmin);
+  ponerBoton(navContainer, { tab: 'llamadas', icono: 'fa-headset', texto: 'Llamadas' }, !esAdmin);
   // Si ya estamos en una tab de la app, no re-navegar (evita saltos al volver a la pestaña)
   if (state.currentTab) return;
   const fichaCompleta = !!(

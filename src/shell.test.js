@@ -28,10 +28,10 @@ describe('barra inferior según el rol', () => {
     expect(document.getElementById('btn-admin').textContent).toContain('Admin');
   });
 
-  it('un alumno no ve ninguno de los dos', () => {
+  it('un alumno ve Llamadas y no ve Nutrición ni Admin', () => {
     state.userProfile = { role: 'alumno' };
     renderApp();
-    expect(botones()).toEqual([]);
+    expect(botones()).toEqual(['llamadas']);
   });
 
   it('volver a dibujar la app no duplica los botones', () => {
@@ -46,7 +46,7 @@ describe('barra inferior según el rol', () => {
     renderApp();
     state.userProfile = { role: 'alumno' };
     renderApp();
-    expect(botones()).toEqual([]);
+    expect(botones()).toEqual(['llamadas']);
   });
 
   it('muestra la barra', () => {

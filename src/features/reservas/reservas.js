@@ -4,6 +4,7 @@ import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
+import { alternarDia, AVISO_RESERVA, estadoDelDia, guardarAgenda, leerAgenda, ofertaDisponible, reservar, textoFecha } from './reservaLocal.js';
 
 window.APP_SCHEDULE = {
   onboarding: {
@@ -44,6 +45,36 @@ let selectedTime = null;
 let localBookings = JSON.parse(localStorage.getItem('pp_bookings_v4') || '[]');
 let webhookUrl = localStorage.getItem('pp_webhook_url') || '';
 let isPublicBooking = false;
+
+function htmlOfertaPrimera() {
+  const { jornadas, turnos } = leerAgenda();
+  const dias = ofertaDisponible('primera', jornadas, turnos, new Date());
+  if (!dias.length) {
+    return '<p class="text-sm text-gray-400 text-center py-4">No hay turnos disponibles por ahora.</p>';
+  }
+  return `<div data-lista-dias class="space-y-2">${dias
+    .map((dia, i) => {
+      const abierto = i === 0;
+      return `
+      <div class="border border-gray-800 rounded-lg">
+        <button type="button" data-click="ofertaDesplegar" aria-expanded="${abierto}" class="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase text-white">
+          <span>${escapeAttr(textoFecha(dia.fecha))}</span>
+          <i data-flecha class="fa-solid fa-chevron-down text-[10px] text-gray-400 transition ${abierto ? 'rotate-180' : ''}"></i>
+        </button>
+        <div data-cuerpo-dia ${abierto ? '' : 'hidden'} class="px-3 pb-3">
+          <div class="grid grid-cols-3 gap-2">
+            ${dia.horas
+              .map(
+                (hora) =>
+                  `<button type="button" data-click="selectTime" data-fecha="${escapeAttr(dia.fecha)}" data-time="${escapeAttr(hora)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed">${hora}</button>`,
+              )
+              .join('')}
+          </div>
+        </div>
+      </div>`;
+    })
+    .join('')}</div>`;
+}
 
 function startPublicBooking() {
   selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
@@ -101,15 +132,9 @@ window.renderPublicBooking = function () {
                 <p><i class="fa-solid fa-bullseye text-neonRed mr-2"></i> <span class="font-bold text-white">Garantía:</span> Transformación desde el día 1.</p>
             </div>
 
-            <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Selecciona la Fecha</label>
-                <input type="date" id="bookingDate" min="${new Date().toISOString().split('T')[0]}" data-change="generateTimeSlots" class="w-full bg-cyberDark border border-gray-700 text-white p-3 rounded-xl text-xs outline-none focus:border-neonRed">
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-400 uppercase mb-2">Horarios Disponibles (ART)</label>
-                <div id="timeSlotsContainer" class="grid grid-cols-3 gap-2">
-                    <p class="col-span-3 text-[10px] text-gray-500 text-center py-4">Selecciona una fecha arriba para ver los turnos</p>
-                </div>
+            <div class="space-y-4">
+                <p class="text-xs font-bold text-gray-400 uppercase">Días y horarios disponibles</p>
+                ${htmlOfertaPrimera()}
             </div>
             <button data-click="irAPasoReservaPublica" data-paso="1" class="text-xs text-gray-400 hover:text-white mt-4 flex items-center"><i class="fa-solid fa-arrow-left mr-1"></i> Volver a mis datos</button>
         </div>
@@ -247,9 +272,7 @@ export function renderTabTurnos(content) {
     `;
 
   if (bookingStep === 2 && selectedDate) {
-    // generateAppTimeSlots no existe en ningún lado (error previo de la agenda interna, pendiente de revisar)
-    // eslint-disable-next-line no-undef
-    setTimeout(() => generateAppTimeSlots('internal'), 50);
+    setTimeout(() => window.generateAppTimeSlots(), 50);
   }
 }
 
@@ -299,71 +322,45 @@ export function renderAdminLlamadas() {
   `;
 }
 
-window.generateTimeSlots = function () {
+function pintarHuecos(agendaId) {
   const dateInput = document.getElementById('bookingDate');
   const container = document.getElementById('timeSlotsContainer');
+  if (!dateInput || !dateInput.value || !container) return;
 
-  if (!dateInput || !dateInput.value) return;
-
-  // --- SOLUCIÓN DEFINITIVA ---
-  let type = 'onboarding'; // Por defecto, CUALQUIERA que entre asume horarios de Primera Vez.
-
-  try {
-    // Solo si la variable currentUser existe y tiene datos (o sea, estás logueado en tu admin), usa Seguimiento.
-    if (typeof state.currentUser !== 'undefined' && state.currentUser !== null) {
-      type = 'followup';
-    }
-  } catch {
-    // Si hay cualquier error al leer el usuario, seguimos forzando Primera Vez.
-    type = 'onboarding';
-  }
-  // ---------------------------
-
-  const config = window.APP_SCHEDULE[type];
-
-  const [year, month, day] = dateInput.value.split('-');
-  const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0);
-  const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
-
-  // Comprobamos si le pusiste 'true' o 'false' a ese día en tu panel
-  if (!config.days[dayOfWeek]) {
-    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
+  const { jornadas, turnos } = leerAgenda();
+  const { horas, aviso } = estadoDelDia(agendaId, dateInput.value, jornadas, turnos);
+  if (!horas.length) {
+    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">${aviso}</p>`;
     return;
   }
 
-  const intervalMinutes = type === 'onboarding' ? 60 : 45;
-  const slots = [];
-
-  let current = new Date(`2000-01-01T${config.start}:00`);
-  const end = new Date(`2000-01-01T${config.end}:00`);
-
-  while (current < end) {
-    const hours = current.getHours().toString().padStart(2, '0');
-    const minutes = current.getMinutes().toString().padStart(2, '0');
-    const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
-
-    if (nextSlot <= end) {
-      slots.push(`${hours}:${minutes}`);
-    }
-    current = new Date(current.getTime() + intervalMinutes * 60000);
-  }
-
-  if (slots.length === 0) {
-    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
-    return;
-  }
-
-  // Dibujamos los botones
-  container.innerHTML = slots
+  const accion = isPublicBooking ? 'selectTime' : 'elegirTurno';
+  container.innerHTML = horas
     .map(
       (time) => `
-        <button type="button" data-click="selectTime" data-time="${escapeAttr(time)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
-            ${time}
-        </button>
-    `,
+        <button type="button" data-click="${accion}" data-time="${escapeAttr(time)}" class="slot-btn p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">${time}</button>`,
     )
     .join('');
+}
+
+window.generateTimeSlots = function () {
+  pintarHuecos(isPublicBooking ? 'primera' : 'seguimiento');
 };
+
+window.generateAppTimeSlots = function () {
+  pintarHuecos('seguimiento');
+};
+
+function elegirTurno(el) {
+  selectedTime = el.dataset.time;
+  selectedDate = document.getElementById('bookingDate')?.value || '';
+  document.querySelectorAll('[data-click="elegirTurno"]').forEach((b) => {
+    b.className = 'slot-btn p-2 border border-gray-700 rounded-lg text-xs text-white';
+  });
+  el.className = 'slot-btn p-2 border border-neonRed rounded-lg text-xs text-neonRed font-bold';
+  const siguiente = document.getElementById('btnToStep3');
+  if (siguiente) siguiente.disabled = false;
+}
 
 window.selectAppTimeSlot = function (btnEl, slot) {
   document
@@ -379,44 +376,50 @@ window.selectAppTimeSlot = function (btnEl, slot) {
 };
 
 window.confirmAppBooking = function (e) {
-  e.preventDefault();
+  if (e) e.preventDefault();
   const btn = document.getElementById('b-submit');
-  btn.disabled = true;
-  btn.innerHTML = 'PROCESANDO...';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'PROCESANDO...';
+  }
 
-  const emailToSave = isPublicBooking ? document.getElementById('b-email').value.trim() : state.currentUser.email;
+  const emailToSave = isPublicBooking
+    ? document.getElementById('b-email').value.trim()
+    : state.currentUser?.email || '';
+  const { jornadas, turnos } = leerAgenda();
+  const resultado = reservar(jornadas, turnos, {
+    agendaId: isPublicBooking ? 'primera' : 'seguimiento',
+    fecha: selectedDate,
+    hora: selectedTime,
+    nombre: document.getElementById('b-name').value.trim(),
+    email: emailToSave,
+    telefono: document.getElementById('b-phone')?.value.trim() || '',
+    notas: document.getElementById('b-notes')?.value.trim() || '',
+  });
 
-  const newBooking = {
-    id: Date.now(),
-    service: selectedService.name,
-    date: selectedDate,
-    time: selectedTime,
-    clientName: document.getElementById('b-name').value.trim(),
-    clientEmail: emailToSave,
-    clientPhone: document.getElementById('b-phone').value.trim(),
-    notes: document.getElementById('b-notes').value.trim(),
-  };
+  if (!resultado.ok) {
+    alert(AVISO_RESERVA[resultado.motivo]);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Agendar llamada';
+    }
+    return;
+  }
 
-  localBookings.push(newBooking);
-  localStorage.setItem('pp_bookings_v4', JSON.stringify(localBookings));
+  guardarAgenda(jornadas, resultado.turnos);
 
   if (webhookUrl) {
     fetch(webhookUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newBooking),
-    }).catch((err) => console.log('Sincronización de fondo fallida', err));
+      body: JSON.stringify(resultado.turnos.at(-1)),
+    }).catch(() => {});
   }
 
-  setTimeout(() => {
-    bookingStep = 4;
-    if (isPublicBooking) {
-      window.renderPublicBooking();
-    } else {
-      switchTab('turnos');
-    }
-  }, 1000);
+  bookingStep = 4;
+  if (isPublicBooking) window.renderPublicBooking();
+  else switchTab('turnos');
 };
 
 window.saveAppWebhookUrl = function () {
@@ -494,82 +497,11 @@ window.saveScheduleConfig = function (type) {
   );
 };
 
-window.generateTimeSlots = function () {
-  const dateInput = document.getElementById('bookingDate');
-  const container = document.getElementById('timeSlotsContainer');
-
-  if (!dateInput || !dateInput.value) return;
-
-  // FORZAMOS a que busque siempre la configuración de "onboarding" (Primera vez)
-  // cuando alguien entra desde el link público.
-  const type = typeof isPublicBooking !== 'undefined' && isPublicBooking ? 'onboarding' : 'followup';
-
-  // Leemos los datos guardados en el localStorage de tu navegador
-  const configString = localStorage.getItem(`pp_schedule_${type}`);
-
-  if (!configString) {
-    container.innerHTML = `<p class="col-span-3 text-[10px] text-red-500 text-center py-4">Error: El administrador aún no guardó los horarios de disponibilidad.</p>`;
-    return;
-  }
-
-  const config = JSON.parse(configString);
-
-  // ARREGLO DE ZONA HORARIA: Evitamos que el día cambie por culpa del GMT
-  // Leemos la fecha exacta que seleccionó el usuario (ej: 2026-08-15)
-  const [year, month, day] = dateInput.value.split('-');
-  // Creamos una fecha local a las 12 del mediodía para que nunca cambie de día por el timezone
-  const selectedDateLocal = new Date(year, month - 1, day, 12, 0, 0);
-  const dayOfWeek = selectedDateLocal.getDay(); // 0=Dom, 1=Lun, etc.
-
-  if (!config.days || !config.days.includes(dayOfWeek)) {
-    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No atendemos este día de la semana. Por favor, selecciona otro.</p>`;
-    return;
-  }
-
-  // Calcular el intervalo: 60 min para primera vez, 45 min para seguimiento
-  const intervalMinutes = type === 'onboarding' ? 60 : 45;
-
-  const slots = [];
-  // Creamos fechas ficticias solo para poder sumar los minutos fácilmente
-  let current = new Date(`2000-01-01T${config.start}:00`);
-  const end = new Date(`2000-01-01T${config.end}:00`);
-
-  while (current < end) {
-    const hours = current.getHours().toString().padStart(2, '0');
-    const minutes = current.getMinutes().toString().padStart(2, '0');
-
-    const nextSlot = new Date(current.getTime() + intervalMinutes * 60000);
-
-    // Solo mostramos el turno si el bloque entero entra antes de la hora de fin
-    if (nextSlot <= end) {
-      slots.push(`${hours}:${minutes}`);
-    }
-
-    current = new Date(current.getTime() + intervalMinutes * 60000);
-  }
-
-  if (slots.length === 0) {
-    container.innerHTML = `<p class="col-span-3 text-[10px] text-gray-500 text-center py-4">No quedan horarios disponibles en este día.</p>`;
-    return;
-  }
-
-  // Mostramos los botones en pantalla
-  container.innerHTML = slots
-    .map(
-      (time) => `
-        <button data-click="selectTime" data-time="${escapeAttr(time)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white hover:border-neonRed hover:text-neonRed transition">
-            ${time}
-        </button>
-    `,
-    )
-    .join('');
-};
-
-window.selectTime = function (time) {
-  selectedTime = time; // Guarda la hora que elegiste
-  selectedDate = document.getElementById('bookingDate').value; // Guarda la fecha
-  bookingStep = 3; // Nos manda al Paso 3 de confirmación
-  window.renderPublicBooking(); // Actualiza la pantalla
+window.selectTime = function (time, fechaElegida) {
+  selectedTime = time;
+  selectedDate = fechaElegida || document.getElementById('bookingDate')?.value || '';
+  bookingStep = 3;
+  window.renderPublicBooking();
 };
 
 function irAPasoReservaPublica(paso) {
@@ -595,13 +527,12 @@ registrarAcciones({
   irAPasoTurnos: (el) => irAPasoTurnos(Number(el.dataset.paso)),
   validateBookingStep1: () => window.validateBookingStep1(),
   generateTimeSlots: () => window.generateTimeSlots(),
-  selectTime: (el) => window.selectTime(el.dataset.time),
+  selectTime: (el) => window.selectTime(el.dataset.time, el.dataset.fecha),
+  ofertaDesplegar: (el) => alternarDia(el),
   confirmAppBooking: (el, e) => window.confirmAppBooking(e),
   saveAppWebhookUrl: () => window.saveAppWebhookUrl(),
   clearAppBookings: () => window.clearAppBookings(),
   recargarPagina: () => window.location.reload(),
-  // generateAppTimeSlots no existe (error previo de la agenda interna, pendiente de revisar):
-  // se mantiene la misma llamada que hacía el onchange inline.
-  // eslint-disable-next-line no-undef
-  generateAppTimeSlots: () => generateAppTimeSlots('internal'),
+  generateAppTimeSlots: () => window.generateAppTimeSlots(),
+  elegirTurno: (el) => elegirTurno(el),
 });

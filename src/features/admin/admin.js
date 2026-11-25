@@ -4,7 +4,7 @@ import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { supaClient } from '../../lib/supabase.js';
 import { state } from '../../state.js';
-import { renderAdminLlamadas } from '../reservas/reservas.js';
+import { montarAgenda } from '../reservas/agendaVista.js';
 import { checkAndSendExpirationEmails } from './vencimientos.js';
 
 let adminSubTab = 'asignacion';
@@ -34,6 +34,7 @@ export async function renderTabAdmin(content) {
         <div id="admin-sub-content">${renderAdminSubTab()}</div>
       </div>
     `;
+  pintarAgenda();
 }
 
 // ---------- SUB-TABS DEL ADMIN ----------
@@ -43,8 +44,14 @@ export async function loadAdminData() {
 }
 
 function renderAdminSubTab() {
-  if (adminSubTab === 'llamadas') return renderAdminLlamadas();
+  if (adminSubTab === 'llamadas') return '<div data-agenda-raiz></div>';
   return renderAdminAsignacion();
+}
+
+function pintarAgenda() {
+  if (adminSubTab !== 'llamadas') return;
+  const contenedor = document.querySelector('#admin-sub-content [data-agenda-raiz]');
+  if (contenedor) montarAgenda(contenedor);
 }
 
 function renderAdminAsignacion() {
@@ -80,6 +87,7 @@ function switchAdminSubTab(tab) {
   });
   const container = document.getElementById('admin-sub-content');
   if (container) container.innerHTML = renderAdminSubTab();
+  pintarAgenda();
 }
 
 function renderAlumnos() {
