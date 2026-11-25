@@ -1,9 +1,13 @@
 // Sesión: escucha los eventos de Supabase Auth (login, logout, recuperación de
 // contraseña), revisa si ya hay sesión al cargar y carga los datos del usuario.
 import { renderLanding, renderPasswordUpdate } from './features/auth/auth.js';
+import { crearRepoLlamadas } from './features/reservas/llamadasRepo.js';
+import { conectarLlamadas } from './features/reservas/llamadasSync.js';
 import { supaClient } from './lib/supabase.js';
 import { renderApp } from './shell.js';
 import { state } from './state.js';
+
+conectarLlamadas(crearRepoLlamadas(supaClient));
 
 export function iniciarSesion() {
   // Listener global de sesión: login, logout y recuperación de contraseña

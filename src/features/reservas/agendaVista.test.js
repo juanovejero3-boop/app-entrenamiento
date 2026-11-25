@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../lib/acciones.js';
 import '../../lib/ui.js';
 import { montarAgenda } from './agendaVista.js';
+import { conectarLlamadas, guardarScriptRemoto } from './llamadasSync.js';
 import { guardarAgenda, leerAgenda, reservar } from './reservaLocal.js';
 
 const SABADO = '2026-11-21';
@@ -16,6 +17,7 @@ beforeEach(() => {
 afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
+  conectarLlamadas(null);
 });
 
 const $ = (selector) => raiz.querySelector(selector);
@@ -37,6 +39,21 @@ function anotar(hora) {
 }
 
 describe('agenda de prueba', () => {
+  it('sin script guardado no deja generar llamadas', async () => {
+    await guardarScriptRemoto('', '');
+    conectarLlamadas({
+      async leer() {
+        throw new Error('sin datos');
+      },
+    });
+
+    montarAgenda(raiz);
+
+    expect(raiz.querySelector('[data-sin-script]').textContent).toContain('Cargá tu script');
+    expect(raiz.querySelector('[data-click="agendaGenerar"]')).toBeNull();
+    expect(raiz.querySelector('#agenda-script')).not.toBeNull();
+  });
+
   it('la fecha abre el calendario y el rango, la duración y el descanso son listas', () => {
     montarAgenda(raiz);
     const fecha = $('[data-change="agendaFecha"]');

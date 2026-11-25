@@ -15,6 +15,8 @@ Este directorio contiene las migraciones de la base de datos, versionadas y orde
 | `migrations/20261102000000_realtime_entrenamiento.sql` | Suma `training_set_logs` y `training_sessions` a la publicación `supabase_realtime`, para que el entrenador vea en vivo lo que completa el alumno. Idempotente |
 | `migrations/20261108000000_nutrition_plans.sql` | Nutrición: `nutrition_plans` (un plan de alimentación por alumno, en jsonb, con `published`: el coach lo prepara y lo muestra; el alumno solo lee el suyo si está publicado), con RLS. Se prueba en `src/features/nutricion/esquemaNutricion.test.js` (PGlite). **Aplicarla en Supabase antes de desplegar la app que la usa** |
 | `migrations/20261108000001_nutrition_foods.sql` | Nutrición: `nutrition_foods`, la biblioteca de alimentos compartida por todos los coaches (nombre único por categoría), con RLS: solo los admins la ven y la escriben. Se prueba en `src/features/nutricion/esquemaAlimentos.test.js` (PGlite). **Aplicarla en Supabase antes de desplegar la app que la usa** |
+| `migrations/20261125000000_llamadas.sql` | Llamadas: `call_openings` (días que abre el coach), `call_bookings` (turnos, un email por día, sin pisarse) y `group_calls` (la grupal con su enlace). El coach ve teléfono y WhatsApp; el alumno ve su turno y la grupal; quien reserva sin cuenta solo ve los huecos de la primera llamada. Se prueba en `src/features/reservas/esquemaLlamadas.test.js` (PGlite). **Aplicarla en Supabase antes de usar las llamadas entre dispositivos** |
+| `migrations/20261125010000_llamadas_script.sql` | El script de Google Calendar del coach (`call_settings`): lo leen la primera llamada y el seguimiento para agendar el evento con el mail del alumno y el del coach. **Aplicarla en Supabase** |
 
 ## Convención
 

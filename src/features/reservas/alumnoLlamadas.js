@@ -16,6 +16,7 @@ import {
   reservar,
   textoFecha,
 } from './reservaLocal.js';
+import { anotarTurnoRemoto, avisarCalendario, soltarTurnoRemoto, traerLlamadas } from './llamadasSync.js';
 
 /** @type {HTMLElement | null} */
 let contenido = null;
@@ -133,6 +134,9 @@ export function renderTabLlamadas(content) {
   aviso = '';
   listo = false;
   dibujar();
+  traerLlamadas().then((trajo) => {
+    if (trajo && contenido === content) dibujar();
+  });
 }
 
 registrarAcciones({
@@ -166,10 +170,20 @@ registrarAcciones({
       return;
     }
     guardarAgenda(jornadas, resultado.turnos);
+    const turno = resultado.turnos.at(-1);
+    const jornada = jornadas.find((j) => j.agendaId === 'seguimiento' && j.fecha === turno.fecha);
     elegido = null;
     aviso = '';
     listo = true;
     dibujar();
+    anotarTurnoRemoto(turno, jornada)
+      .then(() => avisarCalendario(turno, jornada))
+      .catch(() => {
+        const ahora = leerAgenda();
+        guardarAgenda(ahora.jornadas, cancelarTurno(ahora.turnos, turno));
+        alert('No se pudo guardar el turno. Probá de nuevo.');
+        dibujar();
+      });
   },
   alumnoDesplegar: (el) => alternarDia(el),
   llamadaCancelar: async (el) => {
@@ -178,9 +192,11 @@ registrarAcciones({
     const ok = await window.confirm(`¿Cancelar el turno del ${textoFecha(fecha)} a las ${hora}?`);
     if (!ok) return;
     const { jornadas, turnos } = leerAgenda();
-    guardarAgenda(jornadas, cancelarTurno(turnos, { agendaId: 'seguimiento', fecha, hora }));
+    const clave = { agendaId: 'seguimiento', fecha, hora };
+    guardarAgenda(jornadas, cancelarTurno(turnos, clave));
     elegido = null;
     listo = false;
     dibujar();
+    soltarTurnoRemoto(clave).catch(() => alert('No se pudo cancelar el turno.'));
   },
 });

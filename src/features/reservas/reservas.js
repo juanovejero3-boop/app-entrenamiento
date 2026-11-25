@@ -4,6 +4,7 @@ import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
+import { anotarTurnoRemoto, avisarCalendario, traerLlamadas } from './llamadasSync.js';
 import { alternarDia, AVISO_RESERVA, estadoDelDia, guardarAgenda, leerAgenda, ofertaDisponible, reservar, textoFecha } from './reservaLocal.js';
 
 window.APP_SCHEDULE = {
@@ -76,9 +77,10 @@ function htmlOfertaPrimera() {
     .join('')}</div>`;
 }
 
-function startPublicBooking() {
+async function startPublicBooking() {
   selectedService = { name: 'Evaluación Inicial & Onboarding', duration: 45 };
   bookingStep = 1; // ESTO FUERZA A QUE ARRANQUE EN EL PASO 1 SÍ O SÍ
+  await traerLlamadas();
   window.renderPublicBooking();
 }
 
@@ -375,7 +377,7 @@ window.selectAppTimeSlot = function (btnEl, slot) {
   document.getElementById('btnToStep3').disabled = false;
 };
 
-window.confirmAppBooking = function (e) {
+window.confirmAppBooking = async function (e) {
   if (e) e.preventDefault();
   const btn = document.getElementById('b-submit');
   if (btn) {
@@ -407,15 +409,21 @@ window.confirmAppBooking = function (e) {
   }
 
   guardarAgenda(jornadas, resultado.turnos);
-
-  if (webhookUrl) {
-    fetch(webhookUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(resultado.turnos.at(-1)),
-    }).catch(() => {});
+  const turno = resultado.turnos.at(-1);
+  const jornada = jornadas.find((j) => j.agendaId === turno.agendaId && j.fecha === turno.fecha);
+  try {
+    await anotarTurnoRemoto(turno, jornada);
+  } catch {
+    guardarAgenda(jornadas, turnos);
+    alert('No se pudo guardar el turno. Probá de nuevo.');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Agendar llamada';
+    }
+    return;
   }
+
+  await avisarCalendario(turno, jornada);
 
   bookingStep = 4;
   if (isPublicBooking) window.renderPublicBooking();
@@ -504,7 +512,8 @@ window.selectTime = function (time, fechaElegida) {
   window.renderPublicBooking();
 };
 
-function irAPasoReservaPublica(paso) {
+async function irAPasoReservaPublica(paso) {
+  if (paso === 2) await traerLlamadas();
   bookingStep = paso;
   window.renderPublicBooking();
 }

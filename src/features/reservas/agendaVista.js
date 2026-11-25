@@ -3,6 +3,7 @@
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import '../../lib/ui.js';
+import { state } from '../../state.js';
 import { valoresIniciales } from './agendas.js';
 import {
   alternarDia,
@@ -18,6 +19,16 @@ import {
   publicarGrupal,
   textoFecha,
 } from './reservaLocal.js';
+import {
+  cancelarGrupalRemoto,
+  guardarJornadasRemotas,
+  guardarScriptRemoto,
+  publicarGrupalRemoto,
+  soltarTurnoRemoto,
+  scriptListo,
+  traerLlamadas,
+  urlScript,
+} from './llamadasSync.js';
 
 const claseInput =
   'w-full bg-cyberDark border border-gray-700 rounded-lg p-2 text-sm text-white outline-none focus:border-neonRed';
@@ -53,6 +64,7 @@ let fechaHasta = '';
 let fechaGrupal = '';
 let horaGrupal = '19:00';
 let avisoGrupal = '';
+let scriptEscrito = localStorage.getItem('pp_webhook_url') || '';
 /** @type {{ desde: string, hasta: string, duracionMin: number, descansoMin: number }} */
 let borrador = { desde: '08:30', hasta: '19:30', duracionMin: 30, descansoMin: 30 };
 
@@ -79,7 +91,8 @@ function filaTurno(t) {
   const de = jornadas.find((j) => j.agendaId === t.agendaId && j.fecha === t.fecha);
   const tipoNombre = tipo[t.agendaId]?.nombre ?? '';
   const quien = t.nombre || 'Ocupado';
-  return `<li data-ocupado="${esc(t.hora)}" class="flex items-center justify-between gap-2 text-xs text-gray-300"><span><b class="text-white">${esc(t.hora)}</b> ${esc(quien)} hasta ${de ? esc(finDelBloque(de, t.hora)) : ''} · ${esc(tipoNombre)}</span><button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="text-red-400 font-bold">Cancelar</button></li>`;
+  const contacto = [t.telefono, t.email].filter(Boolean).join(' · ');
+  return `<li data-ocupado="${esc(t.hora)}" class="flex items-center justify-between gap-2 text-xs text-gray-300"><span><b class="text-white">${esc(t.hora)}</b> ${esc(quien)}${contacto ? ` · ${esc(contacto)}` : ''} hasta ${de ? esc(finDelBloque(de, t.hora)) : ''} · ${esc(tipoNombre)}</span><button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="text-red-400 font-bold">Cancelar</button></li>`;
 }
 
 function huecosHtml(horas) {
@@ -171,6 +184,8 @@ function tomarBorrador(origen) {
 
 function dibujar() {
   if (!raiz || !tipo) return;
+  const campoScript = raiz.querySelector('#agenda-script');
+  if (campoScript) scriptEscrito = campoScript.value;
   const esPrimera = agendaId === 'primera';
   const fechas = esPrimera
     ? `<div class="grid grid-cols-2 gap-2">
@@ -184,7 +199,20 @@ function dibujar() {
         <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda</h2>
         <p class="text-xs text-gray-400">${esPrimera ? 'Elegí desde qué día hasta qué día, y el horario. Generar abre todos esos días.' : 'Elegí el día y el horario. Generar publica esos horarios en este navegador.'}</p>
       </div>
-      <div class="flex gap-2">
+      <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+        <div>
+          <h3 class="text-sm font-black text-white uppercase">Calendario</h3>
+          <p class="text-[11px] text-gray-500">El script del coach. Al reservar, agenda la llamada para el alumno y para este mail.</p>
+        </div>
+        <label class="block text-[10px] text-gray-400 uppercase font-bold">URL del script<input id="agenda-script" type="url" value="${esc(scriptEscrito)}" placeholder="https://script.google.com/macros/..." class="${claseInput}"></label>
+        <button type="button" data-click="agendaGuardarScript" class="w-full py-2 rounded-lg border border-gray-700 text-xs font-bold uppercase text-white">Guardar script</button>
+      </div>
+      ${
+        scriptListo()
+          ? ''
+          : '<p data-sin-script class="text-sm text-amber-300 bg-cyberCard border border-gray-800 rounded-xl p-4">Cargá tu script para poder generar llamadas.</p>'
+      }
+      ${scriptListo() ? `<div class="flex gap-2">
         ${Object.values(tipo)
           .map(
             (a) => `
@@ -206,23 +234,34 @@ function dibujar() {
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         ${panelDias()}
       </div>
-      ${panelGrupal()}
+      ${panelGrupal()}` : ''}
     </div>`;
+}
+
+function cargarLocal() {
+  const agenda = leerAgenda();
+  jornadas = agenda.jornadas;
+  turnos = agenda.turnos;
 }
 
 /** Muestra la agenda de prueba dentro de `contenedor`. */
 export function montarAgenda(contenedor) {
   raiz = contenedor;
   tipo = valoresIniciales();
-  const agenda = leerAgenda();
-  jornadas = agenda.jornadas;
-  turnos = agenda.turnos;
+  cargarLocal();
   agendaId = 'seguimiento';
   fecha = '';
   fechaDesde = '';
   fechaHasta = '';
   tomarBorrador(tipo.seguimiento);
   dibujar();
+  const esta = contenedor;
+  traerLlamadas().then((trajo) => {
+    if (!trajo || raiz !== esta) return;
+    if (urlScript()) scriptEscrito = urlScript();
+    cargarLocal();
+    dibujar();
+  });
 }
 
 function campoNumero(valor, anterior) {
@@ -271,16 +310,34 @@ registrarAcciones({
     }
     guardar();
     dibujar();
+    guardarJornadasRemotas(jornadas).catch(() => alert('No se pudieron publicar los horarios.'));
   },
   agendaDesplegar: (el) => alternarDia(el),
   agendaSoltar: (el) => {
-    turnos = cancelarTurno(turnos, {
+    const clave = {
       agendaId: el.dataset.agenda,
       fecha: el.dataset.fecha || fecha,
       hora: el.dataset.hora,
-    });
+    };
+    turnos = cancelarTurno(turnos, clave);
     guardar();
     dibujar();
+    soltarTurnoRemoto(clave).catch(() => alert('No se pudo cancelar el turno.'));
+  },
+  agendaGuardarScript: async () => {
+    const url = raiz?.querySelector('#agenda-script')?.value.trim() || '';
+    scriptEscrito = url;
+    if (!url) {
+      alert('Pegá la URL del script.');
+      return;
+    }
+    try {
+      await guardarScriptRemoto(url, state.currentUser?.email || '');
+      dibujar();
+      alert('Script guardado. Las reservas nuevas lo usan para agendar.');
+    } catch {
+      alert('No se pudo guardar el script.');
+    }
   },
   grupalFecha: (el) => {
     fechaGrupal = el.value;
@@ -303,6 +360,7 @@ registrarAcciones({
     avisoGrupal = '';
     guardarGrupales(resultado.grupales);
     dibujar();
+    publicarGrupalRemoto(resultado.grupales.at(-1)).catch(() => alert('No se pudo publicar la llamada grupal.'));
   },
   grupalCancelar: async (el) => {
     const ok = await window.confirm(
@@ -311,5 +369,6 @@ registrarAcciones({
     if (!ok) return;
     guardarGrupales(cancelarGrupal(leerGrupales(), el.dataset.id));
     dibujar();
+    cancelarGrupalRemoto(el.dataset.id).catch(() => alert('No se pudo cancelar la llamada grupal.'));
   },
 });
