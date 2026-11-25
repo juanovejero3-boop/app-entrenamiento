@@ -23,6 +23,10 @@ import {
   eliminarPrioridad,
   eliminarSemana,
   etiquetasSuperserie,
+  fijarIntensidadDeSerie,
+  cambiarEjercicio,
+  intensidadesDe,
+  textoIntensidad,
   fechasDeSemana,
   generarEstructura,
   normalizarPlan,
@@ -470,6 +474,7 @@ describe('normalizarPlan', () => {
       reps: '10',
       intensityType: 'RIR',
       intensityValue: '',
+      intensidadPorSerie: [],
       tech: '',
       rest: '',
       notes: '',
@@ -735,5 +740,51 @@ describe('semanaActual', () => {
   it('sin fecha de inicio o sin semanas devuelve 0', () => {
     expect(semanaActual(plan(''), '2026-10-20')).toBe(0);
     expect(semanaActual(plan('2026-10-19', 0), '2026-10-20')).toBe(0);
+  });
+});
+
+describe('intensidad por serie y cambiar ejercicio', () => {
+  const con = (cambios) => actualizarEjercicio(planChico(), 0, 0, 0, 0, cambios);
+  const ejDe = (plan) => plan.weeks[0].days[0].blocks[0].exercises[0];
+
+  it('con series enteras hay un valor por serie para RPE, RIR y %RM', () => {
+    expect(intensidadesDe(ejDe(con({ intensityType: 'RPE', sets: '3', intensityValue: '8' })))).toEqual(['8', '8', '8']);
+    expect(intensidadesDe(ejDe(con({ intensityType: 'RIR', sets: '3', intensityValue: '2' })))).toEqual(['2', '2', '2']);
+    expect(intensidadesDe(ejDe(con({ intensityType: '%RM', sets: '2', intensityValue: '80' })))).toEqual(['80', '80']);
+    expect(textoIntensidad(ejDe(con({ intensityType: 'RIR', sets: '3', intensityValue: '2' })))).toBe('RIR 2');
+  });
+
+  it('un rango de series no se parte', () => {
+    const rango = ejDe(con({ intensityType: '%RM', sets: '3-4', intensityValue: '75' }));
+    expect(intensidadesDe(rango)).toEqual([]);
+    expect(textoIntensidad(rango)).toBe('%RM 75');
+  });
+
+  it('fijar la intensidad de una serie deja las demás y el texto las muestra distintas', () => {
+    const plan = fijarIntensidadDeSerie(con({ intensityType: 'RIR', sets: '3', intensityValue: '3' }), 0, 0, 0, 0, 2, '1');
+    const ej = ejDe(plan);
+    expect(ej.intensidadPorSerie).toEqual(['3', '3', '1']);
+    expect(ej.sets).toBe('3');
+    expect(textoIntensidad(ej)).toBe('RIR 3 · 3 · 1');
+  });
+
+  it('cambiar el ejercicio solo cambia el nombre', () => {
+    const base = con({ name: 'Press banca', sets: '4', reps: '8', rest: '90s', intensityType: '%RM', intensityValue: '80' });
+    const conSerie = fijarIntensidadDeSerie(base, 0, 0, 0, 0, 1, '75');
+    const plan = cambiarEjercicio(conSerie, 0, 0, 0, 0, 'Press inclinado');
+    expect(ejDe(plan)).toMatchObject({
+      name: 'Press inclinado',
+      sets: '4',
+      reps: '8',
+      rest: '90s',
+      intensidadPorSerie: ['80', '75', '80', '80'],
+    });
+  });
+
+  it('normalizar conserva la intensidad por serie y lee el nombre viejo rpePorSerie', () => {
+    const plan = normalizarPlan({
+      weeks: [{ days: [{ blocks: [{ exercises: [{ name: 'Press', sets: '2', intensityType: 'RPE', rpePorSerie: ['8', '6'] }] }] }] }],
+    });
+    expect(ejDe(plan).intensidadPorSerie).toEqual(['8', '6']);
   });
 });

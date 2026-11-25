@@ -15,6 +15,10 @@ import {
   actualizarBloque,
   actualizarDia,
   actualizarEjercicio,
+  cambiarEjercicio,
+  fijarIntensidadDeSerie,
+  intensidadesDe,
+  textoIntensidad,
   actualizarPrioridad,
   actualizarReporte,
   actualizarSemana,
@@ -76,6 +80,8 @@ export async function abrirConstructorDePlanes(content, alumno, { cicloId, alVol
 
 const ID_CATALOGO = 'ejercicios-catalogo';
 let catalogo = null;
+/** Ejercicio cuyo nombre se está eligiendo de la biblioteca. El resto de la prescripción no se toca. */
+let cambio = null;
 
 async function prepararCatalogoEjercicios() {
   if (document.getElementById(ID_CATALOGO)) return;
@@ -84,6 +90,47 @@ async function prepararCatalogoEjercicios() {
   document.body.appendChild(lista);
   catalogo ??= (await import('../../../data/exercises.json')).default;
   lista.innerHTML = catalogo.map((ej) => `<option value="${esc(ej.n)}"></option>`).join('');
+}
+
+const CLASE_CAMPO =
+  'w-full bg-black border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed';
+
+/** El valor único, o un campo de RPE por serie cuando las series son un número. */
+function controlesIntensidad(ej, pos) {
+  const valores = intensidadesDe(ej);
+  if (!valores.length) {
+    return `<input data-change="ejercicioCampo" ${pos} data-campo="intensityValue" value="${esc(ej.intensityValue)}" placeholder="2" class="${CLASE_CAMPO}">`;
+  }
+  return `<div class="grid grid-cols-3 gap-1">${valores
+    .map(
+      (valor, i) =>
+        `<label class="min-w-0"><span class="block text-[9px] text-gray-500 uppercase">S${i + 1}</span><input data-change="ejercicioIntensidad" ${pos} data-i="${i}" value="${esc(valor)}" inputmode="decimal" class="${CLASE_CAMPO}"></label>`,
+    )
+    .join('')}</div>`;
+}
+
+function refrescarIntensidad(w, d, b, e) {
+  const caja = actual.content.querySelector(`[data-ejercicio="${w}-${d}-${b}-${e}"] [data-intensidad]`);
+  if (!caja) return;
+  const ej = actual.plan.weeks[w].days[d].blocks[b].exercises[e];
+  caja.innerHTML = controlesIntensidad(ej, `data-w="${w}" data-d="${d}" data-b="${b}" data-e="${e}"`);
+}
+
+function opcionesDeCambio() {
+  const q = (cambio?.q ?? '').trim().toLowerCase();
+  const lista = (catalogo ?? []).filter((ej) => !q || String(ej.n).toLowerCase().includes(q)).slice(0, 12);
+  if (!lista.length) return '<p class="text-[10px] text-gray-500 px-1">Nada con ese nombre.</p>';
+  return lista
+    .map(
+      (ej) =>
+        `<button type="button" data-click="ejercicioElegir" data-nombre="${esc(ej.n)}" class="block w-full text-left text-xs text-gray-200 px-2 py-1.5 rounded hover:bg-black">${esc(ej.n)}</button>`,
+    )
+    .join('');
+}
+
+function pintarOpcionesCambio() {
+  const lista = actual?.content?.querySelector('[data-cambiar-lista]');
+  if (lista) lista.innerHTML = opcionesDeCambio();
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +207,7 @@ function dibujar() {
       ${plan ? `<button data-click="semanaAgregar" class="w-full py-3 bg-cyberCard border-2 border-dashed border-gray-700 text-gray-400 font-bold text-xs rounded-xl uppercase tracking-wider hover:border-neonRed hover:text-neonRed transition"><i class="fa-solid fa-plus mr-2"></i>Agregar semana</button>` : ''}
     </div>
   `;
+  pintarOpcionesCambio();
 }
 
 function dibujarBotonesPdf() {
@@ -414,7 +462,8 @@ function resumenDelDia(dia) {
 /** "4 × 8-10 · RIR 2": los datos principales de un ejercicio plegado. */
 function resumenDelEjercicio(ej) {
   const cargado = [ej.sets || '-', ej.reps || '-'].join(' × ');
-  return ej.intensityValue ? `${cargado} · ${ej.intensityType} ${ej.intensityValue}` : cargado;
+  const intensidad = textoIntensidad(ej);
+  return intensidad ? `${cargado} · ${intensidad}` : cargado;
 }
 
 /**
@@ -507,11 +556,13 @@ function dibujarDia(dia, w, d) {
   const abierto = actual.diasAbiertos.has(dia.id);
   return `
     <div data-dia="${w}-${d}" data-dia-id="${esc(dia.id)}" class="scroll-mt-32 bg-cyberDark rounded-lg border border-gray-800 p-3 space-y-2">
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <button type="button" data-click="diaToggle" data-w="${w}" data-d="${d}" aria-expanded="${abierto}" title="Plegar o desplegar el día" class="shrink-0 px-1 text-gray-300 hover:text-neonRed">${flecha(abierto)}</button>
-        <input data-change="diaCampo" data-w="${w}" data-d="${d}" value="${esc(dia.name)}" class="flex-1 min-w-0 bg-transparent text-white font-bold text-sm outline-none border-b border-transparent focus:border-neonRed">
-        <button data-click="diaPropagar" data-w="${w}" data-d="${d}" title="Copiar este día a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
-        <button data-click="diaEliminar" data-w="${w}" data-d="${d}" class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-trash"></i></button>
+        <input data-change="diaCampo" data-w="${w}" data-d="${d}" value="${esc(dia.name)}" class="flex-1 min-w-[6rem] bg-transparent text-white font-bold text-sm outline-none border-b border-transparent focus:border-neonRed">
+        <div class="flex gap-1">
+          <button data-click="diaPropagar" data-w="${w}" data-d="${d}" title="Copiar este día a las semanas siguientes" class="${claseBotonChico} border-sky-800 text-sky-400 hover:bg-sky-950">Propagar ➔</button>
+          <button data-click="diaEliminar" data-w="${w}" data-d="${d}" class="${claseBotonChico} border-red-900 text-red-400 hover:bg-red-950"><i class="fa-solid fa-trash"></i></button>
+        </div>
       </div>
       <p data-dia-resumen="${w}-${d}" class="text-[10px] text-gray-400 pl-7">${esc(resumenDelDia(dia))}</p>
       <div data-dia-cuerpo ${abierto ? '' : 'hidden'} class="space-y-2">
@@ -530,10 +581,10 @@ function dibujarBloque(bloque, w, d, b) {
   const pos = `data-w="${w}" data-d="${d}" data-b="${b}"`;
   const etiquetas = etiquetasSuperserie(bloque);
   return `
-    <div data-bloque="${w}-${d}-${b}" class="bg-cyberCard rounded p-2 space-y-2 border-l-4" style="border-left-color: ${esc(tipo.color)}">
-      <div class="flex items-center justify-between gap-2">
-        <select data-change="bloqueCampo" ${pos} data-campo="type" class="bg-transparent font-bold text-xs outline-none" style="color: ${esc(tipo.color)}">${opciones}</select>
-        <div class="flex shrink-0 flex-wrap justify-end gap-1">
+    <div data-bloque="${w}-${d}-${b}" class="min-w-0 bg-cyberCard rounded p-2 space-y-2 border-l-4" style="border-left-color: ${esc(tipo.color)}">
+      <div class="space-y-2">
+        <select data-change="bloqueCampo" ${pos} data-campo="type" class="max-w-full bg-transparent font-bold text-xs outline-none" style="color: ${esc(tipo.color)}">${opciones}</select>
+        <div class="flex flex-wrap gap-1">
           <button type="button" data-click="bloqueAntes" ${pos} title="Agregar un bloque antes" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Antes</button>
           <button type="button" data-click="bloqueDespues" ${pos} title="Agregar un bloque después" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Después</button>
           <button data-click="bloqueEliminar" ${pos} class="text-[10px] text-red-400 hover:text-red-300 uppercase font-bold">Quitar bloque</button>
@@ -553,22 +604,32 @@ const opcionesDe = (valores, actualValor, vacio) =>
 function dibujarEjercicio(ej, w, d, b, e, etiqueta, cantidad) {
   const pos = `data-w="${w}" data-d="${d}" data-b="${b}" data-e="${e}"`;
   const campo = (nombre) => `data-change="ejercicioCampo" ${pos} data-campo="${nombre}"`;
-  const claseCampo =
-    'w-full bg-black border border-gray-700 rounded p-1.5 text-xs text-white outline-none focus:border-neonRed';
+  const claseCampo = CLASE_CAMPO;
+  const eligiendo = cambio && cambio.w === w && cambio.d === d && cambio.b === b && cambio.e === e;
   const descansos = ['', ...DESCANSOS];
   const color = GRUPOS_SUPERSERIE[ej.group] ?? '#9ca3af';
   const grupos = ['', ...Object.keys(GRUPOS_SUPERSERIE)];
   const abierto = actual.ejerciciosAbiertos.has(ej.id);
   return `
-    <div data-ejercicio="${w}-${d}-${b}-${e}" data-ej-id="${esc(ej.id)}" class="bg-cyberDark rounded p-2 space-y-2 border ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${color}"` : ''}>
-      <div class="flex items-center gap-2">
+    <div data-ejercicio="${w}-${d}-${b}-${e}" data-ej-id="${esc(ej.id)}" class="min-w-0 bg-cyberDark rounded p-2 space-y-2 border ${ej.group ? 'border-dashed' : 'border-gray-800'}" ${ej.group ? `style="border-color: ${color}"` : ''}>
+      <div class="flex items-center gap-2 min-w-0">
         <button type="button" data-click="ejercicioToggle" ${pos} aria-expanded="${abierto}" title="Plegar o desplegar el ejercicio" class="shrink-0 px-1 text-gray-300 hover:text-neonRed">${flecha(abierto)}</button>
         ${etiqueta ? `<span data-etiqueta class="shrink-0 min-w-[2rem] text-center text-xs font-black px-1.5 py-1 rounded" style="color: ${color}; background: ${color}22; border: 1px solid ${color}">${esc(etiqueta)}</span>` : ''}
-        <input ${campo('name')} list="${ID_CATALOGO}" value="${esc(ej.name)}" placeholder="Nombre del ejercicio" class="${claseCampo} font-bold">
+        <input ${campo('name')} list="${ID_CATALOGO}" value="${esc(ej.name)}" placeholder="Nombre del ejercicio" class="${claseCampo} !w-auto min-w-0 flex-1 font-bold">
       </div>
-      <div class="flex items-center justify-between gap-2 pl-7">
-        <p data-ej-resumen class="text-[10px] text-gray-400">${esc(resumenDelEjercicio(ej))}</p>
-        <div class="flex shrink-0 flex-wrap justify-end gap-1">
+      ${
+        eligiendo
+          ? `<div data-cambiar class="space-y-1 rounded-lg border border-gray-700 bg-black p-2">
+              <input data-input="ejercicioBuscar" value="${esc(cambio.q)}" placeholder="Buscar en la biblioteca" class="${claseCampo}">
+              <div data-cambiar-lista class="max-h-40 overflow-y-auto"></div>
+              <button type="button" data-click="ejercicioCancelarCambio" class="text-[10px] uppercase tracking-wider text-gray-400 hover:text-white">Cerrar</button>
+            </div>`
+          : ''
+      }
+      <p data-ej-resumen class="text-[11px] leading-snug text-gray-400 pl-7">${esc(resumenDelEjercicio(ej))}</p>
+      <div class="pl-7">
+        <div class="flex flex-wrap gap-1">
+          <button type="button" data-click="ejercicioCambiar" ${pos} title="Elegir otro ejercicio y conservar series, reps, descanso e intensidad" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">Cambiar</button>
           <button type="button" data-click="ejercicioSubir" ${pos} ${e === 0 ? 'disabled' : ''} title="Subir" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed disabled:opacity-30"><i class="fa-solid fa-arrow-up"></i></button>
           <button type="button" data-click="ejercicioBajar" ${pos} ${e === cantidad - 1 ? 'disabled' : ''} title="Bajar" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed disabled:opacity-30"><i class="fa-solid fa-arrow-down"></i></button>
           <button type="button" data-click="ejercicioAntes" ${pos} title="Agregar un ejercicio antes" class="${claseBotonChico} border-gray-600 text-gray-300 hover:border-neonRed hover:text-neonRed">+ Antes</button>
@@ -581,18 +642,18 @@ function dibujarEjercicio(ej, w, d, b, e, etiqueta, cantidad) {
       <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
         <label><span class="text-[9px] text-gray-500 uppercase">Series</span><input ${campo('sets')} value="${esc(ej.sets)}" class="${claseCampo}"></label>
         <label><span class="text-[9px] text-gray-500 uppercase">Reps</span><input ${campo('reps')} value="${esc(ej.reps)}" class="${claseCampo}"></label>
-        <label class="col-span-2 md:col-span-1"><span class="text-[9px] text-gray-500 uppercase">Intensidad</span>
-          <div class="flex gap-1">
-            <select ${campo('intensityType')} class="${claseCampo} !w-auto">${opcionesDe(TIPOS_INTENSIDAD, ej.intensityType)}</select>
-            <input ${campo('intensityValue')} value="${esc(ej.intensityValue)}" placeholder="2" class="${claseCampo}">
+        <label class="col-span-2"><span class="text-[9px] text-gray-500 uppercase">Intensidad</span>
+          <div class="mt-0.5 flex flex-col gap-1">
+            <select ${campo('intensityType')} class="${claseCampo}">${opcionesDe(TIPOS_INTENSIDAD, ej.intensityType)}</select>
+            <div data-intensidad class="min-w-0">${controlesIntensidad(ej, pos)}</div>
           </div>
         </label>
         <label><span class="text-[9px] text-gray-500 uppercase">Descanso</span><select ${campo('rest')} class="${claseCampo}">${opcionesDe(descansos, ej.rest, '-')}</select></label>
         <label><span class="text-[9px] text-gray-500 uppercase">Técnica</span><select ${campo('tech')} class="${claseCampo}">${opcionesDe(TECNICAS, ej.tech, 'Ninguna')}</select></label>
       </div>
-      <div class="flex items-center gap-2">
-        <input ${campo('notes')} value="${esc(ej.notes)}" placeholder="Notas" class="${claseCampo}">
-        <label class="flex items-center gap-1 text-[10px] text-gray-400 whitespace-nowrap" title="Los ejercicios del bloque con la misma letra forman la superserie (A1, A2, A3...)">
+      <div class="flex flex-wrap items-center gap-2">
+        <input ${campo('notes')} value="${esc(ej.notes)}" placeholder="Notas" class="${claseCampo} !w-auto min-w-0 flex-1 basis-full sm:basis-0">
+        <label class="flex items-center gap-1 text-[10px] text-gray-400" title="Los ejercicios del bloque con la misma letra forman la superserie (A1, A2, A3...)">
           Superserie
           <select ${campo('group')} class="bg-black border border-gray-700 rounded p-1 text-xs font-bold outline-none" style="color: ${color}">${opcionesDe(grupos, ej.group, '—')}</select>
         </label>
@@ -716,7 +777,11 @@ function cambiarCampoEjercicio(el) {
   const [w, d, b, e] = ['w', 'd', 'b', 'e'].map((k) => indice(el, k));
   const campo = el.dataset.campo;
   // Cambiar el grupo renumera las etiquetas (A1, A2...) del bloque: ahí sí se redibuja
-  return aplicar(actualizarEjercicio(actual.plan, w, d, b, e, { [campo]: el.value }), { redibujar: campo === 'group' });
+  const promesa = aplicar(actualizarEjercicio(actual.plan, w, d, b, e, { [campo]: el.value }), {
+    redibujar: campo === 'group',
+  });
+  if (campo === 'sets' || campo === 'intensityType') refrescarIntensidad(w, d, b, e);
+  return promesa;
 }
 
 async function eliminarDiaConfirmando(w, d) {
@@ -825,6 +890,32 @@ registrarAcciones({
   ejercicioAntes: (el) => insertarEjercicioEn(el, 0),
   ejercicioDespues: (el) => insertarEjercicioEn(el, 1),
   ejercicioCampo: (el) => cambiarCampoEjercicio(el),
+  ejercicioIntensidad: (el) =>
+    aplicar(fijarIntensidadDeSerie(actual.plan, ...posicionEjercicio(el), Number(el.dataset.i), el.value), {
+      redibujar: false,
+    }),
+  ejercicioCambiar: async (el) => {
+    const [w, d, b, e] = posicionEjercicio(el);
+    actual.ejerciciosAbiertos.add(actual.plan.weeks[w].days[d].blocks[b].exercises[e].id);
+    cambio = { w, d, b, e, q: '' };
+    if (!catalogo) catalogo = (await import('../../../data/exercises.json')).default;
+    dibujar();
+  },
+  ejercicioBuscar: (el) => {
+    if (!cambio) return;
+    cambio.q = el.value;
+    pintarOpcionesCambio();
+  },
+  ejercicioElegir: (el) => {
+    if (!cambio) return;
+    const { w, d, b, e } = cambio;
+    cambio = null;
+    return aplicar(cambiarEjercicio(actual.plan, w, d, b, e, el.dataset.nombre));
+  },
+  ejercicioCancelarCambio: () => {
+    cambio = null;
+    dibujar();
+  },
   ejercicioEliminar: (el) => aplicar(eliminarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),
   ejercicioPropagar: (el) => aplicar(propagarEjercicio(actual.plan, ...['w', 'd', 'b', 'e'].map((k) => indice(el, k)))),
 });

@@ -13,6 +13,8 @@
  * @property {string} reps            Repeticiones objetivo (texto libre: "8-10")
  * @property {'RIR'|'RPE'|'%RM'} intensityType
  * @property {string} intensityValue
+ * @property {string[]} intensidadPorSerie  Valor de cada serie (RIR, RPE o %RM) cuando las series son un número de 1 a 12.
+ *                                          Vacío si las series son un rango ("3-4") o no son un número.
  * @property {string} tech            Técnica de intensidad (Drop Set, Rest-Pause, ...)
  * @property {string} rest            Descanso ("90s", "2 min")
  * @property {string} notes
@@ -158,6 +160,7 @@ const ejercicioEnBlanco = () => ({
   reps: '',
   intensityType: 'RIR',
   intensityValue: '',
+  intensidadPorSerie: [],
   tech: '',
   rest: '',
   notes: '',
@@ -223,6 +226,51 @@ export function actualizarEjercicio(plan, w, d, b, e, cambios) {
   const nuevo = copiar(plan);
   Object.assign(nuevo.weeks[w].days[d].blocks[b].exercises[e], cambios);
   return nuevo;
+}
+
+/**
+ * Intensidad de cada serie (RIR, RPE o %RM). Solo cuando las series son un entero de 1 a 12
+ * ("4", no "3-4"). Si todavía no hay una por serie, repite intensityValue.
+ * @returns {string[]}
+ */
+export function intensidadesDe(ejercicio) {
+  const sets = String(ejercicio?.sets ?? '').trim();
+  const n = Number(sets);
+  if (!Number.isInteger(n) || n < 1 || n > 12 || String(n) !== sets) return [];
+  const guardados = Array.isArray(ejercicio?.intensidadPorSerie)
+    ? ejercicio.intensidadPorSerie
+    : Array.isArray(ejercicio?.rpePorSerie)
+      ? ejercicio.rpePorSerie
+      : [];
+  const base = texto(ejercicio?.intensityValue);
+  return Array.from({ length: n }, (_, i) => (guardados[i] == null ? base : texto(guardados[i])));
+}
+
+/** "RIR 2" si todas las series coinciden, "RIR 3 · 2 · 1" si no. Igual para RPE y %RM. */
+export function textoIntensidad(ejercicio) {
+  const tipo = ejercicio?.intensityType || 'RIR';
+  const valores = intensidadesDe(ejercicio);
+  if (valores.some((v) => v.trim())) {
+    return valores.every((v) => v === valores[0]) ? `${tipo} ${valores[0]}` : `${tipo} ${valores.join(' · ')}`;
+  }
+  return ejercicio?.intensityValue ? `${tipo} ${ejercicio.intensityValue}` : '';
+}
+
+/** Anota la intensidad de una serie y deja guardada la lista completa, para que no se pierda al cambiar las series. */
+export function fijarIntensidadDeSerie(plan, w, d, b, e, indice, valor) {
+  const nuevo = copiar(plan);
+  const ejercicio = nuevo.weeks[w].days[d].blocks[b].exercises[e];
+  const lista = intensidadesDe(ejercicio);
+  if (!lista.length || indice < 0 || indice >= lista.length) return nuevo;
+  lista[indice] = texto(valor);
+  ejercicio.intensidadPorSerie = lista;
+  if (lista.every((v) => v === lista[0])) ejercicio.intensityValue = lista[0];
+  return nuevo;
+}
+
+/** Cambia el ejercicio por otro: solo el nombre. Series, reps, descanso, técnica e intensidad quedan. */
+export function cambiarEjercicio(plan, w, d, b, e, nombre) {
+  return actualizarEjercicio(plan, w, d, b, e, { name: texto(nombre) });
 }
 
 /**
@@ -387,6 +435,9 @@ export function normalizarPlan(dato) {
     reps: texto(e.reps),
     intensityType: TIPOS_INTENSIDAD.includes(e.intensityType) ? e.intensityType : 'RIR',
     intensityValue: texto(e.intensityValue ?? e.intensity),
+    intensidadPorSerie: (Array.isArray(e.intensidadPorSerie) ? e.intensidadPorSerie : Array.isArray(e.rpePorSerie) ? e.rpePorSerie : [])
+      .slice(0, 12)
+      .map(texto),
     tech: texto(e.tech),
     rest: texto(e.rest),
     notes: texto(e.notes),

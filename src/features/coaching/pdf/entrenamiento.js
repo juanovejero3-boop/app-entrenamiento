@@ -1,7 +1,7 @@
 // PDF con todo el entrenamiento del ciclo, para el alumno que prefiera tenerlo en papel o como
 // respaldo: mapa del macrociclo y, por semana, cada día con sus ejercicios.
 import { TIPOS_BLOQUE, GRUPOS_SUPERSERIE } from '../entrenamiento/catalogos.js';
-import { contarSeries, etiquetasSuperserie, fechasDeSemana } from '../entrenamiento/plan.js';
+import { contarSeries, etiquetasSuperserie, fechasDeSemana, textoIntensidad } from '../entrenamiento/plan.js';
 import {
   COLOR,
   barra,
@@ -39,7 +39,7 @@ function tablaDelBloque(bloque) {
     ['', 'Ejercicio', 'Series', 'Reps', 'Intensidad', 'Descanso'],
     bloque.exercises.map((ej, e) => {
       const detalle = [ej.tech, ej.notes].filter(Boolean).join(' · ');
-      const intensidad = ej.intensityValue ? `${ej.intensityType} ${ej.intensityValue}` : '—';
+      const intensidad = textoIntensidad(ej) || '—';
       return [
         { text: etiquetas[e], bold: true, color: GRUPOS_SUPERSERIE[ej.group] ?? COLOR.gris, alignment: 'center' },
         celdaNombre(ej.name || 'Ejercicio', detalle),

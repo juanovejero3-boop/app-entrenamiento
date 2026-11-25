@@ -9,7 +9,7 @@ import { hoyISO } from '../../../lib/fecha.js';
 import { toast } from '../../../lib/ui.js';
 import { cicloActivo } from '../ciclos/ciclos.js';
 import { GRUPOS_SUPERSERIE, TIPOS_BLOQUE } from '../entrenamiento/catalogos.js';
-import { etiquetasSuperserie, fechasDeSemana, rangoDelPlan, semanaActual } from '../entrenamiento/plan.js';
+import { etiquetasSuperserie, fechasDeSemana, intensidadesDe, rangoDelPlan, semanaActual, textoIntensidad } from '../entrenamiento/plan.js';
 import { nombreDelAlumno } from '../pdf/alumno.js';
 import { mostrarPdf } from '../pdf/mostrar.js';
 import { repo } from '../repo/index.js';
@@ -412,7 +412,7 @@ function crearVista(vista) {
   const insigniasDe = (ej) =>
     [
       ej.reps && `Reps ${ej.reps}`,
-      ej.intensityValue && `${ej.intensityType} ${ej.intensityValue}`,
+      textoIntensidad(ej),
       ej.rest && `Descanso ${ej.rest}`,
       ej.tech,
     ].filter(Boolean);
@@ -512,7 +512,7 @@ function crearVista(vista) {
     const video = vista.videos.get(ej.name.trim().toLowerCase());
     const insignias = [
       ej.reps && `Reps ${ej.reps}`,
-      ej.intensityValue && `${ej.intensityType} ${ej.intensityValue}`,
+      textoIntensidad(ej),
       ej.rest && `Descanso ${ej.rest}`,
       ej.tech,
     ].filter(Boolean);
@@ -603,6 +603,8 @@ function crearVista(vista) {
     const pos = `data-e="${esc(ej.id)}" data-n="${n}"`;
     // En una superserie los campos son un poco más bajos: hay muchas filas y el nombre del ejercicio ya ocupa una línea
     const compacto = nombre ? ' !py-1.5' : '';
+    const intensidad = intensidadesDe(ej)[n - 1]?.trim();
+    const marcaIntensidad = intensidad ? `${ej.intensityType} ${intensidad}` : '';
     const campos = `
         <input data-change="alumnoSerie" ${pos} data-campo="kg" type="text" inputmode="decimal" placeholder="0" value="${esc(serie.kg)}" ${dis} class="${claseInput}${compacto}" aria-label="Kg de la serie ${n}">
         ${campoReps(ej, serie, pos, dis, n, compacto)}
@@ -612,13 +614,14 @@ function crearVista(vista) {
       return `
       <div data-serie="${esc(ej.id)}-${n}" class="space-y-0.5 pl-2 border-l-4 border-neonRed">
         <p data-fila-nombre title="${esc(nombre)}" class="text-[11px] font-bold leading-tight text-white line-clamp-2 break-words">${esc(nombreCorto(nombre))}</p>
+        ${marcaIntensidad ? `<p data-intensidad-serie class="text-[9px] font-normal text-gray-400">${esc(marcaIntensidad)}</p>` : ''}
         <div class="grid ${COLUMNAS_SUPERSERIE} gap-1.5 items-center">${campos}
         </div>
       </div>`;
     }
     return `
       <div data-serie="${esc(ej.id)}-${n}" class="grid ${COLUMNAS} gap-1.5 items-center">
-        <span class="text-center text-xs font-bold text-gray-500">${n}</span>${campos}
+        <span class="text-center text-xs font-bold text-gray-500">${n}${marcaIntensidad ? `<span data-intensidad-serie class="block text-[9px] font-normal text-gray-400">${esc(marcaIntensidad)}</span>` : ''}</span>${campos}
       </div>`;
   }
 

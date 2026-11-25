@@ -305,7 +305,9 @@ describe('constructor de planes: bloques y ejercicios', () => {
     cambiar(campoEj('sets'), '4');
     cambiar(campoEj('reps'), '6-8');
     cambiar(campoEj('intensityType'), 'RPE');
-    cambiar(campoEj('intensityValue'), '8');
+    const rpes = $$('[data-ejercicio="0-0-0-0"] [data-change="ejercicioIntensidad"]');
+    expect(rpes).toHaveLength(4);
+    for (const input of rpes) cambiar(input, '8');
     cambiar(campoEj('rest'), '3 min');
     cambiar(campoEj('tech'), 'Rest-Pause');
     cambiar(campoEj('notes'), 'Pausa abajo');
@@ -318,6 +320,7 @@ describe('constructor de planes: bloques y ejercicios', () => {
       reps: '6-8',
       intensityType: 'RPE',
       intensityValue: '8',
+      intensidadPorSerie: ['8', '8', '8', '8'],
       rest: '3 min',
       tech: 'Rest-Pause',
       notes: 'Pausa abajo',
@@ -1315,7 +1318,7 @@ describe('constructor de planes: barra fija y plegables', () => {
       const tarjeta = $('[data-ejercicio="0-0-0-0"]');
       cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="sets"]'), '6');
       cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="reps"]'), '5');
-      cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="intensityValue"]'), '1');
+      for (const input of $$('[data-ejercicio="0-0-0-0"] [data-change="ejercicioIntensidad"]')) cambiar(input, '1');
       await esperar();
 
       expect($('[data-ejercicio="0-0-0-0"] [data-ej-resumen]').textContent).toBe('6 × 5 · RIR 1');
@@ -1369,6 +1372,42 @@ describe('constructor de planes: barra fija y plegables', () => {
       expect(cuerpoDia(0, 1).hidden).toBe(true);
       expect(cuerpoDia(0, 2).hidden).toBe(false);
     });
+  });
+
+  it('carga el RPE de cada serie y, al cambiar el ejercicio, deja series, reps y RPE', async () => {
+    await abrir();
+    await tocar('[data-ejercicio="0-0-0-0"] [data-click="ejercicioToggle"]');
+    const antes = (await guardado()).weeks[0].days[0].blocks[0].exercises[0];
+    cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="sets"]'), '3');
+    cambiar($('[data-ejercicio="0-0-0-0"] [data-campo="intensityType"]'), 'RPE');
+    await esperar();
+
+    const series = $$('[data-ejercicio="0-0-0-0"] [data-change="ejercicioIntensidad"]');
+    expect(series).toHaveLength(3);
+    cambiar(series[0], '8');
+    cambiar(series[1], '7');
+    cambiar(series[2], '6');
+    await esperar();
+
+    await tocar('[data-ejercicio="0-0-0-0"] [data-click="ejercicioCambiar"]');
+    const buscar = $('[data-input="ejercicioBuscar"]');
+    buscar.value = 'zzzz-no-existe';
+    buscar.dispatchEvent(new Event('input', { bubbles: true }));
+    expect($('[data-cambiar-lista]').textContent).toMatch(/Nada con ese nombre/);
+
+    buscar.value = 'floor press';
+    buscar.dispatchEvent(new Event('input', { bubbles: true }));
+    $('[data-click="ejercicioElegir"]').click();
+    await esperar();
+
+    const ej = (await guardado()).weeks[0].days[0].blocks[0].exercises[0];
+    expect(ej.name.toLowerCase()).toContain('floor press');
+    expect(ej.name).not.toBe(antes.name);
+    expect(ej.sets).toBe('3');
+    expect(ej.reps).toBe(antes.reps);
+    expect(ej.rest).toBe(antes.rest);
+    expect(ej.intensidadPorSerie).toEqual(['8', '7', '6']);
+    expect($('[data-cambiar]')).toBeNull();
   });
 
   it('regenerar la estructura arranca de nuevo: primer día abierto', async () => {
