@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../../lib/acciones.js';
 import '../../lib/ui.js';
+import { state } from '../../state.js';
 import { montarAgenda } from './agendaVista.js';
 import { conectarLlamadas, guardarScriptRemoto } from './llamadasSync.js';
 import { guardarAgenda, leerAgenda, reservar } from './reservaLocal.js';
@@ -18,6 +19,8 @@ afterEach(() => {
   document.body.innerHTML = '';
   localStorage.clear();
   conectarLlamadas(null);
+  state.currentUser = null;
+  state.userProfile = null;
 });
 
 const $ = (selector) => raiz.querySelector(selector);
@@ -180,5 +183,98 @@ describe('agenda de prueba', () => {
     document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
 
     await vi.waitFor(() => expect(raiz.textContent).not.toContain('meet.google.com/abc-defg-hij'));
+  });
+});
+
+describe('agenda: turnos guardados en la cuenta', () => {
+  const jornada = {
+    agendaId: 'seguimiento',
+    fecha: SABADO,
+    desde: '09:00',
+    hasta: '12:00',
+    duracionMin: 30,
+    descansoMin: 30,
+  };
+  const turnoDe = (cambios) => ({
+    id: 'b1',
+    agendaId: 'seguimiento',
+    fecha: SABADO,
+    hora: '09:00',
+    nombre: 'Ana',
+    email: 'ana@test.com',
+    telefono: '111',
+    notas: '',
+    calendarioEstado: 'agendado',
+    calendarioError: '',
+    ...cambios,
+  });
+  /** Un repo de mentira que devuelve `turnos` (o lo que se le cambie después). */
+  function repoCon(turnos) {
+    const repo = {
+      turnos,
+      leer: vi.fn(async () => ({ jornadas: [jornada], turnos: repo.turnos, grupales: [] })),
+      leerScript: async () => ({ url: 'https://script.google.com/macros/s/abc/exec', coachEmail: 'coach@test.com' }),
+      agendar: vi.fn(async () => ({ estado: 'agendado', error: '' })),
+    };
+    conectarLlamadas(repo);
+    state.currentUser = { id: 'coach-1', email: 'coach@test.com' };
+    state.userProfile = { role: 'admin' };
+    return repo;
+  }
+  /** Espera a que termine de traer los datos (mientras tanto «Actualizar» está deshabilitado). */
+  const cargado = () => vi.waitFor(() => expect($('[data-click="agendaActualizar"]').disabled).toBe(false));
+  const abrirSabado = async () => {
+    montarAgenda(raiz);
+    await cargado();
+    cambiar($('[data-change="agendaFecha"]'), SABADO);
+  };
+
+  it('cada turno reservado dice si quedó en Google Calendar', async () => {
+    repoCon([turnoDe({})]);
+    await abrirSabado();
+    expect($('[data-calendario="agendado"]').textContent).toMatch(/en google calendar/i);
+    expect($('[data-click="agendaReintentar"]')).toBeNull();
+  });
+
+  it('si no se agendó muestra el motivo exacto y deja reintentar', async () => {
+    const repo = repoCon([turnoDe({ calendarioEstado: 'error', calendarioError: 'Invalid argument: startTime' })]);
+    await abrirSabado();
+    expect($('[data-calendario="error"]').textContent).toContain('Invalid argument: startTime');
+
+    repo.turnos = [turnoDe({})]; // después de reintentar, la base ya lo tiene agendado
+    $('[data-click="agendaReintentar"][data-id="b1"]').click();
+
+    await vi.waitFor(() => expect(repo.agendar).toHaveBeenCalledWith('b1'));
+    await vi.waitFor(() => expect($('[data-calendario="agendado"]')).not.toBeNull());
+  });
+
+  it('un turno sin calendario conectado también se puede reintentar', async () => {
+    repoCon([
+      turnoDe({ calendarioEstado: 'sin_script', calendarioError: 'El coach todavía no conectó su Google Calendar.' }),
+    ]);
+    await abrirSabado();
+    expect($('[data-calendario="sin_script"]').textContent).toContain('no conectó');
+    expect($('[data-click="agendaReintentar"]')).not.toBeNull();
+  });
+
+  it('«Actualizar» trae lo nuevo sin recargar la página', async () => {
+    const repo = repoCon([]);
+    await abrirSabado();
+    expect(raiz.textContent).not.toContain('Ana');
+
+    repo.turnos = [turnoDe({})]; // un alumno reservó mientras tanto
+    $('[data-click="agendaActualizar"]').click();
+    await cargado();
+
+    await vi.waitFor(() => expect(raiz.textContent).toContain('Ana'));
+    expect(repo.leer).toHaveBeenCalledTimes(2);
+  });
+
+  it('si no se pudieron traer los turnos, lo avisa en vez de mostrar datos viejos como si fueran actuales', async () => {
+    const repo = repoCon([]);
+    repo.leer.mockRejectedValue(new Error('sin conexión'));
+    montarAgenda(raiz);
+    await vi.waitFor(() => expect($('[data-error-lectura]')).not.toBeNull());
+    expect($('[data-error-lectura]').textContent).toContain('sin conexión');
   });
 });

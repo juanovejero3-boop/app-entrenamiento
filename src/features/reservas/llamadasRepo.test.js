@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { combinarTurnos, crearRepoLlamadas } from './llamadasRepo.js';
-import { avisarCalendario, conectarLlamadas, pedidoCalendario } from './llamadasSync.js';
+import { state } from '../../state.js';
+import { agendarCalendario, conectarLlamadas, guardarJornadasRemotas, guardarScriptRemoto } from './llamadasSync.js';
 
 describe('repo de llamadas', () => {
   it('el turno propio pisa el hueco ocupado', () => {
@@ -42,48 +43,135 @@ describe('repo de llamadas', () => {
     expect(insertados[0].user_id).toBeUndefined();
   });
 
-  it('el pedido de calendario invita al alumno y al coach', () => {
-    const pedido = pedidoCalendario(
-      {
-        agendaId: 'primera',
-        fecha: '2026-12-20',
-        hora: '14:00',
-        nombre: 'Ana',
-        email: 'ana@test.com',
-        telefono: '111',
-        notas: '',
-      },
-      { duracionMin: 20 },
-      'coach@test.com',
-    );
-    expect(pedido.clientEmail).toBe('ana@test.com');
-    expect(pedido.coachEmail).toBe('coach@test.com');
-    expect(pedido.attendees).toEqual(['ana@test.com', 'coach@test.com']);
-    expect(pedido.date).toBe('2026-12-20');
-    expect(pedido.time).toBe('14:00');
-    expect(pedido.service).toBe('Evaluación Inicial & Onboarding');
+  it('anotar manda el id que generó la app (para poder pedir que se agende sin leer la tabla)', async () => {
+    const insertados = [];
+    const cliente = {
+      from: () => ({ insert: (fila) => (insertados.push(fila), Promise.resolve({ data: null, error: null })) }),
+    };
+    await crearRepoLlamadas(cliente).anotar({
+      id: 'b1',
+      agendaId: 'primera',
+      fecha: '2026-12-20',
+      hora: '14:00',
+      duracionMin: 20,
+      descansoMin: 0,
+      nombre: 'Ana',
+      email: 'ana@test.com',
+    });
+    expect(insertados[0].id).toBe('b1');
   });
 
-  it('avisar manda ese pedido al script del coach', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({});
-    vi.stubGlobal('fetch', fetchMock);
-    conectarLlamadas({
-      leerScript: async () => ({ url: 'https://script.google.com/macros/s/abc/exec', coachEmail: 'coach@test.com' }),
-    });
+  it('agendar le pide a la función del servidor que agende ese turno y devuelve cómo quedó', async () => {
+    const invoke = vi.fn(async () => ({ data: { estado: 'agendado', error: '' }, error: null }));
+    const resultado = await crearRepoLlamadas({ functions: { invoke } }).agendar('b1');
+    expect(invoke).toHaveBeenCalledWith('agendar-llamada', { body: { id: 'b1' } });
+    expect(resultado).toEqual({ estado: 'agendado', error: '' });
+  });
 
-    const ok = await avisarCalendario(
-      { agendaId: 'seguimiento', fecha: '2026-12-20', hora: '09:00', nombre: 'Ana', email: 'ana@test.com', telefono: '111', notas: '' },
-      { duracionMin: 30 },
+  it('si la función contesta con error, llega su mensaje', async () => {
+    const invoke = vi.fn(async () => ({
+      data: null,
+      error: {
+        message: 'Edge Function returned a non-2xx status code',
+        context: { json: async () => ({ error: 'Solo el coach puede volver a agendar este turno' }) },
+      },
+    }));
+    await expect(crearRepoLlamadas({ functions: { invoke } }).agendar('b1')).rejects.toThrow(
+      'Solo el coach puede volver a agendar',
     );
+  });
 
-    expect(ok).toBe(true);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.attendees).toEqual(['ana@test.com', 'coach@test.com']);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://script.google.com/macros/s/abc/exec');
+  it('el coach ve en cada turno si quedó en el calendario y por qué falló', async () => {
+    const fila = {
+      id: 'b1',
+      agenda: 'seguimiento',
+      fecha: '2026-12-20',
+      hora: '09:00:00',
+      duracion_min: 30,
+      descanso_min: 30,
+      nombre: 'Ana',
+      email: 'ana@test.com',
+      telefono: '',
+      notas: '',
+      calendario_estado: 'error',
+      calendario_error: 'Invalid argument',
+    };
+    const cliente = {
+      from: (tabla) => ({
+        select: () => Promise.resolve({ data: tabla === 'call_bookings' ? [fila] : [], error: null }),
+      }),
+    };
+    const { turnos } = await crearRepoLlamadas(cliente).leer('admin');
+    expect(turnos[0]).toMatchObject({
+      id: 'b1',
+      hora: '09:00',
+      calendarioEstado: 'error',
+      calendarioError: 'Invalid argument',
+    });
+  });
+
+  it('el script se guarda a nombre del coach que lo carga', async () => {
+    const upserts = [];
+    conectarLlamadas(
+      crearRepoLlamadas({
+        from: (tabla) => ({
+          upsert: (fila) => (upserts.push({ tabla, fila }), Promise.resolve({ data: null, error: null })),
+        }),
+      }),
+    );
+    state.currentUser = { id: 'coach-1', email: 'coach@test.com' };
+    await guardarScriptRemoto(' https://script.google.com/macros/s/abc/exec ', 'coach@test.com');
+    expect(upserts).toEqual([
+      {
+        tabla: 'call_coaches',
+        fila: {
+          coach_id: 'coach-1',
+          script_url: 'https://script.google.com/macros/s/abc/exec',
+          coach_email: 'coach@test.com',
+        },
+      },
+    ]);
+  });
+
+  it('los días que abre el coach quedan a su nombre', async () => {
+    const upserts = [];
+    const cliente = {
+      from: () => ({
+        upsert: (filas) => (upserts.push(...filas), Promise.resolve({ data: null, error: null })),
+        select: () => Promise.resolve({ data: [], error: null }),
+      }),
+    };
+    conectarLlamadas(crearRepoLlamadas(cliente));
+    state.currentUser = { id: 'coach-1' };
+    await guardarJornadasRemotas([
+      {
+        agendaId: 'seguimiento',
+        fecha: '2026-12-20',
+        desde: '09:00',
+        hasta: '12:00',
+        duracionMin: 30,
+        descansoMin: 30,
+      },
+    ]);
+    expect(upserts[0]).toMatchObject({ agenda: 'seguimiento', fecha: '2026-12-20', coach_id: 'coach-1' });
+  });
+
+  it('agendarCalendario devuelve el estado, o el error como estado si no se pudo', async () => {
+    conectarLlamadas({ agendar: async () => ({ estado: 'agendado', error: '' }) });
+    expect(await agendarCalendario({ id: 'b1' })).toEqual({ estado: 'agendado', error: '' });
+    conectarLlamadas({
+      agendar: async () => {
+        throw new Error('sin conexión');
+      },
+    });
+    expect(await agendarCalendario({ id: 'b1' })).toEqual({ estado: 'error', error: 'sin conexión' });
+    conectarLlamadas(null);
+    expect(await agendarCalendario({ id: 'b1' })).toBeNull(); // sin repo (tests): no hay a quién pedirle
   });
 });
 
 afterEach(() => {
   conectarLlamadas(null);
+  state.currentUser = null;
   vi.unstubAllGlobals();
 });

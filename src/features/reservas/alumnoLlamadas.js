@@ -16,7 +16,13 @@ import {
   reservar,
   textoFecha,
 } from './reservaLocal.js';
-import { anotarTurnoRemoto, avisarCalendario, soltarTurnoRemoto, traerLlamadas } from './llamadasSync.js';
+import {
+  agendarCalendario,
+  anotarTurnoRemoto,
+  errorAlTraer,
+  soltarTurnoRemoto,
+  traerLlamadas,
+} from './llamadasSync.js';
 
 /** @type {HTMLElement | null} */
 let contenido = null;
@@ -24,6 +30,11 @@ let contenido = null;
 let elegido = null;
 let aviso = '';
 let listo = false;
+/** Por qué no se pudieron traer las llamadas ('' si se trajeron bien). */
+let errorLectura = '';
+/** Aviso si el turno quedó reservado pero no se pudo agendar en el calendario. */
+let avisoCalendario = '';
+let actualizando = false;
 
 const diaPendiente = (fecha, ahora = new Date()) => {
   const [y, m, d] = fecha.split('-').map(Number);
@@ -100,9 +111,14 @@ function dibujar() {
 
   contenido.innerHTML = `
     <div class="space-y-4 pb-8">
-      <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
-        <h2 class="text-xl font-black text-white uppercase tracking-wide">Llamadas</h2>
+      <div class="flex items-center gap-3">
+        <div class="flex-1 bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
+          <h2 class="text-xl font-black text-white uppercase tracking-wide">Llamadas</h2>
+        </div>
+        <button type="button" data-click="llamadasActualizar" ${actualizando ? 'disabled' : ''} class="shrink-0 min-h-10 px-3 rounded-lg border border-gray-700 text-[11px] font-bold uppercase text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-50"><i class="fa-solid fa-rotate ${actualizando ? 'fa-spin' : ''} mr-1"></i>Actualizar</button>
       </div>
+      ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer las llamadas (${esc(errorLectura)}). Probá con «Actualizar».</p>` : ''}
+      ${avisoCalendario ? `<p data-aviso-calendario class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">${esc(avisoCalendario)}</p>` : ''}
       <section class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         <h3 class="text-sm font-black text-white uppercase">Grupal</h3>
         ${
@@ -133,13 +149,26 @@ export function renderTabLlamadas(content) {
   elegido = null;
   aviso = '';
   listo = false;
+  errorLectura = '';
+  avisoCalendario = '';
   dibujar();
-  traerLlamadas().then((trajo) => {
-    if (trajo && contenido === content) dibujar();
-  });
+  actualizar();
+}
+
+/** Vuelve a traer las llamadas de la cuenta y redibuja (sin recargar la página). */
+async function actualizar() {
+  const esta = contenido;
+  actualizando = true;
+  dibujar();
+  const trajo = await traerLlamadas();
+  if (contenido !== esta) return; // ya salió de esta pantalla
+  actualizando = false;
+  errorLectura = trajo ? '' : errorAlTraer();
+  dibujar();
 }
 
 registrarAcciones({
+  llamadasActualizar: () => actualizar(),
   alumnoElegirTurno: (el) => {
     elegido = { fecha: el.dataset.fecha, hora: el.dataset.hora };
     aviso = '';
@@ -176,8 +205,16 @@ registrarAcciones({
     aviso = '';
     listo = true;
     dibujar();
+    avisoCalendario = '';
     anotarTurnoRemoto(turno, jornada)
-      .then(() => avisarCalendario(turno, jornada))
+      .then(async () => {
+        const resultado = await agendarCalendario(turno);
+        if (resultado && resultado.estado !== 'agendado') {
+          avisoCalendario =
+            'Tu turno quedó reservado, pero no se pudo agendar en tu calendario. El coach lo va a ver y te confirma la llamada.';
+          dibujar();
+        }
+      })
       .catch(() => {
         const ahora = leerAgenda();
         guardarAgenda(ahora.jornadas, cancelarTurno(ahora.turnos, turno));

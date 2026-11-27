@@ -97,6 +97,7 @@ export function reservar(jornadas, turnos, pedido) {
     turnos: [
       ...turnos,
       {
+        id: crypto.randomUUID(), // lo genera la app: con él se pide agendarlo sin poder leer la tabla
         agendaId: pedido.agendaId,
         fecha: pedido.fecha,
         hora: pedido.hora,

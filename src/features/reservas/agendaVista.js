@@ -20,7 +20,9 @@ import {
   textoFecha,
 } from './reservaLocal.js';
 import {
+  agendarCalendario,
   cancelarGrupalRemoto,
+  errorAlTraer,
   guardarJornadasRemotas,
   guardarScriptRemoto,
   publicarGrupalRemoto,
@@ -45,7 +47,9 @@ const opciones = (valores, actual) => {
   const lista = valores.map(String);
   const todos = lista.includes(String(actual)) ? lista : [String(actual), ...lista];
   return todos
-    .map((valor) => `<option value="${esc(valor)}" ${String(actual) === valor ? 'selected' : ''}>${esc(valor)}</option>`)
+    .map(
+      (valor) => `<option value="${esc(valor)}" ${String(actual) === valor ? 'selected' : ''}>${esc(valor)}</option>`,
+    )
     .join('');
 };
 
@@ -65,6 +69,9 @@ let fechaGrupal = '';
 let horaGrupal = '19:00';
 let avisoGrupal = '';
 let scriptEscrito = localStorage.getItem('pp_webhook_url') || '';
+/** Por qué no se pudieron traer los turnos ('' si se trajeron bien). */
+let errorLectura = '';
+let actualizando = false;
 /** @type {{ desde: string, hasta: string, duracionMin: number, descansoMin: number }} */
 let borrador = { desde: '08:30', hasta: '19:30', duracionMin: 30, descansoMin: 30 };
 
@@ -87,12 +94,34 @@ function finDelBloque(jornada, hora) {
   return aHora(aMinutos(hora) + jornada.duracionMin + jornada.descansoMin);
 }
 
+const ESTADOS_CALENDARIO = {
+  agendado: { texto: 'En Google Calendar', clase: 'border-emerald-800 text-emerald-300', icono: 'fa-circle-check' },
+  pendiente: { texto: 'Agendando…', clase: 'border-gray-700 text-gray-400', icono: 'fa-clock' },
+  error: { texto: 'No se agendó', clase: 'border-red-900 text-red-300', icono: 'fa-triangle-exclamation' },
+  sin_script: { texto: 'Sin calendario conectado', clase: 'border-amber-800 text-amber-300', icono: 'fa-plug' },
+};
+
+/** Si el turno quedó en el Google Calendar del coach; si no, el motivo y el botón para reintentar. */
+function estadoCalendario(t) {
+  const estado = ESTADOS_CALENDARIO[t.calendarioEstado];
+  if (!t.id || !estado) return '';
+  const reintentable = t.calendarioEstado === 'error' || t.calendarioEstado === 'sin_script';
+  return `<span data-calendario="${esc(t.calendarioEstado)}" class="flex flex-wrap items-center gap-2 text-[11px]">
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded border ${estado.clase}"><i class="fa-solid ${estado.icono}"></i>${esc(estado.texto)}</span>
+      ${reintentable && t.calendarioError ? `<span class="text-gray-400">${esc(t.calendarioError)}</span>` : ''}
+      ${reintentable ? `<button type="button" data-click="agendaReintentar" data-id="${esc(t.id)}" class="text-neonRed font-bold underline">Reintentar</button>` : ''}
+    </span>`;
+}
+
 function filaTurno(t) {
   const de = jornadas.find((j) => j.agendaId === t.agendaId && j.fecha === t.fecha);
   const tipoNombre = tipo[t.agendaId]?.nombre ?? '';
   const quien = t.nombre || 'Ocupado';
   const contacto = [t.telefono, t.email].filter(Boolean).join(' · ');
-  return `<li data-ocupado="${esc(t.hora)}" class="flex items-center justify-between gap-2 text-xs text-gray-300"><span><b class="text-white">${esc(t.hora)}</b> ${esc(quien)}${contacto ? ` · ${esc(contacto)}` : ''} hasta ${de ? esc(finDelBloque(de, t.hora)) : ''} · ${esc(tipoNombre)}</span><button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="text-red-400 font-bold">Cancelar</button></li>`;
+  return `<li data-ocupado="${esc(t.hora)}" class="space-y-1 text-xs text-gray-300 border-t border-gray-800 pt-2">
+      <div class="flex items-center justify-between gap-2"><span><b class="text-white">${esc(t.hora)}</b> ${esc(quien)}${contacto ? ` · ${esc(contacto)}` : ''} hasta ${de ? esc(finDelBloque(de, t.hora)) : ''} · ${esc(tipoNombre)}</span><button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="text-red-400 font-bold">Cancelar</button></div>
+      ${estadoCalendario(t)}
+    </li>`;
 }
 
 function huecosHtml(horas) {
@@ -195,10 +224,14 @@ function dibujar() {
     : `<label class="block text-[10px] text-gray-400 uppercase font-bold">Fecha<input type="date" data-click="agendaAbrirFecha" data-change="agendaFecha" value="${esc(fecha)}" class="${claseFecha}"></label>`;
   raiz.innerHTML = `
     <div data-agenda class="space-y-4">
-      <div class="bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
-        <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda</h2>
-        <p class="text-xs text-gray-400">${esPrimera ? 'Elegí desde qué día hasta qué día, y el horario. Generar abre todos esos días.' : 'Elegí el día y el horario. Generar publica esos horarios en este navegador.'}</p>
+      <div class="flex items-start gap-3">
+        <div class="flex-1 min-w-0 bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
+          <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda</h2>
+          <p class="text-xs text-gray-400">${esPrimera ? 'Elegí desde qué día hasta qué día, y el horario. Generar abre todos esos días.' : 'Elegí el día y el horario. Generar publica esos horarios.'}</p>
+        </div>
+        <button type="button" data-click="agendaActualizar" ${actualizando ? 'disabled' : ''} class="shrink-0 min-h-10 px-3 rounded-lg border border-gray-700 text-[11px] font-bold uppercase text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-50"><i class="fa-solid fa-rotate ${actualizando ? 'fa-spin' : ''} mr-1"></i>Actualizar</button>
       </div>
+      ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer los turnos (${esc(errorLectura)}). Lo que ves puede no estar al día: probá con «Actualizar».</p>` : ''}
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         <div>
           <h3 class="text-sm font-black text-white uppercase">Calendario</h3>
@@ -212,7 +245,9 @@ function dibujar() {
           ? ''
           : '<p data-sin-script class="text-sm text-amber-300 bg-cyberCard border border-gray-800 rounded-xl p-4">Cargá tu script para poder generar llamadas.</p>'
       }
-      ${scriptListo() ? `<div class="flex gap-2">
+      ${
+        scriptListo()
+          ? `<div class="flex gap-2">
         ${Object.values(tipo)
           .map(
             (a) => `
@@ -234,7 +269,9 @@ function dibujar() {
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         ${panelDias()}
       </div>
-      ${panelGrupal()}` : ''}
+      ${panelGrupal()}`
+          : ''
+      }
     </div>`;
 }
 
@@ -254,14 +291,25 @@ export function montarAgenda(contenedor) {
   fechaDesde = '';
   fechaHasta = '';
   tomarBorrador(tipo.seguimiento);
+  errorLectura = '';
   dibujar();
-  const esta = contenedor;
-  traerLlamadas().then((trajo) => {
-    if (!trajo || raiz !== esta) return;
+  actualizar();
+}
+
+/** Vuelve a traer jornadas, turnos y grupales de la cuenta y redibuja (sin recargar la página). */
+async function actualizar() {
+  const esta = raiz;
+  actualizando = true;
+  dibujar();
+  const trajo = await traerLlamadas();
+  if (raiz !== esta) return; // el coach ya salió de esta pantalla
+  actualizando = false;
+  errorLectura = trajo ? '' : errorAlTraer();
+  if (trajo) {
     if (urlScript()) scriptEscrito = urlScript();
     cargarLocal();
-    dibujar();
-  });
+  }
+  dibujar();
 }
 
 function campoNumero(valor, anterior) {
@@ -270,6 +318,14 @@ function campoNumero(valor, anterior) {
 }
 
 registrarAcciones({
+  agendaActualizar: () => actualizar(),
+  agendaReintentar: async (el) => {
+    el.disabled = true;
+    const resultado = await agendarCalendario({ id: el.dataset.id });
+    if (resultado && resultado.estado !== 'agendado')
+      alert(`No se pudo agendar: ${resultado.error || resultado.estado}`);
+    await actualizar();
+  },
   agendaElegir: (el) => {
     agendaId = el.dataset.id;
     const jornada = jornadaActual();

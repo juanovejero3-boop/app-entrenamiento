@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { estadoDelDia, fechasDelRango, grupalesVisibles, ofertaDisponible, publicarGrupal, reservar } from './reservaLocal.js';
+import {
+  estadoDelDia,
+  fechasDelRango,
+  grupalesVisibles,
+  ofertaDisponible,
+  publicarGrupal,
+  reservar,
+} from './reservaLocal.js';
 
 const SABADO = '2026-11-21';
 const VIERNES = '2026-11-20';
@@ -68,7 +75,15 @@ describe('rango y oferta visible', () => {
   });
 
   it('quien reserva ve los días futuros y, en el de hoy, solo los horarios que no pasaron', () => {
-    const hoy = { ...jornada, agendaId: 'primera', fecha: '2026-11-23', desde: '14:00', hasta: '18:00', duracionMin: 20, descansoMin: 0 };
+    const hoy = {
+      ...jornada,
+      agendaId: 'primera',
+      fecha: '2026-11-23',
+      desde: '14:00',
+      hasta: '18:00',
+      duracionMin: 20,
+      descansoMin: 0,
+    };
     const manana = { ...hoy, fecha: '2026-11-24' };
     const ayer = { ...hoy, fecha: '2026-11-22' };
     const ahora = new Date(2026, 10, 23, 15, 0);

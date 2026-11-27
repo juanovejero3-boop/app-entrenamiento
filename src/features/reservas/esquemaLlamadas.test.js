@@ -74,7 +74,9 @@ describe('esquema de llamadas', () => {
       coach_email: 'coach@test.com',
     });
 
-    await expect(como(null, `update public.call_settings set script_url = 'https://evil' where id = 'coach'`)).rejects.toThrow();
+    await expect(
+      como(null, `update public.call_settings set script_url = 'https://evil' where id = 'coach'`),
+    ).rejects.toThrow();
     const sigue = await db.query('select script_url from public.call_settings');
     expect(sigue.rows[0].script_url).toBe('https://script.google.com/macros/s/abc/exec');
   });

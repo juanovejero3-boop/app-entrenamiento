@@ -4,8 +4,17 @@ import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr } from '../../lib/dom.js';
 import { switchTab } from '../../router.js';
 import { state } from '../../state.js';
-import { anotarTurnoRemoto, avisarCalendario, traerLlamadas } from './llamadasSync.js';
-import { alternarDia, AVISO_RESERVA, estadoDelDia, guardarAgenda, leerAgenda, ofertaDisponible, reservar, textoFecha } from './reservaLocal.js';
+import { agendarCalendario, anotarTurnoRemoto, traerLlamadas } from './llamadasSync.js';
+import {
+  alternarDia,
+  AVISO_RESERVA,
+  estadoDelDia,
+  guardarAgenda,
+  leerAgenda,
+  ofertaDisponible,
+  reservar,
+  textoFecha,
+} from './reservaLocal.js';
 
 window.APP_SCHEDULE = {
   onboarding: {
@@ -423,7 +432,7 @@ window.confirmAppBooking = async function (e) {
     return;
   }
 
-  await avisarCalendario(turno, jornada);
+  await agendarCalendario(turno); // si falla, el turno queda marcado y el coach lo reintenta
 
   bookingStep = 4;
   if (isPublicBooking) window.renderPublicBooking();
