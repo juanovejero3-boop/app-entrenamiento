@@ -1,4 +1,5 @@
-// Agenda en Google Calendar un turno de llamada recién reservado, con el script del coach de ese turno.
+// Agenda en Google Calendar un turno de llamada recién reservado, con el script del coach de ese turno (o el que
+// comparten todos los coaches, si ese coach no cargó uno propio).
 // El script es el mismo que el coach usa desde su formulario: le llegan los mismos datos (nombre, mail, WhatsApp,
 // servicio, fecha y hora). A diferencia del navegador, acá se puede leer lo que contesta, así que el turno queda
 // marcado como agendado, o con el error exacto que dio Google y el coach lo puede reintentar.
@@ -57,8 +58,8 @@ type Resultado = { estado: Estado; error: string; intentos: number; en: string }
 export type Dependencias = {
   leerTurno: (id: string) => Promise<Turno | null>;
   leerCoach: (coachId: string) => Promise<Coach | null>;
-  /** El script del único coach que lo tiene cargado (para turnos de antes de que cada uno tuviera su coach). */
-  coachUnico: () => Promise<Coach | null>;
+  /** El script compartido: el último que cargó algún coach. Lo usan los coaches que no cargaron uno propio. */
+  scriptCompartido: () => Promise<Coach | null>;
   guardarResultado: (id: string, resultado: Resultado) => Promise<void>;
   fetchFn: typeof fetch;
   ahora: () => number;
@@ -127,7 +128,9 @@ export async function agendarTurno({ id, admin }: { id: unknown; admin: boolean 
     }
   }
 
-  const coach = turno.coach_id ? await deps.leerCoach(turno.coach_id) : await deps.coachUnico();
+  // El script propio del coach del turno; si no cargó uno, el que comparten todos los coaches
+  let coach = turno.coach_id ? await deps.leerCoach(turno.coach_id) : null;
+  if (!coach?.script_url?.trim()) coach = await deps.scriptCompartido();
   const intentos = (turno.calendario_intentos ?? 0) + 1;
   const en = new Date(deps.ahora()).toISOString();
   if (!coach?.script_url?.trim()) {
@@ -190,10 +193,16 @@ const dependenciasReales = (): Dependencias => ({
     if (error) throw new Error(error.message);
     return data as Coach | null;
   },
-  async coachUnico() {
-    const { data, error } = await adminClient.from("call_coaches").select("script_url, coach_email").neq("script_url", "");
+  async scriptCompartido() {
+    const { data, error } = await adminClient
+      .from("call_coaches")
+      .select("script_url, coach_email")
+      .neq("script_url", "")
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    return data?.length === 1 ? (data[0] as Coach) : null;
+    return data as Coach | null;
   },
   async guardarResultado(id, { estado, error, intentos, en }) {
     const { error: fallo } = await adminClient

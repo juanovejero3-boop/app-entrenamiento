@@ -26,6 +26,7 @@ import {
   guardarJornadasRemotas,
   guardarScriptRemoto,
   publicarGrupalRemoto,
+  scriptCompartidoDe,
   soltarTurnoRemoto,
   scriptListo,
   traerLlamadas,
@@ -235,8 +236,9 @@ function dibujar() {
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         <div>
           <h3 class="text-sm font-black text-white uppercase">Calendario</h3>
-          <p class="text-[11px] text-gray-500">El script del coach. Al reservar, agenda la llamada para el alumno y para este mail.</p>
+          <p class="text-[11px] text-gray-500">Un solo script para todos los coaches. Al reservar, agenda la llamada con él. Si cargás otro, pasa a ser el de todos.</p>
         </div>
+        ${scriptCompartidoDe() ? `<p data-script-compartido class="text-[11px] text-sky-300">Usás el script que cargó ${esc(scriptCompartidoDe())}.</p>` : ''}
         <label class="block text-[10px] text-gray-400 uppercase font-bold">URL del script<input id="agenda-script" type="url" value="${esc(scriptEscrito)}" placeholder="https://script.google.com/macros/..." class="${claseInput}"></label>
         <button type="button" data-click="agendaGuardarScript" class="w-full py-2 rounded-lg border border-gray-700 text-xs font-bold uppercase text-white">Guardar script</button>
       </div>
@@ -306,7 +308,12 @@ async function actualizar() {
   actualizando = false;
   errorLectura = trajo ? '' : errorAlTraer();
   if (trajo) {
-    if (urlScript()) scriptEscrito = urlScript();
+    if (urlScript()) {
+      scriptEscrito = urlScript();
+      // dibujar() toma lo escrito en el campo: se le pone la dirección traída para que no la pise con el campo vacío
+      const campo = raiz.querySelector('#agenda-script');
+      if (campo) campo.value = scriptEscrito;
+    }
     cargarLocal();
   }
   dibujar();

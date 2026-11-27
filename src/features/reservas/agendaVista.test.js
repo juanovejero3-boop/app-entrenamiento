@@ -278,3 +278,24 @@ describe('agenda: turnos guardados en la cuenta', () => {
     expect($('[data-error-lectura]').textContent).toContain('sin conexión');
   });
 });
+
+describe('agenda: script compartido', () => {
+  it('un coach sin script propio puede generar llamadas con el que cargó otro, y se lo dice', async () => {
+    conectarLlamadas({
+      leer: vi.fn(async () => ({ jornadas: [], turnos: [], grupales: [] })),
+      leerScript: async () => ({
+        url: 'https://script.google.com/macros/s/head/exec',
+        coachEmail: 'head@test.com',
+        propio: false,
+      }),
+    });
+    state.currentUser = { id: 'otro-coach' };
+    state.userProfile = { role: 'admin' };
+    montarAgenda(raiz);
+    await vi.waitFor(() => expect($('[data-click="agendaActualizar"]').disabled).toBe(false));
+    expect($('[data-sin-script]')).toBeNull();
+    expect($('[data-click="agendaGenerar"]')).not.toBeNull();
+    expect($('[data-script-compartido]').textContent).toContain('head@test.com');
+    expect($('#agenda-script').value).toBe('https://script.google.com/macros/s/head/exec');
+  });
+});

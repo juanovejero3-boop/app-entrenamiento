@@ -143,16 +143,33 @@ export function crearRepoLlamadas(cliente) {
       datos(await cliente.from('group_calls').delete().eq('id', id));
     },
 
-    /** El script de Google Calendar del coach `coachId` (solo lo puede leer un coach). */
+    /**
+     * El script de Google Calendar que usa el coach `coachId`: el suyo si lo cargó y, si no, el que comparten todos
+     * (el último que cargó algún coach). Solo lo pueden leer los coaches.
+     * @returns {Promise<{ url: string, coachEmail: string, propio: boolean }>}
+     */
     async leerScript(coachId) {
-      const fila = datos(
-        await cliente.from('call_coaches').select('script_url, coach_email').eq('coach_id', coachId).maybeSingle(),
-      );
-      return { url: fila?.script_url || '', coachEmail: fila?.coach_email || '' };
+      const filas = datos(
+        await cliente
+          .from('call_coaches')
+          .select('coach_id, script_url, coach_email')
+          .order('updated_at', { ascending: false }),
+      ).filter((fila) => (fila.script_url || '').trim());
+      const propio = filas.find((fila) => fila.coach_id === coachId);
+      const elegido = propio ?? filas[0];
+      return { url: elegido?.script_url || '', coachEmail: elegido?.coach_email || '', propio: Boolean(propio) };
     },
 
+    /** Guarda el script a nombre de `coachId`; al ser el último cargado, pasa a ser el que comparten todos. */
     async guardarScript(url, coachEmail, coachId) {
-      datos(await cliente.from('call_coaches').upsert({ coach_id: coachId, script_url: url, coach_email: coachEmail }));
+      datos(
+        await cliente.from('call_coaches').upsert({
+          coach_id: coachId,
+          script_url: url,
+          coach_email: coachEmail,
+          updated_at: new Date().toISOString(),
+        }),
+      );
     },
 
     /** Pide al servidor que agende el turno en el Google Calendar de su coach. @returns {Promise<{ estado: string, error: string }>} */

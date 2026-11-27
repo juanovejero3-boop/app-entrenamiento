@@ -44,7 +44,7 @@ function dependencias({
   fila = turno(),
   coach = { script_url: URL_SCRIPT, coach_email: 'coach@test.com' },
   red = exito(),
-  unico = null,
+  compartido = null,
 } = {}) {
   const guardados = [];
   const pedidos = [];
@@ -54,7 +54,7 @@ function dependencias({
     deps: {
       leerTurno: vi.fn(async () => fila),
       leerCoach: vi.fn(async (id) => (id === COACH ? coach : null)),
-      coachUnico: vi.fn(async () => unico),
+      scriptCompartido: vi.fn(async () => compartido),
       guardarResultado: vi.fn(async (id, resultado) => guardados.push({ id, ...resultado })),
       fetchFn: vi.fn(async (url, opciones) => {
         pedidos.push({ url, opciones, cuerpo: JSON.parse(opciones.body) });
@@ -94,14 +94,26 @@ describe('agendar-llamada: lo que le manda al script', () => {
     expect(pedidos[0].cuerpo).toMatchObject({ service: 'Evaluación Inicial & Onboarding', duracionMin: 20 });
   });
 
-  it('si el turno no tiene coach y hay uno solo con script, usa ese', async () => {
+  it('si el turno no tiene coach, usa el script que comparten todos', async () => {
     const { deps, pedidos } = dependencias({
       fila: turno({ coach_id: null }),
-      unico: { script_url: URL_SCRIPT, coach_email: 'coach@test.com' },
+      compartido: { script_url: URL_SCRIPT, coach_email: 'coach@test.com' },
     });
     const resultado = await agendarTurno({ id: ID, admin: false }, deps);
     expect(resultado.cuerpo.estado).toBe('agendado');
     expect(pedidos[0].url).toBe(URL_SCRIPT);
+  });
+
+  it('si el coach del turno no cargó un script propio, usa el compartido (y su mail para invitar)', async () => {
+    const OTRO = 'https://script.google.com/macros/s/compartido/exec';
+    const { deps, pedidos } = dependencias({
+      coach: null,
+      compartido: { script_url: OTRO, coach_email: 'head@test.com' },
+    });
+    const resultado = await agendarTurno({ id: ID, admin: false }, deps);
+    expect(resultado.cuerpo.estado).toBe('agendado');
+    expect(pedidos[0].url).toBe(OTRO);
+    expect(pedidos[0].cuerpo.coachEmail).toBe('head@test.com');
   });
 });
 
@@ -145,7 +157,7 @@ describe('agendar-llamada: lee lo que contesta el script', () => {
   });
 
   it('sin script conectado, el turno queda marcado y no se llama a nadie', async () => {
-    const { deps, guardados, pedidos } = dependencias({ coach: null, unico: null });
+    const { deps, guardados, pedidos } = dependencias({ coach: null, compartido: null });
     const resultado = await agendarTurno({ id: ID, admin: false }, deps);
     expect(resultado.cuerpo.estado).toBe('sin_script');
     expect(pedidos).toHaveLength(0);

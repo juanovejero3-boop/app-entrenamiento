@@ -128,9 +128,26 @@ describe('repo de llamadas', () => {
           coach_id: 'coach-1',
           script_url: 'https://script.google.com/macros/s/abc/exec',
           coach_email: 'coach@test.com',
+          updated_at: expect.any(String), // el último cargado pasa a ser el que comparten todos
         },
       },
     ]);
+  });
+
+  it('un coach sin script propio usa el que cargó otro coach (el compartido); el propio tiene prioridad', async () => {
+    const filas = [
+      { coach_id: 'head', script_url: 'https://script.google.com/macros/s/head/exec', coach_email: 'head@test.com' },
+      { coach_id: 'vacio', script_url: '', coach_email: '' },
+    ];
+    const cliente = {
+      from: () => ({ select: () => ({ order: () => Promise.resolve({ data: filas, error: null }) }) }),
+    };
+    expect(await crearRepoLlamadas(cliente).leerScript('otro')).toEqual({
+      url: 'https://script.google.com/macros/s/head/exec',
+      coachEmail: 'head@test.com',
+      propio: false,
+    });
+    expect((await crearRepoLlamadas(cliente).leerScript('head')).propio).toBe(true);
   });
 
   it('los días que abre el coach quedan a su nombre', async () => {

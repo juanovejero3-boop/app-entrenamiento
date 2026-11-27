@@ -5,7 +5,7 @@ import { state } from '../../state.js';
 import { guardarAgenda, guardarGrupales } from './reservaLocal.js';
 
 let repo = null;
-let script = { url: '', coachEmail: '' };
+let script = { url: '', coachEmail: '', propio: true };
 /** Por qué falló la última lectura ('' si anduvo, o si no hay repo). */
 let errorDeLectura = '';
 
@@ -81,13 +81,18 @@ export function urlScript() {
   return script.url;
 }
 
+/** Si el script que se usa lo cargó otro coach, su mail (el script es compartido); si es el propio, ''. */
+export function scriptCompartidoDe() {
+  return script.url && script.propio === false ? script.coachEmail : '';
+}
+
 /** Sin repo (tests) la agenda se ve. Con repo, solo si el coach ya guardó el script. */
 export function scriptListo() {
   return !repo || Boolean(script.url.trim());
 }
 
 export function guardarScriptRemoto(url, coachEmail) {
-  script = { url: (url || '').trim(), coachEmail: (coachEmail || '').trim() };
+  script = { url: (url || '').trim(), coachEmail: (coachEmail || '').trim(), propio: true };
   if (!repo) return Promise.resolve();
   return repo.guardarScript(script.url, script.coachEmail, state.currentUser?.id);
 }
