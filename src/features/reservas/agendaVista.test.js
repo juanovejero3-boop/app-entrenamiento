@@ -24,6 +24,8 @@ afterEach(() => {
 });
 
 const $ = (selector) => raiz.querySelector(selector);
+/** Cambia de pestaña: Próximas, Horarios o Grupales. */
+const irA = (pestana) => $(`[data-click="agendaPestana"][data-pestana="${pestana}"]`).click();
 const horas = () => [...raiz.querySelectorAll('[data-libre]')].map((b) => b.dataset.libre);
 function cambiar(el, valor) {
   el.value = valor;
@@ -51,6 +53,7 @@ describe('agenda de prueba', () => {
     });
 
     montarAgenda(raiz);
+    irA('horarios');
 
     expect(raiz.querySelector('[data-sin-script]').textContent).toContain('Cargá tu script');
     expect(raiz.querySelector('[data-click="agendaGenerar"]')).toBeNull();
@@ -59,6 +62,7 @@ describe('agenda de prueba', () => {
 
   it('la fecha abre el calendario y el rango, la duración y el descanso son listas', () => {
     montarAgenda(raiz);
+    irA('horarios');
     const fecha = $('[data-change="agendaFecha"]');
     const abrir = vi.fn();
     fecha.showPicker = abrir;
@@ -85,6 +89,7 @@ describe('agenda de prueba', () => {
 
   it('no muestra horarios hasta que el coach genera ese día', () => {
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
 
     expect(horas()).toEqual([]);
@@ -102,10 +107,12 @@ describe('agenda de prueba', () => {
 
   it('una reserva de las 11:30 ocupa hasta las 12:30 y cancelarla lo libera', async () => {
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
     $('[data-click="agendaGenerar"]').click();
     anotar('11:30');
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
 
     expect(horas()).not.toContain('11:30');
@@ -125,10 +132,12 @@ describe('agenda de prueba', () => {
 
   it('cambiar el descanso no rearma el día hasta volver a generar', () => {
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
     $('[data-click="agendaGenerar"]').click();
     anotar('11:30');
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
     cambiar($('[data-campo="descansoMin"]'), '0');
 
@@ -143,6 +152,7 @@ describe('agenda de prueba', () => {
 
   it('generar un día no abre otro', () => {
     montarAgenda(raiz);
+    irA('horarios');
     cambiar($('[data-change="agendaFecha"]'), SABADO);
     $('[data-click="agendaGenerar"]').click();
     cambiar($('[data-change="agendaFecha"]'), VIERNES);
@@ -152,6 +162,7 @@ describe('agenda de prueba', () => {
 
   it('la primera llamada genera de a 20 minutos en cada día del rango', () => {
     montarAgenda(raiz);
+    irA('horarios');
     $('[data-click="agendaElegir"][data-id="primera"]').click();
     cambiar($('[data-change="agendaRango"][data-campo="desde"]'), SABADO);
     cambiar($('[data-change="agendaRango"][data-campo="hasta"]'), '2026-11-22');
@@ -172,14 +183,16 @@ describe('agenda de prueba', () => {
     expect(raiz.querySelector('[data-dia-generado="2026-11-21"] [data-cuerpo-dia]').hidden).toBe(true);
   });
 
-  it('el coach publica una llamada grupal y puede cancelarla', async () => {
+  it('el coach publica una llamada grupal, puede entrar y cancelarla', async () => {
     montarAgenda(raiz);
+    irA('grupales');
     cambiar($('[data-change="grupalFecha"]'), '2026-12-01');
     cambiar($('[data-change="grupalHora"]'), '19:00');
     raiz.querySelector('#grupal-enlace').value = 'https://meet.google.com/abc-defg-hij';
     $('[data-click="grupalPublicar"]').click();
 
     expect(raiz.textContent).toContain('meet.google.com/abc-defg-hij');
+    expect($('[data-grupal] a[data-entrar]').href).toBe('https://meet.google.com/abc-defg-hij');
 
     $('[data-click="grupalCancelar"]').click();
     document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
@@ -227,6 +240,7 @@ describe('agenda: turnos guardados en la cuenta', () => {
   const cargado = () => vi.waitFor(() => expect($('[data-click="agendaActualizar"]').disabled).toBe(false));
   const abrirSabado = async () => {
     montarAgenda(raiz);
+    irA('horarios');
     await cargado();
     cambiar($('[data-change="agendaFecha"]'), SABADO);
   };
@@ -276,6 +290,7 @@ describe('agenda: turnos guardados en la cuenta', () => {
     const repo = repoCon([]);
     repo.leer.mockRejectedValue(new Error('sin conexión'));
     montarAgenda(raiz);
+    irA('horarios');
     await vi.waitFor(() => expect($('[data-error-lectura]')).not.toBeNull());
     expect($('[data-error-lectura]').textContent).toContain('sin conexión');
   });
@@ -294,6 +309,7 @@ describe('agenda: script compartido', () => {
     state.currentUser = { id: 'otro-coach' };
     state.userProfile = { role: 'admin' };
     montarAgenda(raiz);
+    irA('horarios');
     await vi.waitFor(() => expect($('[data-click="agendaActualizar"]').disabled).toBe(false));
     expect($('[data-sin-script]')).toBeNull();
     expect($('[data-click="agendaGenerar"]')).not.toBeNull();
@@ -386,5 +402,33 @@ describe('agenda: próximas llamadas', () => {
     document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
     await vi.waitFor(() => expect(document.body.textContent).toMatch(/borralo a mano/i));
     expect(document.body.textContent).toContain('Not Found');
+  });
+});
+
+describe('agenda: pestañas', () => {
+  it('abre en Próximas y cambia a Horarios y Grupales', () => {
+    montarAgenda(raiz);
+    expect($('[data-proximas]')).not.toBeNull();
+    expect($('[data-click="agendaGenerar"]')).toBeNull();
+    expect($('[data-pestana="proximas"]').getAttribute('aria-selected')).toBe('true');
+
+    irA('horarios');
+    expect($('[data-click="agendaGenerar"]')).not.toBeNull();
+    expect($('[data-proximas]')).toBeNull();
+
+    irA('grupales');
+    expect($('[data-click="grupalPublicar"]')).not.toBeNull();
+    expect($('[data-click="agendaGenerar"]')).toBeNull();
+  });
+
+  it('en Próximas también están las grupales, con su botón para entrar', () => {
+    localStorage.setItem(
+      'pp_grupales_borrador',
+      JSON.stringify([{ id: 'g1', fecha: '2099-01-10', hora: '19:00', enlace: 'meet.google.com/abc-defg-hij' }]),
+    );
+    montarAgenda(raiz);
+    const grupal = $('[data-proxima-grupal="g1"]');
+    expect(grupal.textContent).toMatch(/grupal/i);
+    expect(grupal.querySelector('a[data-entrar]').href).toBe('https://meet.google.com/abc-defg-hij');
   });
 });

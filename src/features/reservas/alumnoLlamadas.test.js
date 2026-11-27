@@ -224,3 +224,27 @@ describe('llamadas del alumno: su turno', () => {
     expect(repo.soltar).not.toHaveBeenCalled();
   });
 });
+
+describe('llamadas del alumno: reservar por día', () => {
+  it('elige el día arriba y ve los horarios de ese día', () => {
+    const jornada = (fecha, desde) => ({
+      agendaId: 'seguimiento',
+      fecha,
+      desde,
+      hasta: '12:00',
+      duracionMin: 30,
+      descansoMin: 0,
+    });
+    guardarAgenda([jornada('2099-01-10', '09:00'), jornada('2099-01-11', '11:00')], []);
+    renderTabLlamadas(raiz);
+    const horas = () => [...raiz.querySelectorAll('[data-click="alumnoElegirTurno"]')].map((b) => b.dataset.hora);
+    expect(raiz.querySelector('[data-click="llamadasDia"][data-fecha="2099-01-10"]').getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(horas()).toContain('09:00');
+
+    raiz.querySelector('[data-click="llamadasDia"][data-fecha="2099-01-11"]').click();
+
+    expect(horas()).toEqual(['11:00', '11:30']);
+  });
+});

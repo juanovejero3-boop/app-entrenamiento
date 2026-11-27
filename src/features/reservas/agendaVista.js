@@ -15,6 +15,7 @@ import {
   guardarAgenda,
   guardarGrupales,
   grupalesVisibles,
+  hrefDe,
   leerAgenda,
   leerGrupales,
   publicarGrupal,
@@ -75,6 +76,13 @@ let scriptEscrito = localStorage.getItem('pp_webhook_url') || '';
 /** Por qué no se pudieron traer los turnos ('' si se trajeron bien). */
 let errorLectura = '';
 let actualizando = false;
+/** @type {'proximas' | 'horarios' | 'grupales'} */
+let pestana = 'proximas';
+const PESTANAS = [
+  { id: 'proximas', nombre: 'Próximas' },
+  { id: 'horarios', nombre: 'Horarios' },
+  { id: 'grupales', nombre: 'Grupales' },
+];
 /** @type {{ desde: string, hasta: string, duracionMin: number, descansoMin: number }} */
 let borrador = { desde: '08:30', hasta: '19:30', duracionMin: 30, descansoMin: 30 };
 
@@ -152,50 +160,81 @@ const hoyIso = (ahora = new Date()) =>
 
 const hrefMeet = (enlace) => (/^https:\/\/meet\.google\.com\//i.test(enlace || '') ? enlace : '');
 
-/** Una llamada reservada en la lista de próximas: quién, a qué hora, su Meet, el calendario y cancelar. */
+const ICONO_CALENDARIO = {
+  agendado: '<i class="fa-solid fa-circle-check text-emerald-400" title="En Google Calendar"></i>',
+  pendiente: '<i class="fa-solid fa-clock text-gray-500" title="Agendando"></i>',
+  error: '<i class="fa-solid fa-triangle-exclamation text-red-400" title="No se agendó"></i>',
+  sin_script: '<i class="fa-solid fa-plug text-amber-400" title="Sin calendario conectado"></i>',
+};
+
+const botonEntrar = (href, extra = '') =>
+  `<a data-entrar ${extra} href="${esc(href)}" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center gap-1 min-h-9 px-3 rounded-lg bg-neonRed text-white text-[11px] font-bold uppercase"><i class="fa-solid fa-video"></i>Entrar</a>`;
+
+/** Una llamada reservada: a la vista la hora, quién y el botón para entrar; al tocarla, los datos y cancelar. */
 function filaProxima(t) {
   const tipoNombre = tipo[t.agendaId]?.nombre ?? '';
   const contacto = [t.telefono, t.email].filter(Boolean).join(' · ');
   const meet = hrefMeet(t.meet);
-  return `<li data-proxima="${esc(t.id || `${t.agendaId}|${t.fecha}|${t.hora}`)}" class="space-y-2 border-t border-gray-800 pt-3 first:border-t-0 first:pt-0">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm text-white"><b class="text-neonRed">${esc(t.hora)}</b> ${esc(t.nombre || 'Ocupado')}</p>
-          <p class="text-[11px] text-gray-400 break-words">${esc(tipoNombre)}${contacto ? ` · ${esc(contacto)}` : ''}</p>
-          ${t.notas ? `<p class="text-[11px] text-gray-500 break-words">${esc(t.notas)}</p>` : ''}
-        </div>
-        <button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="shrink-0 min-h-10 px-2 text-[11px] text-red-400 font-bold uppercase">Cancelar</button>
-      </div>
-      <div class="flex flex-wrap items-center gap-2">
-        ${meet ? `<a data-meet href="${esc(meet)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2 py-1 rounded bg-neonRed text-white text-[11px] font-bold uppercase"><i class="fa-solid fa-video"></i>Meet</a>` : ''}
+  return `<details data-proxima="${esc(t.id || `${t.agendaId}|${t.fecha}|${t.hora}`)}" class="group rounded-lg border border-gray-800 bg-black/30">
+      <summary class="flex items-center gap-3 px-3 py-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <b class="text-neonRed text-sm w-12 shrink-0">${esc(t.hora)}</b>
+        <span class="flex-1 min-w-0">
+          <span class="block text-sm text-white truncate">${esc(t.nombre || 'Ocupado')}</span>
+          <span class="block text-[11px] text-gray-400 truncate">${ICONO_CALENDARIO[t.calendarioEstado] ?? ''} ${esc(tipoNombre)}</span>
+        </span>
+        ${meet ? botonEntrar(meet, 'data-meet') : '<i class="fa-solid fa-chevron-down text-[10px] text-gray-500 transition group-open:rotate-180"></i>'}
+      </summary>
+      <div class="px-3 pb-3 space-y-2 text-[11px] text-gray-300">
+        ${contacto ? `<p class="break-words">${esc(contacto)}</p>` : ''}
+        ${t.notas ? `<p class="text-gray-400 break-words">${esc(t.notas)}</p>` : ''}
         ${estadoCalendario(t)}
+        <button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="w-full min-h-10 rounded-lg border border-red-900 text-red-400 font-bold uppercase">Cancelar llamada</button>
       </div>
-    </li>`;
+    </details>`;
 }
 
-/** Las llamadas reservadas de hoy en adelante, agrupadas por día. */
+function filaGrupalProxima(g) {
+  return `<div data-proxima-grupal="${esc(g.id)}" class="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-800 bg-black/30">
+      <b class="text-neonRed text-sm w-12 shrink-0">${esc(g.hora)}</b>
+      <span class="flex-1 min-w-0">
+        <span class="block text-sm text-white">Grupal</span>
+        <span class="block text-[11px] text-gray-400">Todos los alumnos</span>
+      </span>
+      ${botonEntrar(hrefDe(g.enlace))}
+    </div>`;
+}
+
+function textoDia(fecha) {
+  const hoy = hoyIso();
+  const manana = new Date();
+  manana.setDate(manana.getDate() + 1);
+  const prefijo = fecha === hoy ? 'Hoy · ' : fecha === hoyIso(manana) ? 'Mañana · ' : '';
+  return prefijo + textoFecha(fecha);
+}
+
+/** Las llamadas de hoy en adelante (reservadas y grupales), agrupadas por día. */
 function panelProximas() {
   const hoy = hoyIso();
-  const vienen = turnos
-    .filter((t) => t.fecha >= hoy)
-    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
-  const dias = [...new Set(vienen.map((t) => t.fecha))];
-  return `<section data-proximas class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-      <h3 class="text-sm font-black text-white uppercase">Próximas llamadas${vienen.length ? ` <span class="text-neonRed">${vienen.length}</span>` : ''}</h3>
+  const items = [
+    ...turnos.filter((t) => t.fecha >= hoy).map((t) => ({ fecha: t.fecha, hora: t.hora, html: filaProxima(t) })),
+    ...grupalesParaMostrar().map((g) => ({ fecha: g.fecha, hora: g.hora, html: filaGrupalProxima(g) })),
+  ].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+  const dias = [...new Set(items.map((i) => i.fecha))];
+  return `<section data-proximas class="space-y-3">
       ${
         dias.length
           ? dias
               .map(
                 (dia) => `<div class="space-y-2">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 capitalize">${esc(textoFecha(dia))}</p>
-          <ul class="space-y-3">${vienen
-            .filter((t) => t.fecha === dia)
-            .map(filaProxima)
-            .join('')}</ul>
+          <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400">${esc(textoDia(dia))}</p>
+          ${items
+            .filter((i) => i.fecha === dia)
+            .map((i) => i.html)
+            .join('')}
         </div>`,
               )
               .join('')
-          : '<p class="text-sm text-gray-400">No hay llamadas reservadas por ahora.</p>'
+          : '<p class="text-sm text-gray-400 bg-cyberCard border border-gray-800 rounded-xl p-4">No hay llamadas reservadas por ahora. Abrí horarios en «Horarios» para que los alumnos reserven.</p>'
       }
     </section>`;
 }
@@ -236,7 +275,7 @@ function panelGrupal() {
   return `
     <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
       <div>
-        <h3 class="text-sm font-black text-white uppercase">Llamada grupal</h3>
+        <h3 class="text-sm font-black text-white uppercase">Nueva llamada grupal</h3>
         <p class="text-[11px] text-gray-500">La ven todos los alumnos. Pegá el enlace de Meet.</p>
       </div>
       <div class="grid grid-cols-2 gap-2">
@@ -254,6 +293,7 @@ function panelGrupal() {
                   <p class="text-lg font-black text-white capitalize">${esc(textoFecha(g.fecha))}</p>
                   <p class="text-3xl font-black text-neonRed leading-none">${esc(g.hora)}</p>
                   <p class="text-[11px] text-gray-500 break-all">${esc(g.enlace)}</p>
+                  <a data-entrar href="${esc(hrefDe(g.enlace))}" target="_blank" rel="noopener" class="!mt-2 block w-full py-2 rounded-lg bg-neonRed text-white text-center text-xs font-bold uppercase"><i class="fa-solid fa-video mr-1"></i>Entrar a la llamada</a>
                   <button type="button" data-click="grupalCancelar" data-id="${esc(g.id)}" data-fecha="${esc(g.fecha)}" data-hora="${esc(g.hora)}" class="!mt-2 w-full py-2 border border-red-900 text-red-400 rounded-lg text-xs font-bold uppercase">Cancelar llamada</button>
                 </article>`,
               )
@@ -276,45 +316,37 @@ function tomarBorrador(origen) {
   };
 }
 
-function dibujar() {
-  if (!raiz || !tipo) return;
-  const campoScript = raiz.querySelector('#agenda-script');
-  if (campoScript) scriptEscrito = campoScript.value;
+function pestanas() {
+  return `<div role="tablist" class="flex gap-1 p-1 rounded-xl bg-cyberCard border border-gray-800">${PESTANAS.map(
+    (p) =>
+      `<button type="button" role="tab" data-click="agendaPestana" data-pestana="${p.id}" aria-selected="${p.id === pestana}" class="flex-1 min-h-10 rounded-lg text-[11px] font-bold uppercase tracking-wider ${p.id === pestana ? 'bg-neonRed text-white' : 'text-gray-400'}">${p.nombre}</button>`,
+  ).join('')}</div>`;
+}
+
+function panelScript() {
+  return `<details ${scriptListo() ? '' : 'open'} class="bg-cyberCard rounded-xl border border-gray-800">
+      <summary class="px-4 py-3 text-sm font-black text-white uppercase cursor-pointer">Calendario <span class="text-[11px] font-normal normal-case text-gray-500">· script de Google</span></summary>
+      <div class="px-4 pb-4 space-y-3">
+        <p class="text-[11px] text-gray-500">Un solo script para todos los coaches. Al reservar, agenda la llamada con él. Si cargás otro, pasa a ser el de todos.</p>
+        ${scriptCompartidoDe() ? `<p data-script-compartido class="text-[11px] text-sky-300">Usás el script que cargó ${esc(scriptCompartidoDe())}.</p>` : ''}
+        <label class="block text-[10px] text-gray-400 uppercase font-bold">URL del script<input id="agenda-script" type="url" value="${esc(scriptEscrito)}" placeholder="https://script.google.com/macros/..." class="${claseInput}"></label>
+        <button type="button" data-click="agendaGuardarScript" class="w-full py-2 rounded-lg border border-gray-700 text-xs font-bold uppercase text-white">Guardar script</button>
+      </div>
+    </details>`;
+}
+
+function panelHorarios() {
   const esPrimera = agendaId === 'primera';
+  if (!scriptListo()) {
+    return `<p data-sin-script class="text-sm text-amber-300 bg-cyberCard border border-gray-800 rounded-xl p-4">Cargá tu script para poder generar llamadas.</p>${panelScript()}`;
+  }
   const fechas = esPrimera
     ? `<div class="grid grid-cols-2 gap-2">
         <label class="text-[10px] text-gray-400 uppercase font-bold">Desde el día<input type="date" data-click="agendaAbrirFecha" data-change="agendaRango" data-campo="desde" value="${esc(fechaDesde)}" class="${claseFecha}"></label>
         <label class="text-[10px] text-gray-400 uppercase font-bold">Hasta el día<input type="date" data-click="agendaAbrirFecha" data-change="agendaRango" data-campo="hasta" value="${esc(fechaHasta)}" class="${claseFecha}"></label>
       </div>`
     : `<label class="block text-[10px] text-gray-400 uppercase font-bold">Fecha<input type="date" data-click="agendaAbrirFecha" data-change="agendaFecha" value="${esc(fecha)}" class="${claseFecha}"></label>`;
-  raiz.innerHTML = `
-    <div data-agenda class="space-y-4">
-      <div class="flex items-start gap-3">
-        <div class="flex-1 min-w-0 bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
-          <h2 class="text-xl font-black text-white uppercase tracking-wide">Agenda</h2>
-          <p class="text-xs text-gray-400">${esPrimera ? 'Elegí desde qué día hasta qué día, y el horario. Generar abre todos esos días.' : 'Elegí el día y el horario. Generar publica esos horarios.'}</p>
-        </div>
-        <button type="button" data-click="agendaActualizar" ${actualizando ? 'disabled' : ''} class="shrink-0 min-h-10 px-3 rounded-lg border border-gray-700 text-[11px] font-bold uppercase text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-50"><i class="fa-solid fa-rotate ${actualizando ? 'fa-spin' : ''} mr-1"></i>Actualizar</button>
-      </div>
-      ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer los turnos (${esc(errorLectura)}). Lo que ves puede no estar al día: probá con «Actualizar».</p>` : ''}
-      ${panelProximas()}
-      <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-        <div>
-          <h3 class="text-sm font-black text-white uppercase">Calendario</h3>
-          <p class="text-[11px] text-gray-500">Un solo script para todos los coaches. Al reservar, agenda la llamada con él. Si cargás otro, pasa a ser el de todos.</p>
-        </div>
-        ${scriptCompartidoDe() ? `<p data-script-compartido class="text-[11px] text-sky-300">Usás el script que cargó ${esc(scriptCompartidoDe())}.</p>` : ''}
-        <label class="block text-[10px] text-gray-400 uppercase font-bold">URL del script<input id="agenda-script" type="url" value="${esc(scriptEscrito)}" placeholder="https://script.google.com/macros/..." class="${claseInput}"></label>
-        <button type="button" data-click="agendaGuardarScript" class="w-full py-2 rounded-lg border border-gray-700 text-xs font-bold uppercase text-white">Guardar script</button>
-      </div>
-      ${
-        scriptListo()
-          ? ''
-          : '<p data-sin-script class="text-sm text-amber-300 bg-cyberCard border border-gray-800 rounded-xl p-4">Cargá tu script para poder generar llamadas.</p>'
-      }
-      ${
-        scriptListo()
-          ? `<div class="flex gap-2">
+  return `<div class="flex gap-2">
         ${Object.values(tipo)
           .map(
             (a) => `
@@ -323,6 +355,7 @@ function dibujar() {
           .join('')}
       </div>
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+        <p class="text-xs text-gray-400">${esPrimera ? 'Elegí desde qué día hasta qué día, y el horario. Generar abre todos esos días.' : 'Elegí el día y el horario. Generar publica esos horarios.'}</p>
         ${fechas}
         <div class="grid grid-cols-2 gap-2">
           <label class="text-[10px] text-gray-400 uppercase font-bold">Desde la hora<select data-change="agendaCampo" data-campo="desde" class="${claseInput}">${opciones(HORAS, borrador.desde)}</select></label>
@@ -336,9 +369,25 @@ function dibujar() {
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         ${panelDias()}
       </div>
-      ${panelGrupal()}`
-          : ''
-      }
+      ${panelScript()}`;
+}
+
+function dibujar() {
+  if (!raiz || !tipo) return;
+  const campoScript = raiz.querySelector('#agenda-script');
+  if (campoScript) scriptEscrito = campoScript.value;
+  const contenido = pestana === 'proximas' ? panelProximas() : pestana === 'horarios' ? panelHorarios() : panelGrupal();
+  raiz.innerHTML = `
+    <div data-agenda class="space-y-4">
+      <div class="flex items-center gap-3">
+        <div class="flex-1 min-w-0 bg-cyberDark border-l-4 border-neonRed pl-3 py-2">
+          <h2 class="text-xl font-black text-white uppercase tracking-wide">Llamadas</h2>
+        </div>
+        <button type="button" data-click="agendaActualizar" ${actualizando ? 'disabled' : ''} class="shrink-0 min-h-10 px-3 rounded-lg border border-gray-700 text-[11px] font-bold uppercase text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-50"><i class="fa-solid fa-rotate ${actualizando ? 'fa-spin' : ''} mr-1"></i>Actualizar</button>
+      </div>
+      ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer los turnos (${esc(errorLectura)}). Lo que ves puede no estar al día: probá con «Actualizar».</p>` : ''}
+      ${pestanas()}
+      ${contenido}
     </div>`;
 }
 
@@ -354,6 +403,7 @@ export function montarAgenda(contenedor) {
   tipo = valoresIniciales();
   cargarLocal();
   agendaId = 'seguimiento';
+  pestana = 'proximas';
   fecha = '';
   fechaDesde = '';
   fechaHasta = '';
@@ -390,6 +440,10 @@ function campoNumero(valor, anterior) {
 }
 
 registrarAcciones({
+  agendaPestana: (el) => {
+    pestana = el.dataset.pestana;
+    dibujar();
+  },
   agendaActualizar: () => actualizar(),
   agendaReintentar: async (el) => {
     el.disabled = true;

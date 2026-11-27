@@ -1,10 +1,10 @@
-// Pantalla del alumno: la llamada grupal y los turnos de seguimiento que generó el coach.
+// Pantalla del alumno: arriba su próxima llamada (con el Meet), las grupales para entrar, y abajo reservar un
+// seguimiento eligiendo el día y la hora.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import '../../lib/ui.js';
 import { state } from '../../state.js';
 import {
-  alternarDia,
   AVISO_RESERVA,
   cancelarTurno,
   guardarAgenda,
@@ -35,6 +35,8 @@ let errorLectura = '';
 /** Aviso si el turno quedó reservado pero no se pudo agendar en el calendario. */
 let avisoCalendario = '';
 let actualizando = false;
+/** El día que está mirando para reservar ('' = el primero con lugar). */
+let diaElegido = '';
 
 const diaPendiente = (fecha, ahora = new Date()) => {
   const [y, m, d] = fecha.split('-').map(Number);
@@ -43,26 +45,33 @@ const diaPendiente = (fecha, ahora = new Date()) => {
 
 function tarjetaGrupal(g) {
   return `
-    <article data-grupal class="rounded-xl border border-neonRed bg-black/40 p-4 space-y-1">
-      <p class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Llamada grupal</p>
-      <p class="text-lg font-black text-white capitalize">${esc(textoFecha(g.fecha))}</p>
-      <p class="text-3xl font-black text-neonRed leading-none">${esc(g.hora)}</p>
-      <a data-grupal-enlace href="${esc(hrefDe(g.enlace))}" target="_blank" rel="noopener" class="!mt-3 block w-full py-2 bg-neonRed text-white text-center text-xs font-bold uppercase rounded-lg">Entrar a la llamada</a>
+    <article data-grupal class="flex items-center gap-3 rounded-xl border border-gray-800 bg-black/40 px-3 py-2">
+      <span class="flex-1 min-w-0">
+        <span class="block text-[10px] uppercase tracking-widest text-gray-400 font-bold">Grupal · <span class="capitalize">${esc(textoFecha(g.fecha))}</span></span>
+        <span class="block text-xl font-black text-neonRed leading-tight">${esc(g.hora)}</span>
+      </span>
+      <a data-grupal-enlace href="${esc(hrefDe(g.enlace))}" target="_blank" rel="noopener" class="shrink-0 inline-flex items-center gap-1 min-h-10 px-3 bg-neonRed text-white text-xs font-bold uppercase rounded-lg"><i class="fa-solid fa-video"></i>Entrar</a>
     </article>`;
 }
 
 function tarjetaTurno(t) {
+  const meet = /^https:\/\/meet\.google\.com\//i.test(t.meet || '') ? t.meet : '';
+  const detalle = [
+    t.duracionMin ? `${t.duracionMin} min` : '',
+    t.calendarioEstado === 'agendado' ? 'en tu calendario' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return `
     <article data-turno-propio class="rounded-xl border border-neonRed bg-black/40 p-4 space-y-1">
-      <p class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Tu turno</p>
+      <p class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Tu próxima llamada</p>
       <p class="text-lg font-black text-white capitalize">${esc(textoFecha(t.fecha))}</p>
       <p class="text-3xl font-black text-neonRed leading-none">${esc(t.hora)}</p>
-      ${
-        /^https:\/\/meet\.google\.com\//i.test(t.meet || '')
-          ? `<a data-meet href="${esc(t.meet)}" target="_blank" rel="noopener" class="!mt-3 block w-full py-2 bg-neonRed text-white text-center text-xs font-bold uppercase rounded-lg"><i class="fa-solid fa-video mr-1"></i>Entrar a la llamada</a>`
-          : ''
-      }
-      <button type="button" data-click="llamadaCancelar" data-fecha="${esc(t.fecha)}" data-hora="${esc(t.hora)}" class="!mt-3 w-full py-2 border border-red-900 text-red-400 rounded-lg text-xs font-bold uppercase">Cancelar turno</button>
+      <p class="text-[11px] text-gray-400">Seguimiento${detalle ? ` · ${esc(detalle)}` : ''}</p>
+      <div class="!mt-3 flex gap-2">
+        ${meet ? `<a data-meet href="${esc(meet)}" target="_blank" rel="noopener" class="flex-1 py-2 bg-neonRed text-white text-center text-xs font-bold uppercase rounded-lg"><i class="fa-solid fa-video mr-1"></i>Entrar a la llamada</a>` : ''}
+        <button type="button" data-click="llamadaCancelar" data-fecha="${esc(t.fecha)}" data-hora="${esc(t.hora)}" class="${meet ? 'shrink-0 px-3' : 'w-full'} py-2 border border-red-900 text-red-400 rounded-lg text-xs font-bold uppercase">Cancelar</button>
+      </div>
     </article>`;
 }
 
@@ -79,28 +88,23 @@ function formulario(nombre) {
   </div>`;
 }
 
+/** Los días con lugar como botones arriba, y los horarios del día elegido abajo. */
 function listaDias(dias) {
-  return `<div data-lista-dias class="space-y-2">${dias
-    .map((dia, i) => {
-      const abierto = i === 0;
-      return `<div class="border border-gray-800 rounded-lg">
-        <button type="button" data-click="alumnoDesplegar" aria-expanded="${abierto}" class="w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase text-white">
-          <span>${esc(textoFecha(dia.fecha))}</span>
-          <i data-flecha class="fa-solid fa-chevron-down text-[10px] ${abierto ? 'rotate-180' : ''}"></i>
-        </button>
-        <div data-cuerpo-dia ${abierto ? '' : 'hidden'} class="px-3 pb-3">
-          <div class="grid grid-cols-3 gap-2">
-            ${dia.horas
-              .map(
-                (hora) =>
-                  `<button type="button" data-click="alumnoElegirTurno" data-fecha="${esc(dia.fecha)}" data-hora="${esc(hora)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white">${hora}</button>`,
-              )
-              .join('')}
-          </div>
-        </div>
-      </div>`;
-    })
-    .join('')}</div>`;
+  const dia = dias.find((d) => d.fecha === diaElegido) ?? dias[0];
+  return `<div class="space-y-3">
+    <div class="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">${dias
+      .map(
+        (d) =>
+          `<button type="button" data-click="llamadasDia" data-fecha="${esc(d.fecha)}" aria-pressed="${d === dia}" class="shrink-0 min-h-10 px-3 rounded-lg border text-[11px] font-bold uppercase capitalize ${d === dia ? 'bg-neonRed border-neonRed text-white' : 'border-gray-700 text-gray-300'}">${esc(textoFecha(d.fecha))}</button>`,
+      )
+      .join('')}</div>
+    <div class="grid grid-cols-3 gap-2">${dia.horas
+      .map(
+        (hora) =>
+          `<button type="button" data-click="alumnoElegirTurno" data-fecha="${esc(dia.fecha)}" data-hora="${esc(hora)}" class="min-h-10 p-2 border border-gray-700 rounded-lg text-xs text-white">${esc(hora)}</button>`,
+      )
+      .join('')}</div>
+  </div>`;
 }
 
 function dibujar() {
@@ -124,27 +128,29 @@ function dibujar() {
       </div>
       ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer las llamadas (${esc(errorLectura)}). Probá con «Actualizar».</p>` : ''}
       ${avisoCalendario ? `<p data-aviso-calendario class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">${esc(avisoCalendario)}</p>` : ''}
+      ${vigentes.map(tarjetaTurno).join('')}
       <section class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-        <h3 class="text-sm font-black text-white uppercase">Grupal</h3>
+        <h3 class="text-sm font-black text-white uppercase">Grupales</h3>
         ${
           grupales.length
             ? grupales.map(tarjetaGrupal).join('')
             : '<p class="text-sm text-gray-400">No hay una llamada grupal por ahora.</p>'
         }
       </section>
-      <section class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
-        <h3 class="text-sm font-black text-white uppercase">Seguimiento</h3>
-        ${vigentes.map(tarjetaTurno).join('')}
+      ${
+        vigentes.length && !elegido
+          ? '' // ya tiene su seguimiento: arriba está su próxima llamada
+          : `<section class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+        <h3 class="text-sm font-black text-white uppercase">Reservar seguimiento</h3>
         ${
           elegido
             ? formulario(nombre)
             : diasLibres.length
               ? listaDias(diasLibres)
-              : vigentes.length
-                ? ''
-                : '<p class="text-sm text-gray-400">No hay turnos de seguimiento por ahora.</p>'
+              : '<p class="text-sm text-gray-400">No hay turnos de seguimiento por ahora.</p>'
         }
-      </section>
+      </section>`
+      }
     </div>`;
 }
 
@@ -156,6 +162,7 @@ export function renderTabLlamadas(content) {
   listo = false;
   errorLectura = '';
   avisoCalendario = '';
+  diaElegido = '';
   dibujar();
   actualizar();
 }
@@ -229,7 +236,10 @@ registrarAcciones({
         dibujar();
       });
   },
-  alumnoDesplegar: (el) => alternarDia(el),
+  llamadasDia: (el) => {
+    diaElegido = el.dataset.fecha;
+    dibujar();
+  },
   llamadaCancelar: async (el) => {
     const fecha = el.dataset.fecha;
     const hora = el.dataset.hora;
