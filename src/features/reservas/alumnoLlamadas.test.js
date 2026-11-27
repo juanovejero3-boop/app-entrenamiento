@@ -170,3 +170,57 @@ describe('llamadas del alumno: con la cuenta', () => {
     expect(raiz.querySelector('[data-click="llamadasActualizar"]')).not.toBeNull();
   });
 });
+
+describe('llamadas del alumno: su turno', () => {
+  const jornada = {
+    agendaId: 'seguimiento',
+    fecha: DIA,
+    desde: '09:00',
+    hasta: '10:00',
+    duracionMin: 30,
+    descansoMin: 0,
+  };
+  const propio = {
+    id: 'b1',
+    agendaId: 'seguimiento',
+    fecha: DIA,
+    hora: '09:00',
+    nombre: 'Ana',
+    email: 'ana@test.com',
+    calendarioEstado: 'agendado',
+    meet: 'https://meet.google.com/abc-defg-hij',
+  };
+  function repoCon(turnos) {
+    const repo = {
+      turnos,
+      leer: vi.fn(async () => ({ jornadas: [jornada], turnos: repo.turnos, grupales: [] })),
+      cancelar: vi.fn(async (id) => {
+        repo.turnos = repo.turnos.filter((t) => t.id !== id);
+        return { calendario: 'borrado', error: '' };
+      }),
+      soltar: vi.fn(async () => {}),
+    };
+    conectarLlamadas(repo);
+    return repo;
+  }
+  const cargado = () =>
+    vi.waitFor(() => expect(raiz.querySelector('[data-click="llamadasActualizar"]').disabled).toBe(false));
+
+  it('ve el enlace de Meet de su turno', async () => {
+    repoCon([propio]);
+    renderTabLlamadas(raiz);
+    await cargado();
+    expect(raiz.querySelector('[data-turno-propio] a[data-meet]').href).toBe('https://meet.google.com/abc-defg-hij');
+  });
+
+  it('al cancelar su turno se borra también del calendario', async () => {
+    const repo = repoCon([propio]);
+    renderTabLlamadas(raiz);
+    await cargado();
+    raiz.querySelector('[data-click="llamadaCancelar"]').click();
+    document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
+    await vi.waitFor(() => expect(repo.cancelar).toHaveBeenCalledWith('b1'));
+    await vi.waitFor(() => expect(raiz.querySelector('[data-turno-propio]')).toBeNull());
+    expect(repo.soltar).not.toHaveBeenCalled();
+  });
+});

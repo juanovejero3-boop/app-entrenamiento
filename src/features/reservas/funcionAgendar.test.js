@@ -6,12 +6,13 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 vi.mock('https://esm.sh/@supabase/supabase-js@2', () => ({ createClient: vi.fn(() => ({})) }));
 
 let agendarTurno;
+let cancelarTurno;
 beforeAll(async () => {
   vi.stubGlobal('Deno', {
     env: { get: (clave) => ({ SUPABASE_URL: 'http://localhost', SUPABASE_SERVICE_ROLE_KEY: 'x' })[clave] },
     serve: vi.fn(),
   });
-  ({ agendarTurno } = await import('../../../supabase/functions/agendar-llamada/index.ts'));
+  ({ agendarTurno, cancelarTurno } = await import('../../../supabase/functions/agendar-llamada/index.ts'));
 });
 
 const ID = '00000000-0000-0000-0000-0000000000b1';
@@ -48,14 +49,17 @@ function dependencias({
 } = {}) {
   const guardados = [];
   const pedidos = [];
+  const borrados = [];
   return {
     guardados,
     pedidos,
+    borrados,
     deps: {
       leerTurno: vi.fn(async () => fila),
       leerCoach: vi.fn(async (id) => (id === COACH ? coach : null)),
       scriptCompartido: vi.fn(async () => compartido),
       guardarResultado: vi.fn(async (id, resultado) => guardados.push({ id, ...resultado })),
+      borrarTurno: vi.fn(async (id) => borrados.push(id)),
       fetchFn: vi.fn(async (url, opciones) => {
         pedidos.push({ url, opciones, cuerpo: JSON.parse(opciones.body) });
         if (red instanceof Error) throw red;
@@ -122,8 +126,36 @@ describe('agendar-llamada: lee lo que contesta el script', () => {
     const { deps, guardados } = dependencias();
     await agendarTurno({ id: ID, admin: false }, deps);
     expect(guardados).toEqual([
-      { id: ID, estado: 'agendado', error: '', intentos: 1, en: new Date(AHORA).toISOString() },
+      {
+        id: ID,
+        estado: 'agendado',
+        error: '',
+        intentos: 1,
+        en: new Date(AHORA).toISOString(),
+        eventoId: '',
+        meet: '',
+      },
     ]);
+  });
+
+  it('guarda el evento y el Meet que devuelve el script nuevo', async () => {
+    const { deps, guardados } = dependencias({
+      red: respuesta(
+        200,
+        JSON.stringify({ status: 'success', eventId: 'ev123', meetLink: 'https://meet.google.com/abc-defg-hij' }),
+      ),
+    });
+    const resultado = await agendarTurno({ id: ID, admin: false }, deps);
+    expect(resultado.cuerpo).toMatchObject({ estado: 'agendado', meet: 'https://meet.google.com/abc-defg-hij' });
+    expect(guardados[0]).toMatchObject({ eventoId: 'ev123', meet: 'https://meet.google.com/abc-defg-hij' });
+  });
+
+  it('un enlace que no es de Meet no se guarda', async () => {
+    const { deps, guardados } = dependencias({
+      red: respuesta(200, JSON.stringify({ status: 'success', eventId: 'ev1', meetLink: 'javascript:alert(1)' })),
+    });
+    await agendarTurno({ id: ID, admin: false }, deps);
+    expect(guardados[0].meet).toBe('');
   });
 
   it('si el script contesta con un error, guarda el motivo exacto que dio Google', async () => {
@@ -194,5 +226,58 @@ describe('agendar-llamada: quién puede pedirlo', () => {
     const resultado = await agendarTurno({ id: ID, admin: true }, deps);
     expect(resultado).toMatchObject({ status: 200, cuerpo: { estado: 'agendado' } });
     expect(pedidos).toHaveLength(0);
+  });
+});
+
+describe('agendar-llamada: cancelar', () => {
+  const agendado = (cambios = {}) =>
+    turno({ calendario_estado: 'agendado', calendario_evento_id: 'ev123', ...cambios });
+
+  it('el coach cancela: borra el evento del calendario y después el turno', async () => {
+    const { deps, pedidos, borrados } = dependencias({ fila: agendado() });
+    const resultado = await cancelarTurno({ id: ID, quien: { admin: true, email: 'coach@test.com' } }, deps);
+    expect(resultado).toEqual({ status: 200, cuerpo: { cancelado: true, calendario: 'borrado', error: '' } });
+    expect(pedidos[0].url).toBe(URL_SCRIPT);
+    expect(pedidos[0].cuerpo).toEqual({ action: 'cancel', id: ID, eventId: 'ev123' });
+    expect(borrados).toEqual([ID]);
+  });
+
+  it('el alumno puede cancelar su propio turno, no el de otro', async () => {
+    const propio = dependencias({ fila: agendado() });
+    const ok = await cancelarTurno({ id: ID, quien: { admin: false, email: 'ANA@test.com' } }, propio.deps);
+    expect(ok.cuerpo.cancelado).toBe(true);
+
+    const ajeno = dependencias({ fila: agendado() });
+    const no = await cancelarTurno({ id: ID, quien: { admin: false, email: 'otro@test.com' } }, ajeno.deps);
+    expect(no.status).toBe(403);
+    expect(ajeno.borrados).toEqual([]);
+    expect(ajeno.pedidos).toEqual([]);
+
+    const anonimo = dependencias({ fila: agendado() });
+    expect((await cancelarTurno({ id: ID, quien: { admin: false, email: '' } }, anonimo.deps)).status).toBe(403);
+  });
+
+  it('un turno sin evento guardado (agendado con el script viejo) se borra sin llamar al script', async () => {
+    const { deps, pedidos, borrados } = dependencias({ fila: agendado({ calendario_evento_id: '' }) });
+    const resultado = await cancelarTurno({ id: ID, quien: { admin: true, email: '' } }, deps);
+    expect(resultado.cuerpo).toEqual({ cancelado: true, calendario: 'sin_evento', error: '' });
+    expect(pedidos).toEqual([]);
+    expect(borrados).toEqual([ID]);
+  });
+
+  it('si el script no pudo borrar el evento, el turno igual se libera y avisa por qué', async () => {
+    const { deps, borrados } = dependencias({
+      fila: agendado(),
+      red: respuesta(200, JSON.stringify({ status: 'error', message: 'Not Found' })),
+    });
+    const resultado = await cancelarTurno({ id: ID, quien: { admin: true, email: '' } }, deps);
+    expect(resultado.cuerpo).toEqual({ cancelado: true, calendario: 'error', error: 'Not Found' });
+    expect(borrados).toEqual([ID]);
+  });
+
+  it('un turno que ya no existe cuenta como cancelado', async () => {
+    const { deps } = dependencias({ fila: null });
+    const resultado = await cancelarTurno({ id: ID, quien: { admin: true, email: '' } }, deps);
+    expect(resultado.cuerpo).toMatchObject({ cancelado: true });
   });
 });

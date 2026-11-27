@@ -1,5 +1,6 @@
-// Agenda local del coach. Genera los horarios de un día. Quien reserva los ve
-// en este mismo navegador. Cancelar un turno lo vuelve a dejar libre.
+// Agenda del coach: arriba las próximas llamadas reservadas (con su Meet y si quedaron en Google Calendar),
+// después el script, y la generación de horarios por día con los libres y los tomados.
+// Cancelar un turno lo vuelve a dejar libre y borra su evento del calendario.
 import { registrarAcciones } from '../../lib/acciones.js';
 import { escapeAttr as esc } from '../../lib/dom.js';
 import '../../lib/ui.js';
@@ -21,13 +22,14 @@ import {
 } from './reservaLocal.js';
 import {
   agendarCalendario,
+  avisoDeCancelacion,
   cancelarGrupalRemoto,
+  cancelarTurnoRemoto,
   errorAlTraer,
   guardarJornadasRemotas,
   guardarScriptRemoto,
   publicarGrupalRemoto,
   scriptCompartidoDe,
-  soltarTurnoRemoto,
   scriptListo,
   traerLlamadas,
   urlScript,
@@ -125,15 +127,77 @@ function filaTurno(t) {
     </li>`;
 }
 
-function huecosHtml(horas) {
-  return horas.length
-    ? horas
-        .map(
-          (hora) =>
-            `<span data-libre="${esc(hora)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white text-center">${hora}</span>`,
-        )
-        .join('')
-    : '<p class="col-span-3 text-sm text-gray-400">No quedan huecos en este día.</p>';
+/** La grilla del día: los horarios libres y, mezclados en orden, los tomados con el nombre de quien reservó. */
+function huecosHtml(horas, ocupados = []) {
+  const chips = [
+    ...horas.map((hora) => ({
+      hora,
+      html: `<span data-libre="${esc(hora)}" class="p-2 border border-gray-700 rounded-lg text-xs text-white text-center">${esc(hora)}</span>`,
+    })),
+    ...ocupados.map((t) => ({
+      hora: t.hora,
+      html: `<span data-tomado="${esc(t.hora)}" class="p-2 border border-neonRed/60 bg-neonRed/10 rounded-lg text-xs text-white text-center min-w-0"><b>${esc(t.hora)}</b><span class="block truncate text-[10px] text-gray-300">${esc(t.nombre || 'Ocupado')}</span></span>`,
+    })),
+  ].sort((a, b) => a.hora.localeCompare(b.hora));
+  if (!horas.length && !ocupados.length) {
+    return '<p class="col-span-3 text-sm text-gray-400">No quedan huecos en este día.</p>';
+  }
+  return `${chips.map((c) => c.html).join('')}${
+    horas.length ? '' : '<p class="col-span-3 text-xs text-gray-400">No quedan huecos libres en este día.</p>'
+  }`;
+}
+
+const hoyIso = (ahora = new Date()) =>
+  `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`;
+
+const hrefMeet = (enlace) => (/^https:\/\/meet\.google\.com\//i.test(enlace || '') ? enlace : '');
+
+/** Una llamada reservada en la lista de próximas: quién, a qué hora, su Meet, el calendario y cancelar. */
+function filaProxima(t) {
+  const tipoNombre = tipo[t.agendaId]?.nombre ?? '';
+  const contacto = [t.telefono, t.email].filter(Boolean).join(' · ');
+  const meet = hrefMeet(t.meet);
+  return `<li data-proxima="${esc(t.id || `${t.agendaId}|${t.fecha}|${t.hora}`)}" class="space-y-2 border-t border-gray-800 pt-3 first:border-t-0 first:pt-0">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm text-white"><b class="text-neonRed">${esc(t.hora)}</b> ${esc(t.nombre || 'Ocupado')}</p>
+          <p class="text-[11px] text-gray-400 break-words">${esc(tipoNombre)}${contacto ? ` · ${esc(contacto)}` : ''}</p>
+          ${t.notas ? `<p class="text-[11px] text-gray-500 break-words">${esc(t.notas)}</p>` : ''}
+        </div>
+        <button type="button" data-click="agendaSoltar" data-hora="${esc(t.hora)}" data-fecha="${esc(t.fecha)}" data-agenda="${esc(t.agendaId)}" class="shrink-0 min-h-10 px-2 text-[11px] text-red-400 font-bold uppercase">Cancelar</button>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        ${meet ? `<a data-meet href="${esc(meet)}" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2 py-1 rounded bg-neonRed text-white text-[11px] font-bold uppercase"><i class="fa-solid fa-video"></i>Meet</a>` : ''}
+        ${estadoCalendario(t)}
+      </div>
+    </li>`;
+}
+
+/** Las llamadas reservadas de hoy en adelante, agrupadas por día. */
+function panelProximas() {
+  const hoy = hoyIso();
+  const vienen = turnos
+    .filter((t) => t.fecha >= hoy)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.hora.localeCompare(b.hora));
+  const dias = [...new Set(vienen.map((t) => t.fecha))];
+  return `<section data-proximas class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
+      <h3 class="text-sm font-black text-white uppercase">Próximas llamadas${vienen.length ? ` <span class="text-neonRed">${vienen.length}</span>` : ''}</h3>
+      ${
+        dias.length
+          ? dias
+              .map(
+                (dia) => `<div class="space-y-2">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400 capitalize">${esc(textoFecha(dia))}</p>
+          <ul class="space-y-3">${vienen
+            .filter((t) => t.fecha === dia)
+            .map(filaProxima)
+            .join('')}</ul>
+        </div>`,
+              )
+              .join('')
+          : '<p class="text-sm text-gray-400">No hay llamadas reservadas por ahora.</p>'
+      }
+    </section>`;
 }
 
 function panelDias() {
@@ -143,7 +207,7 @@ function panelDias() {
     return `<div data-lista-dias class="space-y-2">${dias
       .map((j, i) => {
         const horas = estadoDelDia('primera', j.fecha, jornadas, turnos).horas;
-        const ocupados = turnos.filter((t) => t.fecha === j.fecha);
+        const ocupados = turnos.filter((t) => t.agendaId === 'primera' && t.fecha === j.fecha);
         const abierto = i === 0;
         return `<div data-dia-generado="${esc(j.fecha)}" class="border border-gray-800 rounded-lg">
           <button type="button" data-click="agendaDesplegar" aria-expanded="${abierto}" class="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-bold uppercase text-white">
@@ -151,7 +215,7 @@ function panelDias() {
             <i data-flecha class="fa-solid fa-chevron-down text-[10px] text-gray-400 transition ${abierto ? 'rotate-180' : ''}"></i>
           </button>
           <div data-cuerpo-dia ${abierto ? '' : 'hidden'} class="px-3 pb-3 space-y-2">
-            <div class="grid grid-cols-3 gap-2">${huecosHtml(horas)}</div>
+            <div class="grid grid-cols-3 gap-2">${huecosHtml(horas, ocupados)}</div>
             ${ocupados.length ? `<ul class="space-y-1">${ocupados.map(filaTurno).join('')}</ul>` : ''}
           </div>
         </div>`;
@@ -160,10 +224,10 @@ function panelDias() {
   }
   const jornada = jornadaActual();
   const horas = jornada ? estadoDelDia(agendaId, fecha, jornadas, turnos).horas : [];
-  const ocupados = turnos.filter((t) => t.fecha === fecha);
+  const ocupados = turnos.filter((t) => t.agendaId === agendaId && t.fecha === fecha);
   if (!fecha) return '<p class="text-sm text-gray-400">Elegí una fecha y generá sus horarios.</p>';
   if (!jornada) return '<p data-sin-generar class="text-sm text-gray-400">Este día todavía no tiene horarios.</p>';
-  return `<div data-huecos class="grid grid-cols-3 gap-2">${huecosHtml(horas)}</div>${
+  return `<div data-huecos class="grid grid-cols-3 gap-2">${huecosHtml(horas, ocupados)}</div>${
     ocupados.length ? `<ul class="space-y-1">${ocupados.map(filaTurno).join('')}</ul>` : ''
   }`;
 }
@@ -233,6 +297,7 @@ function dibujar() {
         <button type="button" data-click="agendaActualizar" ${actualizando ? 'disabled' : ''} class="shrink-0 min-h-10 px-3 rounded-lg border border-gray-700 text-[11px] font-bold uppercase text-gray-300 hover:text-neonRed hover:border-neonRed disabled:opacity-50"><i class="fa-solid fa-rotate ${actualizando ? 'fa-spin' : ''} mr-1"></i>Actualizar</button>
       </div>
       ${errorLectura ? `<p data-error-lectura class="text-sm text-amber-300 bg-cyberCard border border-amber-900 rounded-xl p-4">No se pudieron traer los turnos (${esc(errorLectura)}). Lo que ves puede no estar al día: probá con «Actualizar».</p>` : ''}
+      ${panelProximas()}
       <div class="bg-cyberCard p-4 rounded-xl border border-gray-800 space-y-3">
         <div>
           <h3 class="text-sm font-black text-white uppercase">Calendario</h3>
@@ -376,16 +441,28 @@ registrarAcciones({
     guardarJornadasRemotas(jornadas).catch(() => alert('No se pudieron publicar los horarios.'));
   },
   agendaDesplegar: (el) => alternarDia(el),
-  agendaSoltar: (el) => {
+  agendaSoltar: async (el) => {
     const clave = {
       agendaId: el.dataset.agenda,
       fecha: el.dataset.fecha || fecha,
       hora: el.dataset.hora,
     };
+    const turno = turnos.find((t) => t.agendaId === clave.agendaId && t.fecha === clave.fecha && t.hora === clave.hora);
+    if (!turno) return;
+    const ok = await window.confirm(
+      `¿Cancelar la llamada de ${turno.nombre || 'este turno'} del ${textoFecha(turno.fecha)} a las ${turno.hora}? Se borra también de los calendarios.`,
+    );
+    if (!ok) return;
     turnos = cancelarTurno(turnos, clave);
     guardar();
     dibujar();
-    soltarTurnoRemoto(clave).catch(() => alert('No se pudo cancelar el turno.'));
+    try {
+      const aviso = avisoDeCancelacion(await cancelarTurnoRemoto(turno), turno);
+      if (aviso) alert(aviso);
+    } catch (error) {
+      alert(`No se pudo cancelar el turno: ${error?.message || 'error desconocido'}`);
+    }
+    await actualizar();
   },
   agendaGuardarScript: async () => {
     const url = raiz?.querySelector('#agenda-script')?.value.trim() || '';

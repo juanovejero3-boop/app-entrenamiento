@@ -19,8 +19,8 @@ import {
 import {
   agendarCalendario,
   anotarTurnoRemoto,
+  cancelarTurnoRemoto,
   errorAlTraer,
-  soltarTurnoRemoto,
   traerLlamadas,
 } from './llamadasSync.js';
 
@@ -57,6 +57,11 @@ function tarjetaTurno(t) {
       <p class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">Tu turno</p>
       <p class="text-lg font-black text-white capitalize">${esc(textoFecha(t.fecha))}</p>
       <p class="text-3xl font-black text-neonRed leading-none">${esc(t.hora)}</p>
+      ${
+        /^https:\/\/meet\.google\.com\//i.test(t.meet || '')
+          ? `<a data-meet href="${esc(t.meet)}" target="_blank" rel="noopener" class="!mt-3 block w-full py-2 bg-neonRed text-white text-center text-xs font-bold uppercase rounded-lg"><i class="fa-solid fa-video mr-1"></i>Entrar a la llamada</a>`
+          : ''
+      }
       <button type="button" data-click="llamadaCancelar" data-fecha="${esc(t.fecha)}" data-hora="${esc(t.hora)}" class="!mt-3 w-full py-2 border border-red-900 text-red-400 rounded-lg text-xs font-bold uppercase">Cancelar turno</button>
     </article>`;
 }
@@ -213,6 +218,8 @@ registrarAcciones({
           avisoCalendario =
             'Tu turno quedó reservado, pero no se pudo agendar en tu calendario. El coach lo va a ver y te confirma la llamada.';
           dibujar();
+        } else if (resultado) {
+          await actualizar(); // trae el enlace de Meet del evento
         }
       })
       .catch(() => {
@@ -230,10 +237,16 @@ registrarAcciones({
     if (!ok) return;
     const { jornadas, turnos } = leerAgenda();
     const clave = { agendaId: 'seguimiento', fecha, hora };
+    const turno = turnos.find((t) => t.agendaId === 'seguimiento' && t.fecha === fecha && t.hora === hora) ?? clave;
     guardarAgenda(jornadas, cancelarTurno(turnos, clave));
     elegido = null;
     listo = false;
     dibujar();
-    soltarTurnoRemoto(clave).catch(() => alert('No se pudo cancelar el turno.'));
+    try {
+      await cancelarTurnoRemoto(turno); // también lo borra de tu calendario y del del coach
+    } catch {
+      alert('No se pudo cancelar el turno.');
+    }
+    await actualizar();
   },
 });

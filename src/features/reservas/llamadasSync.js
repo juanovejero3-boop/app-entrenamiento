@@ -67,6 +67,30 @@ export function soltarTurnoRemoto(clave) {
   return repo.soltar(clave);
 }
 
+/**
+ * Cancela un turno: si tiene id (está en la cuenta) lo cancela el servidor, que también borra su evento del
+ * calendario; si no, solo se libera el horario.
+ * @returns {Promise<{ calendario: string, error: string } | null>} null si no hubo evento que mirar
+ */
+export async function cancelarTurnoRemoto(turno) {
+  if (!repo) return null;
+  if (turno?.id && repo.cancelar) return repo.cancelar(turno.id);
+  await repo.soltar({ agendaId: turno.agendaId, fecha: turno.fecha, hora: turno.hora });
+  return null;
+}
+
+/** El aviso para el coach si el turno se liberó pero su evento sigue en el calendario ('' si no hace falta). */
+export function avisoDeCancelacion(resultado, turno) {
+  if (!resultado) return '';
+  if (resultado.calendario === 'error') {
+    return `El turno se liberó, pero no se pudo borrar el evento del calendario (${resultado.error}). Borralo a mano.`;
+  }
+  if (resultado.calendario === 'sin_evento' && turno?.calendarioEstado === 'agendado') {
+    return 'El turno se liberó. Se había agendado con el script anterior: borralo a mano del calendario.';
+  }
+  return '';
+}
+
 export function publicarGrupalRemoto(grupal) {
   if (!repo) return Promise.resolve();
   return repo.publicarGrupal(grupal);

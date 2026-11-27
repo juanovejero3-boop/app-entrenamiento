@@ -28,6 +28,7 @@ function aTurno(fila) {
     ...(fila.calendario_estado
       ? { calendarioEstado: fila.calendario_estado, calendarioError: fila.calendario_error || '' }
       : {}),
+    ...(fila.meet_link ? { meet: fila.meet_link } : {}),
     agendaId: fila.agenda,
     fecha: fila.fecha,
     hora: horaCorta(fila.hora),
@@ -47,7 +48,7 @@ function aGrupal(fila) {
 const clave = (turno) => `${turno.agendaId}|${turno.fecha}|${turno.hora}`;
 
 const COLUMNAS_TURNO =
-  'id, agenda, fecha, hora, duracion_min, descanso_min, nombre, email, telefono, notas, calendario_estado, calendario_error';
+  'id, agenda, fecha, hora, duracion_min, descanso_min, nombre, email, telefono, notas, calendario_estado, calendario_error, meet_link';
 
 /** El mensaje que mandó la función del servidor (si lo hay) o el del propio error. */
 async function mensajeDeError(error) {
@@ -177,6 +178,17 @@ export function crearRepoLlamadas(cliente) {
       const { data, error } = await cliente.functions.invoke('agendar-llamada', { body: { id } });
       if (error) throw new Error(await mensajeDeError(error));
       return { estado: data?.estado ?? 'error', error: data?.error ?? '' };
+    },
+
+    /**
+     * Cancela el turno en el servidor: borra su evento de Google Calendar (le llega la cancelación al alumno) y libera
+     * el horario. `calendario`: borrado, sin_evento (no guardó su evento: se agendó con el script viejo) o error.
+     * @returns {Promise<{ calendario: string, error: string }>}
+     */
+    async cancelar(id) {
+      const { data, error } = await cliente.functions.invoke('agendar-llamada', { body: { id, accion: 'cancelar' } });
+      if (error) throw new Error(await mensajeDeError(error));
+      return { calendario: data?.calendario ?? 'error', error: data?.error ?? '' };
     },
   };
 }

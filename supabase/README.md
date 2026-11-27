@@ -18,6 +18,7 @@ Este directorio contiene las migraciones de la base de datos, versionadas y orde
 | `migrations/20261125000000_llamadas.sql` | Llamadas: `call_openings` (días que abre el coach), `call_bookings` (turnos, un email por día, sin pisarse) y `group_calls` (la grupal con su enlace). El coach ve teléfono y WhatsApp; el alumno ve su turno y la grupal; quien reserva sin cuenta solo ve los huecos de la primera llamada. Se prueba en `src/features/reservas/esquemaLlamadas.test.js` (PGlite). **Aplicarla en Supabase antes de usar las llamadas entre dispositivos** |
 | `migrations/20261125010000_llamadas_script.sql` | El script de Google Calendar del coach (`call_settings`): lo leen la primera llamada y el seguimiento para agendar el evento con el mail del alumno y el del coach. **Aplicarla en Supabase** |
 | `migrations/20261126000000_llamadas_calendario.sql` | Llamadas con varios coaches: `call_coaches` (el script de Google Calendar de cada coach; ya no es público), `coach_id` en días y turnos (el turno toma el coach de su día) y el resultado del calendario en cada turno (`calendario_estado`: pendiente, agendado, error o sin_script, con el motivo). Pasa el script ya cargado al coach que lo cargó. Se prueba en `src/features/reservas/esquemaCalendario.test.js` (PGlite). **Aplicarla en Supabase y publicar la función `agendar-llamada` antes de desplegar la app que la usa** |
+| `migrations/20261127000000_llamadas_evento.sql` | Cada turno guarda el evento de Google Calendar (`calendario_evento_id`) y su Meet (`meet_link`), que escribe solo la función; con el evento, cancelar el turno lo borra de los calendarios. Se prueba en `src/features/reservas/esquemaEvento.test.js` (PGlite). **Aplicarla en Supabase y volver a publicar `agendar-llamada` antes de desplegar la app que la usa** |
 
 ## Convención
 
@@ -42,10 +43,21 @@ Ver `https://supabase.com/docs/guides/local-development`.
 |---------|----------|
 | `functions/admin-usuarios` | Altas y bajas de alumnos (solo admin) |
 | `functions/ai-plan` | Consulta a Gemini para el constructor de planes y la nutrición (solo admin; secreto `GEMINI_API_KEY`) |
-| `functions/agendar-llamada` | Agenda en Google Calendar un turno recién reservado, con el script del coach de ese turno, y guarda en el turno si quedó agendado o por qué falló. Quien reserva la puede llamar una sola vez, en los minutos siguientes; reintentar es del coach. Se prueba en `src/features/reservas/funcionAgendar.test.js` |
+| `functions/agendar-llamada` | Agenda en Google Calendar un turno recién reservado, con el script del coach de ese turno, y guarda en el turno si quedó agendado (con su evento y su Meet) o por qué falló. Con `accion: 'cancelar'` borra el evento y libera el turno (el coach o el alumno dueño). Quien reserva la puede llamar una sola vez, en los minutos siguientes; reintentar es del coach. Se prueba en `src/features/reservas/funcionAgendar.test.js` |
 
 Se publican con la CLI de Supabase:
 
 ```bash
 supabase functions deploy agendar-llamada
 ```
+
+## Script de Google Calendar del coach
+
+`../google-apps-script/llamadas/` tiene el script que crea los eventos: invita al alumno, crea el Meet, usa la duración del turno y borra el evento al cancelar. Se prueba en `src/features/reservas/scriptCoach.test.js`.
+
+1. En [script.google.com](https://script.google.com), con la cuenta del coach cuyo calendario se usa: Nuevo proyecto.
+2. Configuración del proyecto → tildar «Mostrar el archivo de manifiesto appsscript.json».
+3. Pegar `Codigo.gs` en `Código.gs` y `appsscript.json` en el manifiesto (activa Google Calendar para el Meet, la zona horaria de Argentina, ejecutar como el coach y acceso para cualquiera).
+4. Ejecutar `probarAgenda` una vez y aceptar los permisos.
+5. Implementar → Nueva implementación → Aplicación web. Copiar la URL `/exec` y guardarla en la app (Admin › Llamadas › Calendario).
+6. Si se cambia el código: Implementar → Gestionar implementaciones → editar → Nueva versión (la URL `/exec` sigue siendo la misma).

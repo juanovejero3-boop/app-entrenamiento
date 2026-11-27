@@ -95,6 +95,7 @@ describe('repo de llamadas', () => {
       notas: '',
       calendario_estado: 'error',
       calendario_error: 'Invalid argument',
+      meet_link: 'https://meet.google.com/abc-defg-hij',
     };
     const cliente = {
       from: (tabla) => ({
@@ -107,7 +108,15 @@ describe('repo de llamadas', () => {
       hora: '09:00',
       calendarioEstado: 'error',
       calendarioError: 'Invalid argument',
+      meet: 'https://meet.google.com/abc-defg-hij',
     });
+  });
+
+  it('cancelar le pide a la función que borre el evento y el turno', async () => {
+    const invoke = vi.fn(async () => ({ data: { cancelado: true, calendario: 'borrado', error: '' }, error: null }));
+    const resultado = await crearRepoLlamadas({ functions: { invoke } }).cancelar('b1');
+    expect(invoke).toHaveBeenCalledWith('agendar-llamada', { body: { id: 'b1', accion: 'cancelar' } });
+    expect(resultado).toEqual({ calendario: 'borrado', error: '' });
   });
 
   it('el script se guarda a nombre del coach que lo carga', async () => {

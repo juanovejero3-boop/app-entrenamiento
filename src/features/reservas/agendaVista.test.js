@@ -100,7 +100,7 @@ describe('agenda de prueba', () => {
     expect(horas()).not.toContain('19:30');
   });
 
-  it('una reserva de las 11:30 ocupa hasta las 12:30 y cancelarla lo libera', () => {
+  it('una reserva de las 11:30 ocupa hasta las 12:30 y cancelarla lo libera', async () => {
     montarAgenda(raiz);
     cambiar($('[data-change="agendaFecha"]'), SABADO);
     $('[data-click="agendaGenerar"]').click();
@@ -114,10 +114,12 @@ describe('agenda de prueba', () => {
     expect(horas()).toContain('12:30');
     expect(raiz.textContent).toContain('Ana');
     expect(raiz.textContent).toContain('hasta 12:30');
+    expect($('[data-tomado="11:30"]').textContent).toContain('Ana'); // el horario tomado se ve en la grilla
 
     $('[data-click="agendaSoltar"][data-hora="11:30"]').click();
+    document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
 
-    expect(horas()).toContain('11:30');
+    await vi.waitFor(() => expect(horas()).toContain('11:30'));
     expect(raiz.textContent).not.toContain('Ana');
   });
 
@@ -297,5 +299,92 @@ describe('agenda: script compartido', () => {
     expect($('[data-click="agendaGenerar"]')).not.toBeNull();
     expect($('[data-script-compartido]').textContent).toContain('head@test.com');
     expect($('#agenda-script').value).toBe('https://script.google.com/macros/s/head/exec');
+  });
+});
+
+describe('agenda: próximas llamadas', () => {
+  const FUTURO = '2099-01-10';
+  const OTRO_DIA = '2099-01-12';
+  const jornadas = [
+    { agendaId: 'seguimiento', fecha: FUTURO, desde: '09:00', hasta: '12:00', duracionMin: 30, descansoMin: 30 },
+    { agendaId: 'primera', fecha: OTRO_DIA, desde: '09:00', hasta: '12:00', duracionMin: 20, descansoMin: 10 },
+    { agendaId: 'seguimiento', fecha: '2020-01-01', desde: '09:00', hasta: '12:00', duracionMin: 30, descansoMin: 0 },
+  ];
+  const turnoDe = (cambios) => ({
+    id: 'b1',
+    agendaId: 'seguimiento',
+    fecha: FUTURO,
+    hora: '10:00',
+    nombre: 'Ana',
+    email: 'ana@test.com',
+    telefono: '111',
+    notas: '',
+    calendarioEstado: 'agendado',
+    calendarioError: '',
+    meet: 'https://meet.google.com/abc-defg-hij',
+    ...cambios,
+  });
+  function repoCon(turnos, cancelar = { calendario: 'borrado', error: '' }) {
+    const repo = {
+      turnos,
+      leer: vi.fn(async () => ({ jornadas, turnos: repo.turnos, grupales: [] })),
+      leerScript: async () => ({ url: 'https://script.google.com/macros/s/abc/exec', coachEmail: 'coach@test.com' }),
+      cancelar: vi.fn(async (id) => {
+        repo.turnos = repo.turnos.filter((t) => t.id !== id);
+        return cancelar;
+      }),
+      soltar: vi.fn(async () => {}),
+    };
+    conectarLlamadas(repo);
+    state.currentUser = { id: 'coach-1', email: 'coach@test.com' };
+    state.userProfile = { role: 'admin' };
+    return repo;
+  }
+  const cargado = () => vi.waitFor(() => expect($('[data-click="agendaActualizar"]').disabled).toBe(false));
+  const proximas = () => [...raiz.querySelectorAll('[data-proxima]')].map((li) => li.dataset.proxima);
+
+  it('arriba se ven todas las llamadas reservadas que vienen, por día, sin tener que elegir una fecha', async () => {
+    repoCon([
+      turnoDe({ id: 'b2', agendaId: 'primera', fecha: OTRO_DIA, hora: '09:00', nombre: 'Beto', meet: '' }),
+      turnoDe({}),
+      turnoDe({ id: 'b0', fecha: '2020-01-01', hora: '09:00', nombre: 'Vieja' }),
+    ]);
+    montarAgenda(raiz);
+    await cargado();
+    expect(proximas()).toEqual(['b1', 'b2']); // en orden y sin las que ya pasaron
+    expect($('[data-proximas]').textContent).toContain('Ana');
+    expect($('[data-proximas]').textContent).toContain('Beto');
+    expect($('[data-proximas]').textContent).not.toContain('Vieja');
+    expect($('[data-proxima="b1"] a[data-meet]').href).toBe('https://meet.google.com/abc-defg-hij');
+    expect($('[data-proxima="b1"] [data-calendario="agendado"]')).not.toBeNull();
+    expect($('[data-proxima="b2"] a[data-meet]')).toBeNull();
+  });
+
+  it('sin llamadas reservadas lo dice', async () => {
+    repoCon([]);
+    montarAgenda(raiz);
+    await cargado();
+    expect($('[data-proximas]').textContent).toMatch(/no hay llamadas reservadas/i);
+  });
+
+  it('cancelar pide confirmación y borra también el evento del calendario', async () => {
+    const repo = repoCon([turnoDe({})]);
+    montarAgenda(raiz);
+    await cargado();
+    $('[data-proxima="b1"] [data-click="agendaSoltar"]').click();
+    document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
+    await vi.waitFor(() => expect(repo.cancelar).toHaveBeenCalledWith('b1'));
+    await vi.waitFor(() => expect(proximas()).toEqual([]));
+    expect(repo.soltar).not.toHaveBeenCalled();
+  });
+
+  it('si no se pudo borrar el evento, avisa que hay que borrarlo a mano', async () => {
+    repoCon([turnoDe({})], { calendario: 'error', error: 'Not Found' });
+    montarAgenda(raiz);
+    await cargado();
+    $('[data-proxima="b1"] [data-click="agendaSoltar"]').click();
+    document.querySelector('#app-modal-overlay-aux [data-click="resolverModal"][data-valor="true"]').click();
+    await vi.waitFor(() => expect(document.body.textContent).toMatch(/borralo a mano/i));
+    expect(document.body.textContent).toContain('Not Found');
   });
 });
