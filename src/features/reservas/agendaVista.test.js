@@ -101,8 +101,8 @@ describe('agenda de prueba', () => {
 
     expect(horas()).toContain('08:30');
     expect(horas()).toContain('11:30');
-    expect(horas()).toContain('19:00');
-    expect(horas()).not.toContain('19:30');
+    expect(horas()).toContain('18:30'); // 30 de llamada + 30 de descanso: uno por hora
+    expect(horas()).not.toContain('19:00');
   });
 
   it('una reserva de las 11:30 ocupa hasta las 12:30 y cancelarla lo libera', async () => {

@@ -34,7 +34,7 @@ describe('reserva local', () => {
   it('reservar las 11:30 las saca y deja las 12:30', () => {
     const antes = estadoDelDia('seguimiento', SABADO, [jornada], []);
     expect(antes.horas).toContain('11:30');
-    expect(antes.horas).toContain('12:00');
+    expect(antes.horas).toContain('12:30');
 
     const resultado = reservar([jornada], [], ana);
 

@@ -1,7 +1,7 @@
 // Jornadas de llamadas del coach. Cada una es un día concreto ya generado:
 // fecha, rango, duración y descanso de después. No hay días de la semana fijos.
-// Se ofrece un inicio cada `duracionMin`. Al reservar, la llamada más el descanso
-// ocupan ese tramo y se sacan los inicios que se le pisan, de cualquier agenda.
+// Se ofrece un inicio cada llamada más su descanso (30 + 15: 08:30, 09:15, 10:00…). Al reservar, la llamada más
+// el descanso ocupan ese tramo y se sacan los inicios que se le pisan, también los de la otra agenda del día.
 
 /** @typedef {{ agendaId: string, fecha: string, desde: string, hasta: string, duracionMin: number, descansoMin: number }} Jornada */
 /** @typedef {{ agendaId: string, fecha: string, hora: string }} Turno */
@@ -53,8 +53,9 @@ const sePisan = ([a0, a1], [b0, b1]) => a0 < b1 && b0 < a1;
  * @returns {string[]}
  */
 export function huecosDeJornada(jornada, turnos, jornadas) {
-  const paso = jornada.duracionMin;
-  if (paso <= 0) return [];
+  // Cada inicio deja lugar a la llamada y a su descanso: lo que ve el coach es lo que se ofrece
+  const paso = jornada.duracionMin + Math.max(0, jornada.descansoMin || 0);
+  if (jornada.duracionMin <= 0) return [];
 
   const delDia = jornadas.filter((otra) => otra.fecha === jornada.fecha);
   const ocupados = [];

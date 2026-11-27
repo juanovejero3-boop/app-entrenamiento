@@ -33,15 +33,25 @@ describe('valores iniciales', () => {
 });
 
 describe('huecos de una jornada generada', () => {
-  it('ofrece un inicio cada duración, mientras la llamada entre en el rango', () => {
+  it('ofrece un inicio cada llamada más su descanso, mientras la llamada entre en el rango', () => {
     const horas = huecosDeJornada(seguimiento, [], [seguimiento]);
     expect(horas[0]).toBe('08:30');
-    expect(horas).toContain('11:00');
-    expect(horas).toContain('11:30');
-    expect(horas).toContain('12:00');
-    expect(horas).toContain('12:30');
-    expect(horas.at(-1)).toBe('19:00');
-    expect(horas).not.toContain('19:30');
+    expect(horas).toContain('09:30');
+    expect(horas).not.toContain('09:00'); // 08:30 + 30 de llamada + 30 de descanso
+    expect(horas.at(-1)).toBe('18:30');
+    expect(horas).not.toContain('19:00');
+  });
+
+  it('con 30 minutos de llamada y 15 de descanso: 08:30, 09:15, 10:00…', () => {
+    const jornada = { ...seguimiento, descansoMin: 15 };
+    const horas = huecosDeJornada(jornada, [], [jornada]);
+    expect(horas.slice(0, 4)).toEqual(['08:30', '09:15', '10:00', '10:45']);
+    expect(horas.at(-1)).toBe('19:00'); // termina justo a las 19:30
+  });
+
+  it('sin descanso, un inicio cada duración', () => {
+    const jornada = { ...seguimiento, descansoMin: 0 };
+    expect(huecosDeJornada(jornada, [], [jornada]).slice(0, 3)).toEqual(['08:30', '09:00', '09:30']);
   });
 
   it('un turno de las 11:30 ocupa hasta las 12:30 y saca los huecos que se le pisan', () => {
@@ -72,7 +82,7 @@ describe('huecos de una jornada generada', () => {
       [seguimiento, primera],
     );
     expect(horas).not.toContain('11:30');
-    expect(horas).toContain('12:00');
+    expect(horas).toContain('12:30');
   });
 
   it('un turno de otro día no bloquea', () => {
